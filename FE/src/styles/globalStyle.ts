@@ -20,8 +20,7 @@ i {font-style:normal}
 #root {
 	display: flex;
 	flex-direction: column;
-
-	min-height: 100vh;
+	min-height: 100%;
   width: 100%;
 	
 
@@ -38,23 +37,17 @@ html {
     -webkit-tap-highlight-color:rgb(0 0 0 / 0%);
     scroll-behavior: smooth; 
 
-	/* @media (max-width: 360px) {
-		font-size:12px;
-	} */
 
 }
 
 body {
 	width: 100vw;
-  //TODO: max-width 확인 필요
-	max-width: 440px;
-	overflow-x: hidden;
+	max-width: 100%;
 	background-color: white;
 	color: black;
   font-synthesis: none;
 	scrollbar-width: none; 
 	-ms-overflow-style: none;
-  border: 1px solid black;
 
 	::-webkit-scrollbar {
     display: none;
