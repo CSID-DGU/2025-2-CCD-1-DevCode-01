@@ -1,0 +1,49 @@
+name: Discord Notify
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+    paths:
+      - "FE/**"
+      - "BE/**"
+
+jobs:
+  notify-fe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: FE PR Open/Update
+        if: github.event.action != 'closed' &&
+          (contains(join(github.event.pull_request.changed_files, ' '), 'FE/'))
+        run: |
+          curl -H "Content-Type: application/json" \
+          -d "{\"content\":\"📂 FE PR 올라옴! 🔗 PR: ${{ github.event.pull_request.html_url }}\"}" \
+          ${{ secrets.DISCORD_FE_WEBHOOK }}
+
+      - name: FE PR Merged
+        if:
+          github.event.action == 'closed' && github.event.pull_request.merged == true &&
+          (contains(join(github.event.pull_request.changed_files, ' '), 'FE/'))
+        run: |
+          curl -H "Content-Type: application/json" \
+          -d "{\"content\":\"✅ FE PR 머지 완료! 🔗 PR: ${{ github.event.pull_request.html_url }}\"}" \
+          ${{ secrets.DISCORD_FE_WEBHOOK }}
+
+  notify-be:
+    runs-on: ubuntu-latest
+    steps:
+      - name: BE PR Open/Update
+        if: github.event.action != 'closed' &&
+          (contains(join(github.event.pull_request.changed_files, ' '), 'BE/'))
+        run: |
+          curl -H "Content-Type: application/json" \
+          -d "{\"content\":\"📂 BE PR 올라옴! 🔗 PR: ${{ github.event.pull_request.html_url }}\"}" \
+          ${{ secrets.DISCORD_BE_WEBHOOK }}
+
+      - name: BE PR Merged
+        if:
+          github.event.action == 'closed' && github.event.pull_request.merged == true &&
+          (contains(join(github.event.pull_request.changed_files, ' '), 'BE/'))
+        run: |
+          curl -H "Content-Type: application/json" \
+          -d "{\"content\":\"✅ BE PR 머지 완료! 🔗 PR: ${{ github.event.pull_request.html_url }}\"}" \
+          ${{ secrets.DISCORD_BE_WEBHOOK }}
