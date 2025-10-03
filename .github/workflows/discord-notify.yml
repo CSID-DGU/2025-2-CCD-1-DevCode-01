@@ -38,7 +38,7 @@ jobs:
     steps:
       - name: FE PR Open/Update
         if: ${{ github.event.action != 'closed' }}
-        uses: tsickert/discord-webhook@v5
+        uses: tsickert/discord-webhook@v7.0.0
         with:
           webhook-url: ${{ secrets.Discord_FE }}
           content: >
@@ -48,7 +48,7 @@ jobs:
 
       - name: FE PR Merged
         if: ${{ github.event.action == 'closed' && github.event.pull_request.merged == true }}
-        uses: tsickert/discord-webhook@v5
+        uses: tsickert/discord-webhook@v7.0.0
         with:
           webhook-url: ${{ secrets.Discord_FE }}
           content: >
@@ -63,7 +63,7 @@ jobs:
     steps:
       - name: BE PR Open/Update
         if: ${{ github.event.action != 'closed' }}
-        uses: tsickert/discord-webhook@v5
+        uses: tsickert/discord-webhook@v7.0.0
         with:
           webhook-url: ${{ secrets.Discord_BE }}
           content: >
@@ -73,7 +73,7 @@ jobs:
 
       - name: BE PR Merged
         if: ${{ github.event.action == 'closed' && github.event.pull_request.merged == true }}
-        uses: tsickert/discord-webhook@v5
+        uses: tsickert/discord-webhook@v7.0.0
         with:
           webhook-url: ${{ secrets.Discord_BE }}
           content: >
