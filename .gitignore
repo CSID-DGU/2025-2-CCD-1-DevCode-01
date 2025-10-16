@@ -213,3 +213,7 @@ __pycache__/
 venv310/
 *.sqlite3
 db.sqlite3
+
+
+# DB
+BE/.env
