@@ -1,3 +1,5 @@
 export const colors = {
-  // bgbeige01: "#ede2da",
+  blue: "#1565C0",
+  gray: "#EDEDED",
+  black: "#58616A",
 };
