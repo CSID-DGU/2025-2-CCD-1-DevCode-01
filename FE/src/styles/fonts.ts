@@ -1,6 +1,5 @@
 import { css } from "styled-components";
 
-//TODO: 플젝 디자인시스템 맞게 수정
 const fontGenerator = (
   weight: number,
   size: string,
@@ -10,10 +9,16 @@ const fontGenerator = (
   font-weight: ${weight};
   font-size: ${size};
 
-  font-family: ${fontFamily ? `${fontFamily}` : ""};
+  font-family: ${fontFamily ? `${fontFamily}` : "Pretendard GOV Variable"};
 `;
 
 export const fonts = {
-  // 예시
-  title_b_30: fontGenerator(600, "30px", "nad"),
+  // Regular
+  regular_32: fontGenerator(400, "32px"),
+
+  // Medium
+  medium_32: fontGenerator(500, "32px"),
+
+  // Bold
+  bold_32: fontGenerator(700, "32px"),
 };
