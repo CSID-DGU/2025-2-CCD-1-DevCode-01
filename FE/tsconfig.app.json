@@ -30,7 +30,8 @@
       "@pages/*": ["src/pages/*"],
       "@layouts/*": ["src/layouts/*"],
       "@apis/*": ["src/apis/*"],
-      "@styles/*": ["src/styles/*"]
+      "@styles/*": ["src/styles/*"],
+      "@shared/*": ["src/shared/*"]
     }
   },
   "include": ["src"]
