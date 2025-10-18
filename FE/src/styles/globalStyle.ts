@@ -1,9 +1,28 @@
 import { createGlobalStyle } from "styled-components";
+import { colors, contrastMap } from "./colors";
+
+const baseVar = Object.entries(colors.base)
+  .map(([k, v]) => `--c-${k}: ${v};`)
+  .join("\n");
+
+const hcVar = Object.entries(contrastMap)
+  .map(([baseKey, hcKey]) => `--c-${baseKey}: ${colors.hc[hcKey]};`)
+  .join("\n");
 
 const GlobalStyle = createGlobalStyle`
+
+  :root {
+    ${baseVar}
+  }
+  // 고대비 모드
+  html.hc {
+    ${hcVar}
+  }
+
+
 *{box-sizing:border-box}
 body, button, dd, dl, dt, fieldset, form, h1, h2, h3, h4, h5, h6, input, legend, li, ol, p, select, table, td, textarea, th, ul {margin:0;padding:0}
-body, button, input, select, table, textarea {font-size:12px;border:none;font-family:-apple-system, BlinkMacSystemFont, "Malgun Gothic", "맑은 고딕", helvetica, "Apple SD Gothic Neo", sans-serif}
+body, button, input, select, table, textarea {font-size:12px;border:none;font-family:"Pretendard GOV Variable",-apple-system, BlinkMacSystemFont, "Malgun Gothic", "맑은 고딕", helvetica, "Apple SD Gothic Neo", sans-serif}
 h1, h2, h3, h4, h5, h6 {font-size:inherit;line-height:inherit}
 textarea {-webkit-backface-visibility:hidden;backface-visibility:hidden;background-color:transparent;border:0;word-break:keep-all;word-wrap:break-word;outline:none;}
 button, input {-webkit-border-radius:0;border-radius:0;border:none;outline: none;}
@@ -20,7 +39,7 @@ i {font-style:normal}
 #root {
 	display: flex;
 	flex-direction: column;
-	min-height: 100%;
+	min-height: 100vh;
   width: 100%;
 	
 
@@ -28,7 +47,7 @@ i {font-style:normal}
 
 // 초기 html 설정
 html {
-	background-color: white;
+	background-color: var(--c-white);
 	display: flex;
 	justify-content: center;
 	align-items: center;
@@ -43,8 +62,8 @@ html {
 body {
 	width: 100vw;
 	max-width: 100%;
-	background-color: white;
-	color: black;
+	background-color: var(--c-white);
+	color: var(--c-black);
   font-synthesis: none;
 	scrollbar-width: none; 
 	-ms-overflow-style: none;

@@ -1,10 +1,12 @@
 import { Outlet } from "react-router-dom";
 
 import styled from "styled-components";
+import Nav from "./components/Nav";
 
 const DefaultLayout = () => {
   return (
     <OutletWrapper>
+      <Nav />
       <Outlet />
     </OutletWrapper>
   );
