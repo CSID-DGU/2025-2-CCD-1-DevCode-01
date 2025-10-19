@@ -1,9 +1,8 @@
 from django.shortcuts import render
 from rest_framework.response import Response
-from rest_framework import status, generics
+from rest_framework import status, generics,permissions
 from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework_simplejwt.tokens import RefreshToken
-from .serializers import LoginSerializer, SignupSerializer
+from .serializers import *
 from .models import User
 
 class SignupView(generics.CreateAPIView):
@@ -14,7 +13,6 @@ class SignupView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
-        refresh = RefreshToken.for_user(user)
         return Response({
             "message": "회원가입 완료",
             "username": user.username,
@@ -39,3 +37,22 @@ class LoginView(TokenObtainPairView):
             "access": tokens.get("access"),
             "refresh": tokens.get("refresh"),
         }, status=status.HTTP_200_OK)
+
+
+class AccessibilityView(generics.UpdateAPIView):
+    serializer_class = AccessibilitySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+
+    def update(self, request, *args, **kwargs):
+        user = self.get_object()
+        serializer = self.get_serializer(user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response({
+                "font": user.font,
+                "high_contrast": user.high_contrast,
+        }, status=status.HTTP_200_OK)    
