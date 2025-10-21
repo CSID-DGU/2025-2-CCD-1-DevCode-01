@@ -15,12 +15,14 @@ class LectureCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         user = self.context['request'].user
 
-        # ✅ 장애학우만 강의 생성 가능
+        # ✅ 사용자 역할에 따라 student 또는 assistant로 구분 저장
         if user.role == 'student':
             return Lecture.objects.create(student=user, **validated_data)
+        elif user.role == 'assistant':
+            return Lecture.objects.create(assistant=user, **validated_data)
         else:
-            raise serializers.ValidationError("강의폴더는 장애학우만 생성할 수 있습니다.")
-        
+            raise serializers.ValidationError("유효하지 않은 사용자 역할입니다.")
+
 class LectureUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lecture
