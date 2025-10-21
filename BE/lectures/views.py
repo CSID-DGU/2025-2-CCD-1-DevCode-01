@@ -31,13 +31,8 @@ class LectureUpdateView(generics.UpdateAPIView):
         lecture = self.get_object()
         user = request.user
 
-        # ✅ 장애학우만 수정 가능
-        if user.role != 'student':
-            return Response({"error": "강의폴더 이름은 장애학우만 수정할 수 있습니다."},
-                            status=status.HTTP_403_FORBIDDEN)
-
         # ✅ 본인이 만든 강의만 수정 가능
-        if lecture.student != user:
+        if lecture.student != user and lecture.assistant != user:
             return Response({"error": "본인이 만든 강의만 수정할 수 있습니다."},
                             status=status.HTTP_403_FORBIDDEN)
 
