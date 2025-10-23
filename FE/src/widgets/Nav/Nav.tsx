@@ -47,6 +47,7 @@ const Nav = ({ variant, title }: Props) => {
   const logo = useContrastImage("/img/nav/logo");
   const sound = useContrastImage("/img/nav/sound");
   const eye = useContrastImage("/img/nav/eye");
+  const back = useContrastImage("/img/nav/back");
 
   // ===== 1) 로그인/회원가입 네브바 =====
   if (variant === "auth") {
@@ -96,7 +97,7 @@ const Nav = ({ variant, title }: Props) => {
             variant
           ) ? (
           <s.IconButton aria-label="뒤로가기" onClick={() => nav(-1)}>
-            ‹
+            <img src={back} />
           </s.IconButton>
         ) : (
           <span aria-hidden />

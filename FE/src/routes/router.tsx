@@ -81,11 +81,10 @@ const router = createBrowserRouter([
               } as NavMeta,
             },
           },
-          // 시험은 단일 페이지(/exam) 고정
           {
             path: "/exam",
             element: <Exam />,
-            handle: { nav: { variant: "exam", title: "시험 중" } as NavMeta },
+            handle: { nav: { variant: "exam", title: "시험" } as NavMeta },
           },
         ],
       },

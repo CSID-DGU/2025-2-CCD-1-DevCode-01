@@ -1,4 +1,3 @@
-// src/widgets/Nav/style.ts
 import styled from "styled-components";
 import { fonts } from "@styles/fonts";
 import { Link, NavLink } from "react-router-dom";
@@ -43,9 +42,7 @@ export const BrandText = styled.span`
 
 export const Title = styled.div`
   justify-self: center;
-  font-weight: 600;
-  font-size: 12px;
-  opacity: 0.95;
+  ${fonts.medium24}
   text-align: center;
 `;
 
@@ -69,10 +66,11 @@ export const IconButton = styled.button`
   color: inherit;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
   cursor: pointer;
-  font-size: 14px;
+
+  img {
+    width: 24px;
+  }
 `;
 
 export const IconLink = styled(Link)`
@@ -107,6 +105,7 @@ export const ActionButton = styled.button`
   }
   em {
     color: var(--c-white);
+    ${fonts.regular17}
   }
 `;
 
@@ -136,6 +135,5 @@ export const TabLink = styled(NavLink)`
   ${fonts.regular17}
   text-decoration: none;
   color: var(--c-white);
-  padding: 6px 4px;
   border-radius: 6px;
 `;
