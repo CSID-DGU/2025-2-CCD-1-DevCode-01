@@ -1,3 +1,4 @@
+// src/widgets/Nav/types.ts
 export type NavVariant =
   | "auth" // 로그인/회원가입
   | "folder" // 폴더

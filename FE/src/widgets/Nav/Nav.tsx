@@ -1,0 +1,147 @@
+// src/widgets/Nav/Nav.tsx
+import { useNavigate } from "react-router-dom";
+import { useContrastMode } from "@shared/useContrastMode";
+import * as s from "./style";
+import type { NavVariant } from "./types";
+
+type Props = { variant: NavVariant; title?: string };
+
+// 우측 공통 액션: 모든 페이지에서 동일하게 표시 (맨 오른쪽 고정)
+const RightActions = ({
+  isHC,
+  toggleMode,
+  onRead,
+}: {
+  isHC: boolean;
+  toggleMode: () => void;
+  onRead?: () => void;
+}) => (
+  <>
+    <s.ActionButton
+      type="button"
+      onClick={onRead}
+      aria-label="화면읽기"
+      title="화면읽기"
+    >
+      <img src="/img/nav/sound.png" alt="" aria-hidden />
+      <em>화면읽기</em>
+    </s.ActionButton>
+
+    <s.ActionButton
+      type="button"
+      onClick={toggleMode}
+      aria-pressed={isHC}
+      aria-label="화면설정"
+      title="화면설정"
+    >
+      <img src="/img/nav/eye.png" alt="" aria-hidden />
+      <em>화면설정</em>
+    </s.ActionButton>
+  </>
+);
+
+const Nav = ({ variant, title }: Props) => {
+  const nav = useNavigate();
+  const { isHC, toggleMode } = useContrastMode();
+
+  // ===== 1) 로그인/회원가입 네브바 =====
+  if (variant === "auth") {
+    return (
+      <s.NavWrapper
+        role="banner"
+        aria-label="로그인/회원가입 네비게이션"
+        data-variant="auth"
+      >
+        <s.BrandArea>
+          <img src="/img/nav/logo.png" alt="" aria-hidden />
+          <s.BrandText aria-label={title ?? "캠퍼스 메이트"}>
+            {title ?? "캠퍼스 메이트"}
+          </s.BrandText>
+        </s.BrandArea>
+
+        <s.Actions>
+          <RightActions
+            isHC={isHC}
+            toggleMode={toggleMode}
+            onRead={() => {
+              /* 안내/튜토리얼 */
+            }}
+          />
+        </s.Actions>
+      </s.NavWrapper>
+    );
+  }
+
+  return (
+    <s.NavWrapper data-variant={variant}>
+      {/* Left */}
+      <s.Left>
+        {variant === "folder" ? (
+          <s.FolderLeft>
+            <img src="/img/nav/logo.png" alt="" aria-hidden />
+            <s.TabNav role="tablist" aria-label="폴더 탭">
+              <s.TabLink
+                to="/"
+                role="tab"
+                aria-selected // NavLink가 active면 자동 스타일, aria는 시멘틱만 유지
+                end
+              >
+                홈
+              </s.TabLink>
+              <s.TabLink to="/exam" role="tab">
+                시험
+              </s.TabLink>
+            </s.TabNav>
+          </s.FolderLeft>
+        ) : ["pre", "live", "live-recording", "post", "exam"].includes(
+            variant
+          ) ? (
+          <s.IconButton aria-label="뒤로가기" onClick={() => nav(-1)}>
+            ‹
+          </s.IconButton>
+        ) : (
+          <span aria-hidden />
+        )}
+      </s.Left>
+
+      {/* Center */}
+      <s.Title aria-live="polite">{title ?? " "}</s.Title>
+
+      {/* Right — (네가 만든 공통 RightActions 유지) */}
+      <s.Right>
+        {variant === "live" && (
+          <s.IconLink to="?rec=1" aria-label="녹음 시작">
+            ⏺
+          </s.IconLink>
+        )}
+        {variant === "live-recording" && (
+          <>
+            <s.RecordingBadge role="status" aria-live="polite">
+              ● 녹음 중
+            </s.RecordingBadge>
+            <s.IconLink to="?rec=0" aria-label="일시정지">
+              ⏸
+            </s.IconLink>
+          </>
+        )}
+        {/* 공통: 화면읽기 / 화면설정 */}
+        <s.ActionButton type="button" aria-label="화면읽기" title="화면읽기">
+          <img src="/img/nav/sound.png" alt="" aria-hidden />
+          <em>화면읽기</em>
+        </s.ActionButton>
+        <s.ActionButton
+          type="button"
+          onClick={toggleMode}
+          aria-pressed={isHC}
+          aria-label="화면설정"
+          title="화면설정"
+        >
+          <img src="/img/nav/eye.png" alt="" aria-hidden />
+          <em>화면설정</em>
+        </s.ActionButton>
+      </s.Right>
+    </s.NavWrapper>
+  );
+};
+
+export default Nav;
