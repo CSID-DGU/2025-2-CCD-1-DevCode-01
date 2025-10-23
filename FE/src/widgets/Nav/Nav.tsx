@@ -1,12 +1,12 @@
-// src/widgets/Nav/Nav.tsx
 import { useNavigate } from "react-router-dom";
 import { useContrastMode } from "@shared/useContrastMode";
 import * as s from "./style";
 import type { NavVariant } from "./types";
+import { useContrastImage } from "@shared/useContrastImage";
 
 type Props = { variant: NavVariant; title?: string };
 
-// 우측 공통 액션: 모든 페이지에서 동일하게 표시 (맨 오른쪽 고정)
+// 우측 공통 아이콘: 모든 페이지에서 동일하게 표시 (맨 오른쪽 고정)
 const RightActions = ({
   isHC,
   toggleMode,
@@ -44,6 +44,10 @@ const Nav = ({ variant, title }: Props) => {
   const nav = useNavigate();
   const { isHC, toggleMode } = useContrastMode();
 
+  const logo = useContrastImage("/img/nav/logo");
+  const sound = useContrastImage("/img/nav/sound");
+  const eye = useContrastImage("/img/nav/eye");
+
   // ===== 1) 로그인/회원가입 네브바 =====
   if (variant === "auth") {
     return (
@@ -53,7 +57,7 @@ const Nav = ({ variant, title }: Props) => {
         data-variant="auth"
       >
         <s.BrandArea>
-          <img src="/img/nav/logo.png" alt="" aria-hidden />
+          <img src={logo} alt="" aria-hidden />
           <s.BrandText aria-label={title ?? "캠퍼스 메이트"}>
             {title ?? "캠퍼스 메이트"}
           </s.BrandText>
@@ -78,14 +82,9 @@ const Nav = ({ variant, title }: Props) => {
       <s.Left>
         {variant === "folder" ? (
           <s.FolderLeft>
-            <img src="/img/nav/logo.png" alt="" aria-hidden />
+            <img src={logo} alt="" aria-hidden />
             <s.TabNav role="tablist" aria-label="폴더 탭">
-              <s.TabLink
-                to="/"
-                role="tab"
-                aria-selected // NavLink가 active면 자동 스타일, aria는 시멘틱만 유지
-                end
-              >
+              <s.TabLink to="/" role="tab" aria-selected end>
                 홈
               </s.TabLink>
               <s.TabLink to="/exam" role="tab">
@@ -107,7 +106,7 @@ const Nav = ({ variant, title }: Props) => {
       {/* Center */}
       <s.Title aria-live="polite">{title ?? " "}</s.Title>
 
-      {/* Right — (네가 만든 공통 RightActions 유지) */}
+      {/* Right */}
       <s.Right>
         {variant === "live" && (
           <s.IconLink to="?rec=1" aria-label="녹음 시작">
@@ -126,7 +125,7 @@ const Nav = ({ variant, title }: Props) => {
         )}
         {/* 공통: 화면읽기 / 화면설정 */}
         <s.ActionButton type="button" aria-label="화면읽기" title="화면읽기">
-          <img src="/img/nav/sound.png" alt="" aria-hidden />
+          <img src={sound} alt="" aria-hidden />
           <em>화면읽기</em>
         </s.ActionButton>
         <s.ActionButton
@@ -136,7 +135,7 @@ const Nav = ({ variant, title }: Props) => {
           aria-label="화면설정"
           title="화면설정"
         >
-          <img src="/img/nav/eye.png" alt="" aria-hidden />
+          <img src={eye} alt="" aria-hidden />
           <em>화면설정</em>
         </s.ActionButton>
       </s.Right>
