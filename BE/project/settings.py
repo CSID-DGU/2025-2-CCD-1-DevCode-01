@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'app',
     'users',
     'lectures',
+    'classes',
 
     'rest_framework',
     'rest_framework_simplejwt',    
@@ -104,8 +105,20 @@ DATABASES = {
 #     }
 # }
 
+# Google Cloud Key 환경변수 등록
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 
+# AWS S3 환경변수 등록
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME")
+AWS_REGION = os.getenv("AWS_REGION")
 
+# URL 형태 통일
+AWS_S3_BASE_URL = os.getenv(
+    'AWS_S3_BASE_URL',
+    f"https://{AWS_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com"
+)
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

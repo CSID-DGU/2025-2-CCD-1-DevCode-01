@@ -37,7 +37,7 @@ def text_to_speech(text: str, s3_folder: str = "tts/") -> str:
         region_name='ap-northeast-2'
     )
 
-    bucket_name = settings.AWS_STORAGE_BUCKET_NAME
+    bucket_name = settings.AWS_BUCKET_NAME
     filename = f"{uuid.uuid4()}.mp3"
     s3_key = f"{s3_folder}{filename}"
 
