@@ -2,8 +2,7 @@ from django.db import models
 from users.models import *
 from dataclasses import dataclass, field
 from typing import List, Dict
-from app.models import Page
-
+from lecture_docs.models import *
 #stt
 class Speech(models.Model):
     page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name='speeches', null=True, blank=True)

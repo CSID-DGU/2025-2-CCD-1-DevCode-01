@@ -41,11 +41,11 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
-    'app',
+
     'users',
     'lectures',
     'classes',
+    'lecture_docs',
 
     'rest_framework',
     'rest_framework_simplejwt',    
@@ -148,7 +148,7 @@ TIME_ZONE = 'Asia/Seoul'
 
 USE_I18N = True
 
-USE_TZ = True
+USE_TZ = False
 
 
 
