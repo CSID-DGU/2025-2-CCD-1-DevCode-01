@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from app.models import Lecture
+from .models import Lecture
 from users.models import User
 
 class LectureSerializer(serializers.ModelSerializer):

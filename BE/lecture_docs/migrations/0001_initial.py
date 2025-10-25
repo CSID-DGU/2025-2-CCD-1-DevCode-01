@@ -12,30 +12,36 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='Bookmark',
+            name='Board',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('timestamp', models.CharField(max_length=10)),
+                ('text', models.TextField(blank=True, null=True)),
+                ('board_tts', models.URLField(blank=True, null=True)),
+                ('image', models.ImageField(blank=True, null=True, upload_to='boards/')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
             ],
         ),
         migrations.CreateModel(
-            name='Note',
+            name='Doc',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('content', models.TextField()),
-                ('note_tts', models.URLField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-            ],
-        ),
-        migrations.CreateModel(
-            name='Speech',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('stt', models.TextField(blank=True, null=True)),
-                ('stt_tts', models.URLField(blank=True, null=True)),
+                ('title', models.CharField(max_length=100)),
                 ('summary', models.TextField(blank=True, null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
             ],
+        ),
+        migrations.CreateModel(
+            name='Page',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('page_number', models.IntegerField()),
+                ('image', models.ImageField(upload_to='docs/')),
+                ('ocr', models.TextField(blank=True, null=True)),
+                ('page_tts', models.URLField(blank=True, null=True)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+            ],
+            options={
+                'ordering': ['page_number'],
+            },
         ),
     ]

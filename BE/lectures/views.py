@@ -2,7 +2,7 @@ from django.shortcuts import render
 from rest_framework import generics, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from app.models import Lecture
+from .models import Lecture
 from .serializers import LectureSerializer, LectureCreateSerializer, LectureUpdateSerializer
 
 # ① 강의폴더 생성
