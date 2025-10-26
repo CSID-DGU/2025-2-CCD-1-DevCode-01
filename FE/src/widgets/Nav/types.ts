@@ -4,7 +4,6 @@ export type NavVariant =
   | "folder" // 폴더
   | "pre" // 수업 전
   | "live" // 수업 중
-  | "live-recording" // 수업 중 - 녹음 중
   | "post" // 수업 후
   | "exam"; // 시험
 

@@ -88,6 +88,12 @@ export const Actions = styled.div`
   gap: 14px;
 `;
 
+export const LeftActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+`;
+
 export const ActionButton = styled.button`
   appearance: none;
   border: 0;
@@ -120,8 +126,8 @@ export const FolderLeft = styled.div`
   gap: 12px;
 
   img {
-    width: 60px;
-    height: 60px;
+    width: 50px;
+    height: 50px;
   }
 `;
 

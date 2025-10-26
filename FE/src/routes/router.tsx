@@ -3,7 +3,7 @@ import { createBrowserRouter } from "react-router-dom";
 
 // layouts
 import DefaultLayout from "@layouts/DefaultLayout";
-import PrivateRoute from "@layouts/PrivateLayout";
+// import PrivateRoute from "@layouts/PrivateLayout";
 import GuestLayout from "@layouts/GuestLayout";
 
 // pages (예시)
