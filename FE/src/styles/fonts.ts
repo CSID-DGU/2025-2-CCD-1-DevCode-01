@@ -14,11 +14,13 @@ const fontGenerator = (
 
 export const fonts = {
   // Regular
-  regular_32: fontGenerator(400, "32px"),
+  regular32: fontGenerator(400, "32px"),
+  regular17: fontGenerator(400, "17px"),
 
   // Medium
-  medium_32: fontGenerator(500, "32px"),
+  medium32: fontGenerator(500, "32px"),
+  medium24: fontGenerator(500, "24px"),
 
   // Bold
-  bold_32: fontGenerator(700, "32px"),
+  bold32: fontGenerator(700, "32px"),
 };
