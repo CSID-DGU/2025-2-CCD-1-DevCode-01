@@ -13,6 +13,9 @@ const fontGenerator = (
 `;
 
 export const fonts = {
+  //title
+  title: fontGenerator(500, "64px"),
+
   // Regular
   regular32: fontGenerator(400, "32px"),
   regular17: fontGenerator(400, "17px"),

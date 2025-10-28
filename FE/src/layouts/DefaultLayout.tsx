@@ -26,7 +26,9 @@ const DefaultLayout = () => {
   return (
     <Wrapper>
       <Nav variant={variant} title={computedTitle} />
-      <Outlet />
+      <Container>
+        <Outlet />
+      </Container>
     </Wrapper>
   );
 };
@@ -37,5 +39,9 @@ const Wrapper = styled.section`
   display: flex;
   flex-direction: column;
   width: 100%;
-  min-height: 100dvh;
+  min-height: 100vh;
+`;
+const Container = styled.section`
+  flex: 1;
+  display: flex;
 `;

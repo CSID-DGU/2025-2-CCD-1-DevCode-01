@@ -1,5 +1,19 @@
+import { useContrastImage } from "@shared/useContrastImage";
+import * as s from "./Login_style";
+
 const Login = () => {
-  return <p>로그인 페이지</p>;
+  const logo = useContrastImage("/img/login/logoBig");
+
+  return (
+    <s.LoginWrapper>
+      <s.LoginLeftContainer>
+        <s.LoginLeftBg />
+        <img src={logo} />
+        <h1>CAMPUS MATE</h1>
+      </s.LoginLeftContainer>
+      <s.LoginRightContaienr></s.LoginRightContaienr>
+    </s.LoginWrapper>
+  );
 };
 
 export default Login;
