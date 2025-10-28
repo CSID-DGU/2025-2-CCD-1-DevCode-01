@@ -13,8 +13,14 @@ const fontGenerator = (
 `;
 
 export const fonts = {
+  //title
+  title: fontGenerator(500, "64px"),
+  title2: fontGenerator(700, "36px"),
+
   // Regular
   regular32: fontGenerator(400, "32px"),
+  regular24: fontGenerator(400, "24px"),
+  regular20: fontGenerator(400, "20px"),
   regular17: fontGenerator(400, "17px"),
 
   // Medium
