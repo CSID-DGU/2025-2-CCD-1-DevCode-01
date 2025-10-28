@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useContrastMode } from "@shared/useContrastMode";
 import { useContrastImage } from "@shared/useContrastImage";
+import { useAudioRecorder } from "@shared/useAudioRecorder";
 import * as s from "./style";
 import type { NavVariant } from "./types";
 
@@ -56,47 +58,62 @@ const BackButton = ({ icon, onBack }: { icon: string; onBack: () => void }) => (
   </s.ActionButton>
 );
 
-// 왼쪽 아이콘 버튼 (summary/record/classSummary)
+// 왼쪽 아이콘 버튼
 const LeftIconButton = ({
   icon,
   label,
   onClick,
-  expanded,
-  controls,
 }: {
   icon: string;
   label: string;
   onClick?: () => void;
-  expanded?: boolean;
-  controls?: string;
 }) => (
   <s.ActionButton
     type="button"
     onClick={onClick}
     aria-label={label}
     title={label}
-    aria-expanded={expanded}
-    aria-controls={controls}
   >
     <img src={icon} alt="" aria-hidden />
     <em>{label}</em>
   </s.ActionButton>
 );
 
+// 시간 포맷
+const formatTime = (sec: number) => {
+  const m = Math.floor(sec / 60)
+    .toString()
+    .padStart(2, "0");
+  const sss = (sec % 60).toString().padStart(2, "0");
+  return `${m}:${sss}`;
+};
+
 const Nav = ({ variant, title }: Props) => {
   const nav = useNavigate();
   const { isHC, toggleMode } = useContrastMode();
 
-  // 모드별 이미지
   const logo = useContrastImage("/img/nav/logo");
   const sound = useContrastImage("/img/nav/sound");
   const eye = useContrastImage("/img/nav/eye");
   const back = useContrastImage("/img/nav/back");
+  const summary = useContrastImage("/img/nav/summary");
+  const record = useContrastImage("/img/nav/record");
+  const classSummary = useContrastImage("/img/nav/classSummary");
 
-  // 왼쪽 추가 아이콘
-  const summary = useContrastImage("/img/nav/summary"); // pre
-  const record = useContrastImage("/img/nav/record"); // live
-  const classSummary = useContrastImage("/img/nav/classSummary"); // post
+  // 녹음 훅
+  const { state, error, seconds, start, pause, resume, stop } =
+    useAudioRecorder();
+
+  // 정지 직후 "그 시간 그대로" 보여주기 위한 상태
+  const [justStopped, setJustStopped] = useState(false);
+
+  // stop 누른 직후 pill 계속 보여주되, 필요하면 자동 숨김 타이머(선택)
+  useEffect(() => {
+    if (justStopped) {
+      const t = setTimeout(() => setJustStopped(false), 8000);
+      return () => clearTimeout(t);
+    }
+  }, [justStopped]);
 
   // 1) 로그인/회원가입
   if (variant === "auth") {
@@ -122,7 +139,7 @@ const Nav = ({ variant, title }: Props) => {
     );
   }
 
-  // 2) 폴더(루트) 탭
+  // 2) 폴더 탭
   if (variant === "folder") {
     return (
       <s.NavWrapper data-variant="folder">
@@ -135,9 +152,7 @@ const Nav = ({ variant, title }: Props) => {
             <s.TabLink to="/exam">시험</s.TabLink>
           </s.TabNav>
         </s.FolderLeft>
-
         <s.Title aria-live="polite">{title ?? " "}</s.Title>
-
         <s.Right>
           <RightActions
             isHC={isHC}
@@ -150,14 +165,17 @@ const Nav = ({ variant, title }: Props) => {
     );
   }
 
+  // 3) 수업 전/중/후/시험
   const isClassFlow = ["pre", "live", "post", "exam"].includes(variant);
 
   return (
     <s.NavWrapper data-variant={variant}>
+      {/* Left */}
       <s.Left>
         {isClassFlow ? (
           <s.LeftActions>
             <BackButton icon={back} onBack={() => nav(-1)} />
+
             {variant === "pre" && (
               <LeftIconButton
                 icon={summary}
@@ -165,15 +183,89 @@ const Nav = ({ variant, title }: Props) => {
                 onClick={() => {}}
               />
             )}
+
             {variant === "live" && (
-              <LeftIconButton
-                icon={record}
-                label="강의녹화"
-                onClick={() => {
-                  // 녹화 시작/중지 토글
-                }}
-              />
+              <>
+                {/* 메인 토글: idle→start / recording→pause / paused→resume */}
+                <LeftIconButton
+                  icon={record}
+                  label={
+                    state === "idle"
+                      ? "녹음"
+                      : state === "recording"
+                      ? "일시정지"
+                      : "다시시작"
+                  }
+                  onClick={() => {
+                    if (state === "idle") {
+                      setJustStopped(false); // 재녹음 시작 시 justStopped 해제
+                      start();
+                    } else if (state === "recording") {
+                      pause();
+                    } else if (state === "paused") {
+                      resume();
+                    }
+                  }}
+                />
+
+                {/* 녹음/일시정지 중 pill */}
+                {(state === "recording" || state === "paused") && (
+                  <s.RecPill role="group" aria-label="녹음 컨트롤">
+                    {/* 일시정지 중이면 play, 녹음 중이면 pause */}
+                    {state === "paused" ? (
+                      <img
+                        src="/img/nav/play.png"
+                        alt="다시시작"
+                        onClick={() => resume()}
+                        style={{
+                          width: 18,
+                          height: 18,
+                          cursor: "pointer",
+                        }}
+                      />
+                    ) : (
+                      <img
+                        src="/img/nav/pause.png"
+                        alt="일시정지"
+                        onClick={() => pause()}
+                        style={{
+                          width: 22,
+                          height: 22,
+                          cursor: "pointer",
+                        }}
+                      />
+                    )}
+
+                    <img
+                      src="/img/nav/stop.png"
+                      alt="정지"
+                      onClick={() => {
+                        stop();
+                        setJustStopped(true);
+                      }}
+                    />
+
+                    <span className="rec-time">{formatTime(seconds)}</span>
+                  </s.RecPill>
+                )}
+
+                {/* 정지 직후: 시간 유지 + 재시작 아이콘만 노출 */}
+                {state === "idle" && justStopped && (
+                  <s.RecPill role="group" aria-label="재녹음 컨트롤">
+                    <img
+                      src="/img/nav/play.png"
+                      alt="다시 시작"
+                      onClick={() => {
+                        setJustStopped(false);
+                        start();
+                      }}
+                    />
+                    <span className="rec-time">{formatTime(seconds)}</span>
+                  </s.RecPill>
+                )}
+              </>
             )}
+
             {variant === "post" && (
               <LeftIconButton
                 icon={classSummary}
@@ -190,18 +282,22 @@ const Nav = ({ variant, title }: Props) => {
       {/* Center */}
       <s.Title aria-live="polite">{title ?? " "}</s.Title>
 
-      {/* Right: 고정(화면읽기/설정) */}
+      {/* Right */}
       <s.Right>
         <RightActions
           isHC={isHC}
           toggleMode={toggleMode}
           soundSrc={sound}
           eyeSrc={eye}
-          onRead={() => {
-            // 스크린리더용 읽기 기능 (TTS 등)
-          }}
+          onRead={() => {}}
         />
       </s.Right>
+
+      {error && (
+        <span role="alert" style={{ position: "absolute", left: -9999 }}>
+          {error}
+        </span>
+      )}
     </s.NavWrapper>
   );
 };
