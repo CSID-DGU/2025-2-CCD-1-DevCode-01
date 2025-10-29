@@ -45,7 +45,7 @@ export const SignupContainer = styled.div<{ $active?: boolean }>`
     transform: scale(1.05);
   }
 
-  .helper {
+  .assistant {
     width: 269px;
     height: 196px;
   }

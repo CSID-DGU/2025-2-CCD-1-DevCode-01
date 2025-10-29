@@ -1,5 +1,5 @@
 import { Outlet, useLocation, Navigate } from "react-router-dom";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import SignupLayout from "src/components/auth/SignupLayout";
 import Stepper from "src/components/auth/Step";
 import { SignupProvider } from "src/features/signup/SignupProvider";
@@ -21,8 +21,18 @@ type Controls = {
 
 function Guarded() {
   const loc = useLocation();
-  const { role } = useSignup();
+  const { role, access, tts, info } = useSignup();
+
   const stepNo = Number(/\/signup\/(\d)/.exec(loc.pathname)?.[1] ?? 1);
+
+  useEffect(() => {
+    console.groupCollapsed(`📦 Signup Progress | Step ${stepNo}`);
+    console.log("▶ role:", role);
+    console.log("▶ access:", access);
+    console.log("▶ tts:", tts);
+    console.log("▶ info:", info);
+    console.groupEnd();
+  }, [stepNo, role, access, tts, info]);
 
   const [controls, setControls] = useState<Controls>({});
 
@@ -33,7 +43,7 @@ function Guarded() {
 
   if (stepNo >= 2 && !role) return <Navigate to="/signup/1" replace />;
 
-  const displayTitle = controls.title ?? TITLES[stepNo - 1]; // ⬅️ 단일 출처
+  const displayTitle = controls.title ?? TITLES[stepNo - 1];
 
   return (
     <SignupLayout

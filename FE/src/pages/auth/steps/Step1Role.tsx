@@ -31,7 +31,7 @@ export default function Step1Role() {
 
   const handleKey = (
     e: React.KeyboardEvent,
-    nextRole: "student" | "helper"
+    nextRole: "student" | "assistant"
   ) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -56,13 +56,13 @@ export default function Step1Role() {
       <s.SignupContainer
         role="button"
         tabIndex={0}
-        aria-pressed={role === "helper"}
-        onClick={() => setRole("helper")}
-        onKeyDown={(e) => handleKey(e, "helper")}
-        $active={role === "helper"}
+        aria-pressed={role === "assistant"}
+        onClick={() => setRole("assistant")}
+        onKeyDown={(e) => handleKey(e, "assistant")}
+        $active={role === "assistant"}
       >
         <img
-          className="helper"
+          className="assistant"
           src="/img/login/helper.png"
           alt=""
           aria-hidden

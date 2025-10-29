@@ -4,6 +4,7 @@ import styled from "styled-components";
 import { useSignup } from "src/features/signup/useSignup";
 import { useContrastMode } from "@shared/useContrastMode";
 import { fonts } from "@styles/fonts";
+import { applyUiScale } from "@shared/applyUiScale";
 
 type ShellContext = {
   setControls: (
@@ -31,15 +32,21 @@ export default function Step2Access() {
     });
   }, [navigate, setControls]);
 
-  // 화면 크기 변경
-  const handleScale = (scale: number) => setAccess({ fontScale: scale });
+  // 🔎 초기 진입 시 배율 적용(리프레시/탭 이동 대비)
+  useEffect(() => {
+    if (access.font) applyUiScale(access.font);
+  }, [access.font]);
+
+  // 화면 크기 변경 (글자/버튼/이미지/간격 전체 확대)
+  const handleScale = (scale: number) => {
+    setAccess({ font: scale });
+    applyUiScale(scale);
+  };
 
   // 화면 대비 변경 (전역 고대비 모드 동기화)
-  const handleContrast = (contrast: "base" | "hc") => {
-    setAccess({ contrast });
-    if ((contrast === "hc" && !isHC) || (contrast === "base" && isHC)) {
-      toggleMode();
-    }
+  const handleContrast = (high_contrast: boolean) => {
+    setAccess({ high_contrast });
+    if (high_contrast !== isHC) toggleMode();
   };
 
   return (
@@ -48,16 +55,17 @@ export default function Step2Access() {
         <Title>화면 크기</Title>
         <Options>
           {[
-            { label: "보통", scale: 1 },
-            { label: "조금 크게", scale: 1.2 },
-            { label: "크게", scale: 1.4 },
-            { label: "가장 크게", scale: 1.6 },
+            { label: "보통", scale: 100 },
+            { label: "조금 크게", scale: 120 },
+            { label: "크게", scale: 140 },
+            { label: "가장 크게", scale: 160 },
           ].map((opt) => (
             <Option key={opt.scale}>
               <Radio
                 id={`scale-${opt.scale}`}
                 name="fontScale"
-                checked={access.fontScale === opt.scale}
+                value={opt.scale}
+                checked={Number(access.font ?? 100) === opt.scale}
                 onChange={() => handleScale(opt.scale)}
               />
               <Label htmlFor={`scale-${opt.scale}`}>{opt.label}</Label>
@@ -69,7 +77,6 @@ export default function Step2Access() {
       <Group>
         <Title>화면 대비</Title>
         <ContrastBox>
-          {/* 기본 화면 미리보기 + 라디오 */}
           <Preview $active={!isHC}>
             <img src="/img/login/baseScreen.png" alt="" aria-hidden />
           </Preview>
@@ -78,12 +85,11 @@ export default function Step2Access() {
               id="contrast-base"
               name="contrast"
               checked={!isHC}
-              onChange={() => handleContrast("base")}
+              onChange={() => handleContrast(false)}
             />
             <Label htmlFor="contrast-base">기본 화면</Label>
           </Option>
 
-          {/* 고대비 화면 미리보기 + 라디오 */}
           <Preview $active={isHC}>
             <img src="/img/login/hcScreen.png" alt="" aria-hidden />
           </Preview>
@@ -92,7 +98,7 @@ export default function Step2Access() {
               id="contrast-hc"
               name="contrast"
               checked={isHC}
-              onChange={() => handleContrast("hc")}
+              onChange={() => handleContrast(true)}
             />
             <Label htmlFor="contrast-hc">고대비 화면</Label>
           </Option>
@@ -102,7 +108,7 @@ export default function Step2Access() {
   );
 }
 
-/* ---------- styled ---------- */
+/* ----------------------------- styled ----------------------------- */
 
 const Wrapper = styled.div`
   display: flex;

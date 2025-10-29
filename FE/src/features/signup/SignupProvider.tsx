@@ -7,8 +7,8 @@ type Props = { children: React.ReactNode };
 export function SignupProvider({ children }: Props) {
   const [role, setRole] = React.useState<Role>(null);
   const [access, setAccessState] = React.useState<Access>({
-    fontScale: 1,
-    contrast: "base",
+    font: 100,
+    high_contrast: false,
   });
   const [tts, setTtsState] = React.useState<TTS>({ voice: "default", rate: 1 });
   const [info, setInfoState] = React.useState<Info>({

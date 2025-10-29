@@ -40,7 +40,7 @@ const Wrap = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.25rem;
+  gap: 1rem;
   width: 100%;
   margin: 0 auto;
   margin-top: 3rem;

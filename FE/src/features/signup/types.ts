@@ -1,5 +1,5 @@
-export type Role = "student" | "helper" | null;
-export type Access = { fontScale: number; contrast: "base" | "hc" };
+export type Role = "student" | "assistant" | null;
+export type Access = { font: number; high_contrast: boolean };
 export type TTS = { voice: string; rate: number };
 export type Info = { username: string; password: string };
 
