@@ -13,11 +13,22 @@ const GlobalStyle = createGlobalStyle`
 
   :root {
     ${baseVar}
+    --ui-scale: 1;
   }
   // 고대비 모드
   html.hc {
     ${hcVar}
   }
+
+  .app-zoom {
+  position: fixed;
+  inset: 0;                 
+  transform-origin: top left;
+  transform: scale(var(--ui-scale));
+  width: calc(100vw / var(--ui-scale));
+  height: calc(100vh / var(--ui-scale));
+  overflow: auto;           
+}
 
 
 *{box-sizing:border-box}

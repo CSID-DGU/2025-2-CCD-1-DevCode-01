@@ -25,6 +25,7 @@ export const fonts = {
 
   // Medium
   medium32: fontGenerator(500, "32px"),
+  medium26: fontGenerator(500, "26px"),
   medium24: fontGenerator(500, "24px"),
 
   // Bold
