@@ -1,4 +1,4 @@
-export type Role = "student" | "assistant" | null;
+export type Role = "student" | "assistant";
 export type Access = { font: number; high_contrast: boolean };
 export type TTS = { voice: string; rate: number };
 export type Info = { username: string; password: string };

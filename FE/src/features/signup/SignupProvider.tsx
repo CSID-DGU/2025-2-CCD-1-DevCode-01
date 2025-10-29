@@ -5,7 +5,7 @@ import type { Role, Access, TTS, Info, SignupCtx } from "./types";
 type Props = { children: React.ReactNode };
 
 export function SignupProvider({ children }: Props) {
-  const [role, setRole] = React.useState<Role>(null);
+  const [role, setRole] = React.useState<Role>("student");
   const [access, setAccessState] = React.useState<Access>({
     font: 100,
     high_contrast: false,
