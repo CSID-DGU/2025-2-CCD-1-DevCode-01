@@ -58,9 +58,9 @@ const Container = styled.section`
   width: 100%;
 `;
 const Btn = styled.button`
+  margin-top: 1rem;
   width: 28.125rem;
-  height: 4.25rem;
-  padding: 0.75rem 1rem;
+  padding: 1rem;
   font-size: 1rem;
   font-weight: 700;
   color: var(--c-white);
