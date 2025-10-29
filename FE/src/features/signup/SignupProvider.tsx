@@ -10,7 +10,10 @@ export function SignupProvider({ children }: Props) {
     font: 100,
     high_contrast: false,
   });
-  const [tts, setTtsState] = React.useState<TTS>({ voice: "default", rate: 1 });
+  const [tts, setTtsState] = React.useState<TTS>({
+    voice: "female",
+    rate: 1,
+  });
   const [info, setInfoState] = React.useState<Info>({
     username: "",
     password: "",
