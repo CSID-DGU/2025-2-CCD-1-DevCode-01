@@ -42,8 +42,8 @@ const Wrap = styled.div`
   align-items: center;
   gap: 1.25rem;
   width: 100%;
-  max-width: 640px;
   margin: 0 auto;
+  margin-top: 3rem;
 `;
 const Title = styled.h1`
   font-size: 1.8rem;
@@ -58,7 +58,8 @@ const Container = styled.section`
   width: 100%;
 `;
 const Btn = styled.button`
-  width: 100%;
+  width: 28.125rem;
+  height: 4.25rem;
   padding: 0.75rem 1rem;
   font-size: 1rem;
   font-weight: 700;
