@@ -13,11 +13,22 @@ const GlobalStyle = createGlobalStyle`
 
   :root {
     ${baseVar}
+    --ui-scale: 1;
   }
   // 고대비 모드
   html.hc {
     ${hcVar}
   }
+
+  .app-zoom {
+  position: fixed;
+  inset: 0;                 
+  transform-origin: top left;
+  transform: scale(var(--ui-scale));
+  width: calc(100vw / var(--ui-scale));
+  height: calc(100vh / var(--ui-scale));
+  overflow: auto;           
+}
 
 
 *{box-sizing:border-box}
@@ -36,6 +47,7 @@ iframe {overflow:hidden;margin:0;border:0;padding:0;vertical-align:top}
 mark {background-color:transparent}
 i {font-style:normal}
 
+html, body, #root { height: 100%; }
 #root {
 	display: flex;
 	flex-direction: column;
@@ -48,9 +60,9 @@ i {font-style:normal}
 // 초기 html 설정
 html {
 	background-color: var(--c-white);
-	display: flex;
 	justify-content: center;
 	align-items: center;
+  min-height: 100vh;
 
 	-webkit-touch-callout: none;
     -webkit-tap-highlight-color:rgb(0 0 0 / 0%);
@@ -62,6 +74,7 @@ html {
 body {
 	width: 100vw;
 	max-width: 100%;
+  min-height: 100vh;
 	background-color: var(--c-white);
 	color: var(--c-black);
   font-synthesis: none;

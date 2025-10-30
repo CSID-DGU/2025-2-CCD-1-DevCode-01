@@ -1,0 +1,41 @@
+# 탐지 프롬프트 정의
+
+categories:
+  table:
+    aliases:
+      [
+        "table",
+        "data table",
+        "grid table",
+        "spreadsheet",
+        "matrix",
+        "header row",
+      ]
+  chart:
+    aliases:
+      [
+        "chart",
+        "bar chart",
+        "line chart",
+        "plot",
+        "graph",
+        "pie chart",
+        "axis",
+        "x axis",
+        "y axis",
+        "legend",
+      ]
+  text:
+    aliases:
+      [
+        "paragraph text",
+        "title",
+        "heading",
+        "caption",
+        "subtitle",
+        "bullet list",
+        "footnote",
+        "label",
+        "word text",
+        "text area",
+      ]
