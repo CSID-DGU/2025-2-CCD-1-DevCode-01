@@ -10,6 +10,7 @@ from .utils import pdf_to_text, pdf_to_image, pdf_to_embedded_images
 
 
 class DocUploadView(generics.CreateAPIView):
+    #파일목록조회
     def get(self, request, lectureId):
         lecture = Lecture.objects.get(id=lectureId)
         
@@ -27,6 +28,7 @@ class DocUploadView(generics.CreateAPIView):
             ]
         }
         return Response(data, status=status.HTTP_200_OK)
+    #파일업로드
     def post(self, request, lectureId):
         lecture = Lecture.objects.get(id=lectureId)
         file = request.FILES.get("file")
