@@ -8,9 +8,11 @@ from dataclasses import dataclass, field
 class Doc(models.Model):
     lecture = models.ForeignKey(Lecture, on_delete=models.CASCADE, related_name='docs', null=True, blank=True)
     title = models.CharField(max_length=100)
-    summary = models.TextField(blank=True, null=True)  
+    summary = models.TextField(blank=True, null=True) 
+    page_tts =  models.URLField(blank=True, null=True) 
     created_at = models.DateTimeField(auto_now_add=True)
-
+    stt_summary = models.TextField(blank=True, null=True)
+    stt_summary_tts = models.URLField(blank=True, null=True)
     def __str__(self):
         return f"{self.title}"
 

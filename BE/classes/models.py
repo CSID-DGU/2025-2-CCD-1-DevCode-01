@@ -8,7 +8,6 @@ class Speech(models.Model):
     page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name='speeches', null=True, blank=True)
     stt = models.TextField(blank=True, null=True)
     stt_tts =  models.URLField(blank=True, null=True) 
-    summary = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 #노트
