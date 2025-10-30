@@ -1,6 +1,6 @@
 import fitz
-from rest_framework import generics, status
-from rest_framework.parsers import MultiPartParser
+from rest_framework.views import APIView
+from rest_framework import generics, status,permissions
 from rest_framework.response import Response
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -10,6 +10,7 @@ from .utils import pdf_to_text, pdf_to_image, pdf_to_embedded_images
 
 
 class DocUploadView(generics.CreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
     #파일목록조회
     def get(self, request, lectureId):
         lecture = Lecture.objects.get(id=lectureId)
@@ -74,50 +75,8 @@ class DocUploadView(generics.CreateAPIView):
         }, status=status.HTTP_201_CREATED)
 
 class DocDetailView(generics.RetrieveAPIView):
+    permission_classes = [permissions.IsAuthenticated]
     queryset = Doc.objects.all()
-    def get(self, request, docId):
-        doc = Doc.objects.get(id=docId)
-        pages = doc.pages.all()
-        role = getattr(request.user, "role", None)
-
-        data = []
-
-        if role == 'assistant':
-            data = [
-                {
-                    "docId": doc.id,
-                    "pageNumber": p.page_number,
-                    "image": p.image.url if p.image else None
-                }
-                for p in pages
-            ]
-
-        elif role == 'student':
-            for p in pages:
-                page_data = {
-                    "docId": doc.id,
-                    "pageNumber": p.page_number,
-                }
-
-                if p.ocr and not p.embedded_images:
-                    page_data["ocr"] = p.ocr
-
-
-                elif p.ocr and p.embedded_images:
-                    page_data["ocr"] = p.ocr
-                    page_data["embedded_images"] = p.embedded_images
-
-                elif not p.ocr and p.image:
-                    page_data["image"] = p.image.url
-
-                data.append(page_data)
-
-        return Response({
-            "docId": doc.id,
-            "title": doc.title,
-            "pages": data
-        }, status=status.HTTP_200_OK)
-    
     def patch(self, request, docId):
             doc = self.get_queryset().get(id=docId)
             new_title = request.data.get("title")
@@ -129,3 +88,44 @@ class DocDetailView(generics.RetrieveAPIView):
         doc = self.get_queryset().get(id=docId)
         doc.delete()
         return Response({"message": "파일이 삭제되었습니다."}, status=204)
+
+
+class PageDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, docId, pageNumber):
+        try:
+            doc = Doc.objects.get(id=docId)
+        except Doc.DoesNotExist:
+            return Response({"detail": "문서를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            page = doc.pages.get(page_number=pageNumber)
+        except Page.DoesNotExist:
+            return Response({"detail": "페이지를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        role = getattr(request.user, "role", None)
+
+        if role == "assistant":
+            data = {
+                "docId": doc.id,
+                "pageNumber": page.page_number,
+                "image": page.image.url if page.image else None,
+                "sum": None,  
+                "tts": None,   
+            }
+
+        elif role == "student":
+            data = {
+                "docId": doc.id,
+                "pageNumber": page.page_number,
+                "image": page.image.url if page.image else None,
+                "ocr": page.ocr if page.ocr else None,
+                "sum": None,  
+                "tts": None,   
+            }
+
+        else:
+            return Response({"detail": "사용자 인증 오류"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        return Response(data, status=status.HTTP_200_OK)
