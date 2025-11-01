@@ -77,6 +77,48 @@ class DocUploadView(generics.CreateAPIView):
 class DocDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
     queryset = Doc.objects.all()
+    def get(self, request, docId):
+        doc = Doc.objects.get(id=docId)
+        pages = doc.pages.all()
+        role = getattr(request.user, "role", None)
+
+        data = []
+
+        if role == 'assistant':
+            data = [
+                {
+                    "docId": doc.id,
+                    "pageNumber": p.page_number,
+                    "image": p.image.url if p.image else None
+                }
+                for p in pages
+            ]
+
+        elif role == 'student':
+            for p in pages:
+                page_data = {
+                    "docId": doc.id,
+                    "pageNumber": p.page_number,
+                }
+
+                if p.ocr and not p.embedded_images:
+                    page_data["ocr"] = p.ocr
+
+
+                elif p.ocr and p.embedded_images:
+                    page_data["ocr"] = p.ocr
+                    page_data["embedded_images"] = p.embedded_images
+
+                elif not p.ocr and p.image:
+                    page_data["image"] = p.image.url
+
+                data.append(page_data)
+
+        return Response({
+            "docId": doc.id,
+            "title": doc.title,
+            "pages": data
+        }, status=status.HTTP_200_OK)    
     def patch(self, request, docId):
             doc = self.get_queryset().get(id=docId)
             new_title = request.data.get("title")
