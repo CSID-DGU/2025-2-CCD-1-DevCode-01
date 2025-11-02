@@ -35,7 +35,6 @@ class Page(models.Model):
 #판서/필기
 class Board(models.Model):
     page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name='boards',  null=True, blank=True)
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
     text = models.TextField(blank=True, null=True) 
     board_tts =  models.URLField(blank=True, null=True) 
     image = models.ImageField(upload_to='boards/', blank=True, null=True) #판서이미지
