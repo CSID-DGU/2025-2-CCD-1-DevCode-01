@@ -1,15 +1,18 @@
+from django.shortcuts import get_object_or_404
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 import fitz
 from rest_framework.views import APIView
-from rest_framework import generics, status,permissions
+from rest_framework import status,permissions
 from rest_framework.response import Response
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from .models import Doc, Page
+from .models import Doc, Page, Board
 from lectures.models import Lecture
 from .utils import pdf_to_text, pdf_to_image, pdf_to_embedded_images
 
 
-class DocUploadView(generics.CreateAPIView):
+class DocUploadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     #파일목록조회
     def get(self, request, lectureId):
@@ -74,7 +77,7 @@ class DocUploadView(generics.CreateAPIView):
             "docTitle": doc.title,
         }, status=status.HTTP_201_CREATED)
 
-class DocDetailView(generics.RetrieveAPIView):
+class DocDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     queryset = Doc.objects.all()
     def get(self, request, docId):
@@ -171,3 +174,88 @@ class PageDetailView(APIView):
             return Response({"detail": "사용자 인증 오류"}, status=status.HTTP_401_UNAUTHORIZED)
 
         return Response(data, status=status.HTTP_200_OK)
+    
+class BoardView(APIView):
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pageId):
+        page = get_object_or_404(Page, id=pageId)
+        boards = Board.objects.filter(page=page).order_by("-created_at")
+
+        data = [
+            {
+                "boardId": b.id,
+                "image": b.image.url if b.image else None,
+                "text": b.text or None
+            }
+            for b in boards
+        ]
+        return Response({"pageId": page.id, "boards": data}, status=status.HTTP_200_OK)
+
+    def post(self, request, pageId):
+        page = get_object_or_404(Page, id=pageId)
+        image = request.FILES.get("image")
+
+        if not image:
+            return Response({"error": "판서 이미지가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+
+        image_path = default_storage.save(f"boards/{image.name}", ContentFile(image.read()))
+
+        board = Board.objects.create(
+            page=page,
+            image=image_path,
+            text=None,  
+        )
+
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"doc_{page.doc.id}",
+            {
+                "type": "board.event",
+                "event": "created",
+                "data": { 
+                    "boardId": board.id,
+                    "image": default_storage.url(image_path),
+                    "text": board.text,
+                }
+            },
+        )
+
+        return Response(
+            {
+                "boardId": board.id,
+                "text": board.text,  
+                "image": default_storage.url(image_path)
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    def patch(self, request, boardId):
+        board = get_object_or_404(Board, id=boardId)
+        new_text = request.data.get("text")
+        board.text = new_text
+        board.save()
+
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"doc_{board.page.doc.id}",
+            {
+                "type": "board.event",
+                "event": "updated",
+                "data": {  
+                    "boardId": board.id,
+                    "text": board.text,
+                }                
+
+            },
+        )
+        
+
+        return Response(
+            {
+                "boardId": board.id,
+                "text": board.text
+            },
+            status=status.HTTP_200_OK,
+        )
