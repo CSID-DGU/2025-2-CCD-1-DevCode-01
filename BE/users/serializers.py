@@ -11,7 +11,7 @@ class SignupSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['username', 'password', 'role', 'font', 'high_contrast']
+        fields = ['username', 'password', 'role', 'font', 'high_contrast', 'rate', 'voice']
 
     def create(self, validated_data):
         user = User.objects.create_user(
@@ -19,7 +19,9 @@ class SignupSerializer(serializers.ModelSerializer):
             password=validated_data['password'],
             role=validated_data['role'],
             font=validated_data.get('font', 125),
-            high_contrast=validated_data.get('high_contrast', False)
+            high_contrast=validated_data.get('high_contrast', False),
+            rate = validated_data.get('rate', '보통'),
+            voice = validated_data.get('voice', '남성')
         )
         return user
 
@@ -31,6 +33,8 @@ class LoginSerializer(TokenObtainPairSerializer):
         token['role'] = user.role
         token['font'] = user.font
         token['high_contrast'] = user.high_contrast
+        token['rate'] = user.rate
+        token['voice'] = user.voice
 
         return token
 

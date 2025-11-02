@@ -33,7 +33,9 @@ class LoginView(TokenObtainPairView):
             "username": user.username,
             "role": user.role,
             "font": user.font,
-            "high_contrast": user.high_contrast,            
+            "high_contrast": user.high_contrast,   
+            "voice": user.voice,
+            "rate": user.rate,            
             "access": tokens.get("access"),
             "refresh": tokens.get("refresh"),
         }, status=status.HTTP_200_OK)
