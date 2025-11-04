@@ -2,7 +2,7 @@ from google.cloud import speech
 from google.cloud import texttospeech
 import boto3
 from django.conf import settings
-import io
+import io, os
 import uuid
 
 def speech_to_text(audio_file) -> str:
@@ -56,7 +56,7 @@ def speech_to_text(audio_file) -> str:
 
     return transcript
 
-def text_to_speech(text: str, s3_folder: str = "tts/") -> str:
+def text_to_speech(text: str, voice: str, rate: str, s3_folder: str = "tts/") -> str:
     
     if not text or text.strip() == "":
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
@@ -65,21 +65,36 @@ def text_to_speech(text: str, s3_folder: str = "tts/") -> str:
     client = texttospeech.TextToSpeechClient()
 
     synthesis_input = texttospeech.SynthesisInput(text=text)
-    voice = texttospeech.VoiceSelectionParams(
+    
+    voice_map = {
+        "여성": "ko-KR-Neural2-A",
+        "남성": "ko-KR-Neural2-C",
+    }
+    name = voice_map.get(voice)
+    
+    voice_config = texttospeech.VoiceSelectionParams(
         language_code="ko-KR",
-        name="ko-KR-Neural2-B"
+        name=name,
     )
-    audio_config = texttospeech.AudioConfig(audio_encoding=texttospeech.AudioEncoding.MP3)
+
+    rate_map = {"느림": 0.8, "보통": 1.0, "빠름": 1.25}
+    speaking_rate = rate_map.get(rate)
+
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.MP3,
+        speaking_rate=speaking_rate,
+    )
 
     # 2️⃣ TTS 변환
     response = client.synthesize_speech(
         input=synthesis_input,
-        voice=voice,
+        voice=voice_config,
         audio_config=audio_config
     )
 
     if not response.audio_content:
         raise ValueError("TTS 변환에 실패했습니다. 응답이 비어 있습니다.")
+    
 
     # 3️⃣ S3 업로드 (메모리 버퍼 사용)
     s3 = boto3.client(
@@ -104,3 +119,62 @@ def text_to_speech(text: str, s3_folder: str = "tts/") -> str:
     s3_url = f"{settings.AWS_S3_BASE_URL}/{s3_key}"
 
     return s3_url
+
+def text_to_speech_local(text: str, voice: str, rate: str) -> str:
+    """
+    Google TTS 변환 후 로컬에만 MP3 저장 (S3 업로드 없음)
+    """
+    if not text or text.strip() == "":
+        raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
+
+    # 1️⃣ Google TTS 클라이언트 생성
+    client = texttospeech.TextToSpeechClient()
+
+    synthesis_input = texttospeech.SynthesisInput(text=text)
+
+    voice_map = {
+        "여성": "ko-KR-Neural2-A",
+        "남성": "ko-KR-Neural2-C",
+    }
+    name = voice_map.get(voice)
+    
+    voice_config = texttospeech.VoiceSelectionParams(
+        language_code="ko-KR",
+        name=name,
+    )
+
+    rate_map = {"느림": 0.8, "보통": 1.0, "빠름": 1.25}
+    speaking_rate = rate_map.get(rate)
+
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.MP3,
+        speaking_rate=speaking_rate,
+    )
+
+    # 2️⃣ TTS 변환
+    response = client.synthesize_speech(
+        input=synthesis_input,
+        voice=voice_config,
+        audio_config=audio_config
+    )
+
+    if not response.audio_content:
+        raise ValueError("TTS 변환에 실패했습니다. 응답이 비어 있습니다.")
+
+    # 3️⃣ 로컬에만 저장
+    local_dir = os.path.join(settings.BASE_DIR, "tts_local")
+    os.makedirs(local_dir, exist_ok=True)
+
+    base_name = text.strip().replace(" ", "")[:6] or "tts"
+    gender_label = "(여성)" if "Neural2-A" in voice_config.name else "(남성)"
+    safe_name = f"{base_name}{gender_label}.mp3"
+
+    # 🚫 파일명에 파일 시스템 불가 문자 제거
+    safe_name = "".join(c for c in safe_name if c.isalnum() or c in "()._")
+
+    local_path = os.path.join(local_dir, safe_name)
+
+    with open(local_path, "wb") as out:
+        out.write(response.audio_content)
+
+    return local_path
