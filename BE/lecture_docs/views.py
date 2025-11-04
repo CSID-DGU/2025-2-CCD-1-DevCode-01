@@ -11,7 +11,7 @@ from django.core.files.storage import default_storage
 from classes.utils import text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
-from .utils import pdf_to_text, pdf_to_image, pdf_to_embedded_images, summarize_stt
+from .utils import pdf_to_text, pdf_to_image, pdf_to_embedded_images, summarize_doc, summarize_stt
 
 
 class DocUploadView(APIView):
@@ -45,6 +45,9 @@ class DocUploadView(APIView):
 
         file.seek(0)
         page_texts = pdf_to_text(file)
+
+        all_sum = [] # 페이지 별 요약문 리스트
+
         for page_num, page in enumerate(pdf, start=1):
             text = page_texts[page_num - 1] if page_num - 1 < len(page_texts) else ""
             embedded_images = pdf_to_embedded_images(page, pdf)
@@ -71,8 +74,23 @@ class DocUploadView(APIView):
                 embedded_images=image_urls or None  
             )
 
-        pdf.close()
+            # 페이지별 요약문 생성
+            if text and text.strip():
+                page_summary = summarize_doc(doc.id)
+                all_sum.append(page_summary)
 
+        pdf.close()
+        
+        # 페이지별 요약문 병합 후 doc 요약문 및 TTS 생성
+        combined_summary = "\n\n".join(
+            [f"[{idx+1} 페이지] {summary}" for idx, summary in enumerate(all_sum)]
+        ).strip()
+        doc.summary = combined_summary
+        doc.save(update_fields=["summary"])
+
+        tts_url = text_to_speech(combined_summary, s3_folder="tts/doc_summaries/")
+        doc.summary_tts = tts_url
+        doc.save(update_fields=["page_tts"])
 
         return Response({
             "docId": doc.id,

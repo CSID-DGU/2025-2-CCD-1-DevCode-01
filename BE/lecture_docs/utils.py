@@ -97,30 +97,83 @@ def summarize_stt(doc_id: int) -> tuple[str, str]:
     # 3️⃣ Gemini 프롬프트 생성
     prompt = f"""
     너는 '{lecture_title}' 강의의 '{doc_title}' 교안에 대한 전문가야.
-    아래는 강의에 대한 교수님 발화 내용들이야.
-    이 내용을 모두 참고해서 1000자 이내로 간결하고 핵심적인 요약문을 작성해줘.
+    아래는 강의 중 교수님이 실제로 말한 내용이야.
+    이 내용을 전체적으로 읽고, 1000자 이내로 요약해줘.
+
+    단, 오탈자나 일부 누락이 있을 수 있으니 의미를 올바르게 해석하고,
+    원문에 없는 새로운 사실은 추가하지 말고,
+    중복된 설명은 생략하고,
+    중요하고 핵심적인 개념 위주로 정리해.
     ---
     {combined_stt}
     ---
     요약문:
     """
 
+    summary_text = summarize(prompt)
+
+    # Google TTS 변환 + S3 업로드
+    try:
+        tts_url = text_to_speech(summary_text, s3_folder="tts/doc_summary/")
+    except Exception as e:
+        raise RuntimeError(f"TTS 변환 중 오류 발생: {e}")
+    
+    return summary_text, tts_url
+
+def summarize_doc(doc_id: int) -> tuple[str, str]:
+    # 1️⃣ 교안 및 연관 데이터 불러오기
+    doc = Doc.objects.select_related("lecture").prefetch_related("pages__speeches").get(id=doc_id)
+    lecture_title = doc.lecture.title if doc.lecture else "강의"
+    doc_title = doc.title
+
+    # 2️⃣ 모든 페이지의 ocr 텍스트 병합
+    ocr_texts = [
+        page.ocr.strip()
+        for page in doc.pages.all()
+        if page.ocr and page.ocr.strip()
+    ]
+
+    if not ocr_texts:
+        raise ValueError("요약할 OCR 데이터가 없습니다.")
+
+    combined_ocr = "\n".join(ocr_texts)
+
+    # 3️⃣ Gemini 프롬프트 생성
+    prompt = f"""
+    너는 '{lecture_title}' 강의의 '{doc_title}' 교안에 대한 전문가야.
+    아래는 강의 교안의 OCR 인식 결과야.
+    이 내용을 전체적으로 읽고, 200자 이내로 요약해줘.
+
+    단, 오탈자나 일부 누락이 있을 수 있으니 의미를 올바르게 해석하고,
+    원문에 없는 새로운 사실은 추가하지 말고,
+    중복된 설명은 생략하고,
+    중요하고 핵심적인 개념 위주로 정리해.
+    ---
+    {combined_ocr}
+    ---
+    요약문:
+    """
+
     return summarize(prompt)
 
-def summarize(prompt: str) -> tuple[str, str]:
+def summarize(prompt: str) -> str:
     """
     Gemini 호출 요약본 생성 함수
-    프롬프트를 받아서 요약문과 TTS URL 반환
+    프롬프트를 받아서 요약문 반환
     """
 
     # Gemini 모델 호출
-    model = generative_models.GenerativeModel("gemini-2.5-flash")
-    response = model.generate_content(prompt)
+    try:
+        model = generative_models.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(prompt)
 
-    summary_text = response.text.strip()
+        if not response or not getattr(response, "text", "").strip():
+            raise ValueError("Gemini 응답이 비어 있습니다.")
+        
+        summary_text = response.text.strip()
 
-    # Google TTS 변환 + S3 업로드
-    tts_url = text_to_speech(summary_text, s3_folder="tts/stt_summary/")
+    except Exception as e:
+        raise RuntimeError(f"Gemini 요약 생성 중 오류 발생: {e}")
 
-    return summary_text, tts_url
+    return summary_text
 
