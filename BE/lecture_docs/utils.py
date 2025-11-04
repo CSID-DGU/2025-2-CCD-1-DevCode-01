@@ -72,13 +72,10 @@ def summarize_stt(doc_id: int) -> tuple[str, str]:
     """
     1. Doc ID로 모든 Page.speeches의 STT 텍스트 병합
     2. 강의명, 교안명을 포함한 프롬프트 구성
-    3. Gemini 모델을 이용해 200자 이내 요약 생성
+    3. Gemini 모델을 이용해 1000자 이내 요약 생성
     4. Google TTS 변환 + S3 업로드
     5. 요약문과 TTS URL 반환
     """
-
-    # ✅ 프로젝트 및 리전 명시적으로 초기화
-    vertexai.init(project="campus-mate-475315", location="us-central1")
     
     # 1️⃣ 교안 및 연관 데이터 불러오기
     doc = Doc.objects.select_related("lecture").prefetch_related("pages__speeches").get(id=doc_id)
@@ -101,20 +98,28 @@ def summarize_stt(doc_id: int) -> tuple[str, str]:
     prompt = f"""
     너는 '{lecture_title}' 강의의 '{doc_title}' 교안에 대한 전문가야.
     아래는 강의에 대한 교수님 발화 내용들이야.
-    이 내용을 모두 참고해서 200자 이내로 간결하고 핵심적인 요약문을 작성해줘.
+    이 내용을 모두 참고해서 1000자 이내로 간결하고 핵심적인 요약문을 작성해줘.
     ---
     {combined_stt}
     ---
     요약문:
     """
 
-    # 4️⃣ Gemini 모델 호출
+    return summarize(prompt)
+
+def summarize(prompt: str) -> tuple[str, str]:
+    """
+    Gemini 호출 요약본 생성 함수
+    프롬프트를 받아서 요약문과 TTS URL 반환
+    """
+
+    # Gemini 모델 호출
     model = generative_models.GenerativeModel("gemini-2.5-flash")
     response = model.generate_content(prompt)
 
     summary_text = response.text.strip()
 
-    # 5️⃣ Google TTS 변환 + S3 업로드
+    # Google TTS 변환 + S3 업로드
     tts_url = text_to_speech(summary_text, s3_folder="tts/stt_summary/")
 
     return summary_text, tts_url
