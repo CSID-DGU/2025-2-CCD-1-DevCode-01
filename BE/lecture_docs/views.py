@@ -7,9 +7,11 @@ from rest_framework import status,permissions
 from rest_framework.response import Response
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+
+from classes.utils import text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
-from .utils import pdf_to_text, pdf_to_image, pdf_to_embedded_images
+from .utils import pdf_to_text, pdf_to_image, pdf_to_embedded_images, summarize_doc, summarize_stt
 
 
 class DocUploadView(APIView):
@@ -43,6 +45,9 @@ class DocUploadView(APIView):
 
         file.seek(0)
         page_texts = pdf_to_text(file)
+
+        all_sum = [] # 페이지 별 요약문 리스트
+
         for page_num, page in enumerate(pdf, start=1):
             text = page_texts[page_num - 1] if page_num - 1 < len(page_texts) else ""
             embedded_images = pdf_to_embedded_images(page, pdf)
@@ -69,8 +74,23 @@ class DocUploadView(APIView):
                 embedded_images=image_urls or None  
             )
 
-        pdf.close()
+            # 페이지별 요약문 생성
+            if text and text.strip():
+                page_summary = summarize_doc(doc.id)
+                all_sum.append(page_summary)
 
+        pdf.close()
+        
+        # 페이지별 요약문 병합 후 doc 요약문 및 TTS 생성
+        combined_summary = "\n\n".join(
+            [f"[{idx+1} 페이지] {summary}" for idx, summary in enumerate(all_sum)]
+        ).strip()
+        doc.summary = combined_summary
+        doc.save(update_fields=["summary"])
+
+        tts_url = text_to_speech(combined_summary, s3_folder="tts/doc_summary/")
+        doc.page_tts = tts_url
+        doc.save(update_fields=["page_tts"])
 
         return Response({
             "docId": doc.id,
@@ -259,3 +279,122 @@ class BoardView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+    
+class DocSttSummaryView(APIView):
+    """
+    교안 STT 요약문 생성 및 수정
+    """
+
+    def get_object(self, docId):
+        try:
+            return Doc.objects.get(id=docId)
+        except Doc.DoesNotExist:
+            return None
+        
+    def get(self, request, docId):
+        """STT 요약문 조회"""
+        doc = self.get_object(docId)
+        if not doc:
+            return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({
+            "doc_id": doc.id,
+            "title": doc.title,
+            "stt_summary": doc.stt_summary or None,
+            "stt_summary_tts": doc.stt_summary_tts or None
+        }, status=status.HTTP_200_OK)
+
+    def post(self, request, docId):
+        """수업 종료 시 Gemini 기반 자동 요약 생성"""
+        doc = self.get_object(docId)
+        if not doc:
+            return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        # ✅ 요약 + TTS 생성
+        summary, tts_url = summarize_stt(doc.id)
+
+        # ✅ 결과 DB 반영
+        doc.stt_summary = summary
+        doc.stt_summary_tts = tts_url
+        doc.save()
+
+        return Response({
+            "message": "STT 요약문 및 음성 파일이 성공적으로 생성되었습니다.",
+            "doc_id": doc.id,
+            "stt_summary": doc.stt_summary,
+            "stt_summary_tts": doc.stt_summary_tts
+        }, status=status.HTTP_200_OK)
+
+    def patch(self, request, docId):
+        """요약문 직접 수정 시 TTS 재생성"""
+        doc = self.get_object(docId)
+        if not doc:
+            return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        new_summary = request.data.get("stt_summary")
+        if not new_summary or not new_summary.strip():
+            return Response({"error": "수정할 stt_summary 내용이 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ✅ 수정된 요약 저장
+        doc.stt_summary = new_summary.strip()
+
+        # ✅ 수정된 텍스트로 새 TTS 생성
+        tts_url = text_to_speech(doc.stt_summary, s3_folder="tts/stt_summary/")
+        doc.stt_summary_tts = tts_url
+        doc.save()
+
+        return Response({
+            "message": "요약문이 성공적으로 수정되고 새 TTS가 생성되었습니다.",
+            "doc_id": doc.id,
+            "stt_summary": doc.stt_summary,
+            "stt_summary_tts": doc.stt_summary_tts
+        }, status=status.HTTP_200_OK)
+    
+class DocSummaryView(APIView):
+    """
+    교안 OCR 요약문 조회 및 수정
+    """
+
+    def get_object(self, docId):
+        try:
+            return Doc.objects.get(id=docId)
+        except Doc.DoesNotExist:
+            return None
+        
+    def get(self, request, docId):
+        """교안 요약문 조회"""
+        doc = self.get_object(docId)
+        if not doc:
+            return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({
+            "doc_id": doc.id,
+            "title": doc.title,
+            "summary": doc.summary or None,
+            "page_tts": doc.page_tts or None
+        }, status=status.HTTP_200_OK)
+
+    def patch(self, request, docId):
+        """교안 요약문 직접 수정 시 TTS 재생성"""
+        doc = self.get_object(docId)
+        if not doc:
+            return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        new_summary = request.data.get("summary")
+        if not new_summary or not new_summary.strip():
+            return Response({"error": "수정할 summary 내용이 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ✅ 수정된 요약 저장
+        doc.summary = new_summary.strip()
+
+        # ✅ 수정된 텍스트로 새 TTS 생성
+        tts_url = text_to_speech(doc.summary, s3_folder="tts/doc_summary/")
+        doc.page_tts = tts_url
+        doc.save()
+
+        return Response({
+            "message": "요약문이 성공적으로 수정되고 새 TTS가 생성되었습니다.",
+            "doc_id": doc.id,
+            "summary": doc.summary,
+            "page_tts": doc.page_tts
+        }, status=status.HTTP_200_OK)

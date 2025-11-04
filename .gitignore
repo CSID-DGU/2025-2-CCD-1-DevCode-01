@@ -259,3 +259,6 @@ logs/
 .vscode/
 .idea/
 *.swp
+
+# 로컬 TTS 파일
+BE/tts_local/

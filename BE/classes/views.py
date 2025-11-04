@@ -42,7 +42,8 @@ class SpeechView(generics.CreateAPIView):
             rate = (user.rate or "보통")
 
             # 2️⃣ TTS 변환 + S3 업로드
-            s3_url = text_to_speech(stt_text, voice, rate, s3_folder="tts/")
+            s3_url = text_to_speech(stt_text, s3_folder="tts/speech/")
+
 
             # 3️⃣ DB 저장
             speech = Speech.objects.create(
