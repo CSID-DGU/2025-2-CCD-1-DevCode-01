@@ -114,7 +114,7 @@ def summarize_stt(doc_id: int) -> tuple[str, str]:
 
     # Google TTS 변환 + S3 업로드
     try:
-        tts_url = text_to_speech(summary_text, s3_folder="tts/doc_summary/")
+        tts_url = text_to_speech(summary_text, s3_folder="tts/stt_summary/")
     except Exception as e:
         raise RuntimeError(f"TTS 변환 중 오류 발생: {e}")
     

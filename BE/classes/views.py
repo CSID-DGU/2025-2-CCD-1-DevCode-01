@@ -35,7 +35,7 @@ class SpeechView(generics.CreateAPIView):
                 return JsonResponse({"error": "변환된 텍스트가 비어 있습니다."}, status=400)
             
             # 2️⃣ TTS 변환 + S3 업로드
-            s3_url = text_to_speech(stt_text, s3_folder="tts/")
+            s3_url = text_to_speech(stt_text, s3_folder="tts/speech/")
 
             # 3️⃣ DB 저장
             speech = Speech.objects.create(

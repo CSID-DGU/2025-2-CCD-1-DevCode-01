@@ -88,8 +88,8 @@ class DocUploadView(APIView):
         doc.summary = combined_summary
         doc.save(update_fields=["summary"])
 
-        tts_url = text_to_speech(combined_summary, s3_folder="tts/doc_summaries/")
-        doc.summary_tts = tts_url
+        tts_url = text_to_speech(combined_summary, s3_folder="tts/doc_summary/")
+        doc.page_tts = tts_url
         doc.save(update_fields=["page_tts"])
 
         return Response({
@@ -348,4 +348,53 @@ class DocSttSummaryView(APIView):
             "doc_id": doc.id,
             "stt_summary": doc.stt_summary,
             "stt_summary_tts": doc.stt_summary_tts
+        }, status=status.HTTP_200_OK)
+    
+class DocSummaryView(APIView):
+    """
+    교안 OCR 요약문 조회 및 수정
+    """
+
+    def get_object(self, docId):
+        try:
+            return Doc.objects.get(id=docId)
+        except Doc.DoesNotExist:
+            return None
+        
+    def get(self, request, docId):
+        """교안 요약문 조회"""
+        doc = self.get_object(docId)
+        if not doc:
+            return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({
+            "doc_id": doc.id,
+            "title": doc.title,
+            "summary": doc.summary or None,
+            "page_tts": doc.page_tts or None
+        }, status=status.HTTP_200_OK)
+
+    def patch(self, request, docId):
+        """교안 요약문 직접 수정 시 TTS 재생성"""
+        doc = self.get_object(docId)
+        if not doc:
+            return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        new_summary = request.data.get("summary")
+        if not new_summary or not new_summary.strip():
+            return Response({"error": "수정할 summary 내용이 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ✅ 수정된 요약 저장
+        doc.summary = new_summary.strip()
+
+        # ✅ 수정된 텍스트로 새 TTS 생성
+        tts_url = text_to_speech(doc.summary, s3_folder="tts/doc_summary/")
+        doc.page_tts = tts_url
+        doc.save()
+
+        return Response({
+            "message": "요약문이 성공적으로 수정되고 새 TTS가 생성되었습니다.",
+            "doc_id": doc.id,
+            "summary": doc.summary,
+            "page_tts": doc.page_tts
         }, status=status.HTTP_200_OK)
