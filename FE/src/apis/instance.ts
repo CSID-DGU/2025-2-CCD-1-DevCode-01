@@ -63,7 +63,7 @@ instance.interceptors.response.use(
         if (!refresh) throw new Error("No refresh token");
 
         const res = await axios.post<{ access: string }>(
-          `${import.meta.env.VITE_BASE_URL}/api/auth/refresh/`,
+          `${import.meta.env.VITE_BASE_URL}/auth/refresh/`,
           { refresh },
           { withCredentials: false }
         );
