@@ -99,7 +99,8 @@ class DocUploadView(APIView):
 
 class DocDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    queryset = Doc.objects.all()
+    def get_queryset(self):
+        return Doc.objects.all()    
     def get(self, request, docId):
         doc = Doc.objects.get(id=docId)
         pages = doc.pages.all()
