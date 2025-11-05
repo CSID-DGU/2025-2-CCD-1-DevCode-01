@@ -153,7 +153,7 @@ class DocDetailView(APIView):
     def delete(self, request, docId):
         doc = self.get_queryset().get(id=docId)
         doc.delete()
-        return Response({"message": "파일이 삭제되었습니다."}, status=204)
+        return Response({"message": "파일이 삭제되었습니다."}, status=200)
 
 
 class PageDetailView(APIView):
