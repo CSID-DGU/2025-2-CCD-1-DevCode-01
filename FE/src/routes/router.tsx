@@ -1,14 +1,9 @@
-// src/app/router.tsx
 import { createBrowserRouter } from "react-router-dom";
-
-// layouts
 import DefaultLayout from "@layouts/DefaultLayout";
-// import PrivateRoute from "@layouts/PrivateLayout";
 import GuestLayout from "@layouts/GuestLayout";
 
-// pages (예시)
 import Login from "@pages/auth/Login";
-import Folders from "@pages/folders/Folders";
+
 import PreClass from "@pages/class/Pre";
 import LiveClass from "@pages/class/Live";
 import PostClass from "@pages/class/Post";
@@ -20,13 +15,13 @@ import Step1Role from "@pages/auth/steps/Step1Role";
 import Step2Access from "@pages/auth/steps/Step2Access";
 import Step3TTS from "@pages/auth/steps/Step3TTS";
 import Step4Credentials from "@pages/auth/steps/Step4Credentials";
+import FoldersRoute from "./FoldersRoute";
 
 const router = createBrowserRouter([
   {
     path: "/",
     element: <DefaultLayout />,
     children: [
-      // 비로그인(게스트)
       {
         element: <GuestLayout />,
         children: [
@@ -50,13 +45,12 @@ const router = createBrowserRouter([
           },
         ],
       },
-      // 로그인 필요(프라이빗)
       {
         // element: <PrivateRoute />,
         children: [
           {
             path: "/",
-            element: <Folders />,
+            element: <FoldersRoute />, // ✅ 홈
             handle: { nav: { variant: "folder" } as NavMeta },
           },
           {
