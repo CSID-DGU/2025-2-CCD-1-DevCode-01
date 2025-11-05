@@ -7,8 +7,19 @@ export type SignupFlatRequest = {
   role: string;
   font: number;
   high_contrast: boolean;
-  rate: number;
+  rate: string;
   voice: string;
+};
+
+const rateToLabel = (rate: number): string => {
+  if (rate <= 0.95) return "느림";
+  if (rate > 1.1) return "빠름";
+  return "보통";
+};
+
+const voiceToLabel = (voice: string): string => {
+  if (voice === "male") return "남성";
+  return "여성";
 };
 
 export const toSignupFlat = (
@@ -22,9 +33,9 @@ export const toSignupFlat = (
   role,
   font: access.font,
   high_contrast: access.high_contrast,
-  rate: tts.rate,
-  voice: tts.voice,
+  rate: rateToLabel(tts.rate),
+  voice: voiceToLabel(tts.voice),
 });
 
 export const signupApi = (payload: SignupFlatRequest): Promise<boolean> =>
-  postNoResponse<SignupFlatRequest>("/api/auth/signup/", payload);
+  postNoResponse<SignupFlatRequest>("/auth/signup/", payload);

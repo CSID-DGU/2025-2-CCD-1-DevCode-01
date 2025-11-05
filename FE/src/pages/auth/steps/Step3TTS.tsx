@@ -8,6 +8,7 @@ import {
   type SpeedKey,
   type VoiceId,
   rateToSpeedKey,
+  speedKeyToRate,
 } from "src/config/ttsConfig";
 import type { TTS } from "src/features/signup/types";
 
@@ -28,7 +29,7 @@ export default function Step3TTS() {
   const { setControls } = useOutletContext<ShellContext>();
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // 1. 상단 버튼/제목 세팅
+  /* ---------------- 상단 컨트롤/타이틀 ---------------- */
   useEffect(() => {
     setControls({
       title: "화면 읽기 속도와 목소리를 설정해주세요",
@@ -38,15 +39,15 @@ export default function Step3TTS() {
     });
   }, [navigate, setControls]);
 
-  // 2. 기본값 세팅
+  /* ---------------- 기본값 보정 ---------------- */
   useEffect(() => {
     const patch: Partial<TTS> = {};
     if (!tts.voice) patch.voice = "female";
-    if (typeof tts.rate !== "number") patch.rate = 1.0;
+    if (typeof tts.rate !== "number") patch.rate = 1.0; // 보통
     if (Object.keys(patch).length) setTts(patch);
   }, [tts.voice, tts.rate, setTts]);
 
-  // 3. 현재 선택값 계산
+  /* ---------------- 현재 선택값 계산 ---------------- */
   const voiceId = useMemo<VoiceId>(() => {
     const found = VOICES.find((v) => v.id === tts.voice)?.id;
     return (found ?? "female") as VoiceId;
@@ -57,10 +58,9 @@ export default function Step3TTS() {
     [tts.rate]
   );
 
-  // 4. 단일 파일 + playbackRate 방식
-  // 파일은 /public/audio/tts/<voiceId>.mp3 하나씩만 있으면 됨.
+  /* ---------------- 미리듣기: 단일 파일 + playbackRate ---------------- */
   const playVoice = (v: VoiceId, rate: number) => {
-    const url = `/audio/tts/${v}.mp3`;
+    const url = `/audio/tts/${v}.mp3`; // /public/audio/tts/(female|male).mp3
 
     // 재생 중지 및 교체
     if (audioRef.current) {
@@ -71,9 +71,9 @@ export default function Step3TTS() {
     const a = new Audio(url);
     a.playbackRate = rate;
 
-    // 피치 유지 (속도 변경 시 음정 왜곡 방지)
+    // 속도 변경 시 피치 유지 (브라우저 벤더별 속성 처리)
     a.preservesPitch = true;
-    // @ts-expect-error vendor prop
+    // @ts-expect-error - 사파리/크롬 구버전용
     a.webkitPreservesPitch = true;
 
     audioRef.current = a;
@@ -83,8 +83,9 @@ export default function Step3TTS() {
     });
   };
 
+  /* ---------------- 선택 핸들러 ---------------- */
   const onPickRate = (key: SpeedKey) => {
-    const rate = SPEED.find((s) => s.key === key)?.rate ?? 1.0;
+    const rate = speedKeyToRate(key);
     setTts({ rate });
     playVoice(voiceId, rate);
   };
@@ -94,13 +95,14 @@ export default function Step3TTS() {
     playVoice(id, tts.rate ?? 1.0);
   };
 
+  /* ---------------- UI ---------------- */
   return (
-    <Wrap>
+    <Wrap role="region" aria-label="음성 설정">
       <Cols>
         {/* 속도 */}
-        <Group>
-          <Title>속도</Title>
-          <Options>
+        <Group aria-labelledby="tts-speed-title">
+          <Title id="tts-speed-title">속도</Title>
+          <Options role="radiogroup" aria-label="읽기 속도 선택">
             {SPEED.map((opt) => (
               <Row key={opt.key} htmlFor={`rate-${opt.key}`}>
                 <Radio
@@ -117,9 +119,9 @@ export default function Step3TTS() {
         </Group>
 
         {/* 목소리 */}
-        <Group>
-          <Title>목소리</Title>
-          <Options>
+        <Group aria-labelledby="tts-voice-title">
+          <Title id="tts-voice-title">목소리</Title>
+          <Options role="radiogroup" aria-label="목소리 선택">
             {VOICES.map((opt) => (
               <Row key={opt.id} htmlFor={`voice-${opt.id}`}>
                 <Radio
@@ -149,6 +151,11 @@ const Cols = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 56px;
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
 `;
 const Group = styled.section`
   display: flex;
@@ -158,6 +165,11 @@ const Group = styled.section`
 const Title = styled.h3`
   font-size: 1.5rem;
   font-weight: 700;
+  color: var(--c-black);
+
+  html.hc & {
+    color: var(--c-white);
+  }
 `;
 const Options = styled.div`
   display: flex;
@@ -177,7 +189,21 @@ const Radio = styled.input.attrs({ type: "radio" })`
   height: 20px;
   accent-color: var(--c-radio-accent, var(--c-blue));
   cursor: pointer;
+
+  &:focus-visible {
+    outline: 3px solid var(--c-blue);
+    outline-offset: 2px;
+
+    html.hc & {
+      outline-color: var(--c-yellowM);
+    }
+  }
 `;
 const Label = styled.span`
   font-size: 1rem;
+  color: var(--c-black);
+
+  html.hc & {
+    color: var(--c-white);
+  }
 `;

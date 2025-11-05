@@ -5,22 +5,20 @@ import type { NavMeta } from "@widgets/Nav/types";
 
 const DefaultLayout = () => {
   const matches = useMatches();
-  const params = useParams();
+  const params = useParams<Record<string, string>>();
   const { state } = useLocation() as { state?: { subject?: string } };
 
   const last = matches[matches.length - 1];
   const navMeta = (last?.handle as { nav?: NavMeta })?.nav;
 
-  // live에서 ?rec=1이면 live-recording으로 전환
   const baseVariant = navMeta?.variant ?? "folder";
   const variant = baseVariant;
 
-  // exam은 상태로 과목명을 보낼 수 있음 (navigate('/exam', {state:{subject:'정치학개론'}}))
   const computedTitle =
     baseVariant === "exam" && state?.subject
       ? `${state.subject} 시험`
       : typeof navMeta?.title === "function"
-      ? navMeta.title(params as any)
+      ? navMeta.title(params)
       : navMeta?.title;
 
   return (
@@ -41,6 +39,7 @@ const Wrapper = styled.section`
   width: 100%;
   min-height: 100vh;
 `;
+
 const Container = styled.section`
   flex: 1;
   display: flex;

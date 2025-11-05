@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import styled from "styled-components";
 import { useSignup } from "src/features/signup/useSignup";
 import { useContrastMode } from "@shared/useContrastMode";
+
 import { fonts } from "@styles/fonts";
 import { applyUiScale } from "@shared/applyUiScale";
 
@@ -32,41 +33,43 @@ export default function Step2Access() {
     });
   }, [navigate, setControls]);
 
-  // 🔎 초기 진입 시 배율 적용(리프레시/탭 이동 대비)
   useEffect(() => {
     if (access.font) applyUiScale(access.font);
   }, [access.font]);
 
-  // 화면 크기 변경 (글자/버튼/이미지/간격 전체 확대)
   const handleScale = (scale: number) => {
     setAccess({ font: scale });
     applyUiScale(scale);
   };
 
-  // 화면 대비 변경 (전역 고대비 모드 동기화)
   const handleContrast = (high_contrast: boolean) => {
     setAccess({ high_contrast });
     if (high_contrast !== isHC) toggleMode();
   };
 
+  const SIZE_OPTIONS = [
+    { label: "보통", scale: 125 },
+    { label: "크게", scale: 150 },
+    { label: "매우 크게", scale: 175 },
+    { label: "가장 크게", scale: 200 },
+  ] as const;
+
+  const currentScale = Number(access.font ?? 125);
+
   return (
     <Wrapper>
-      <Group>
-        <Title>화면 크기</Title>
-        <Options>
-          {[
-            { label: "보통", scale: 100 },
-            { label: "조금 크게", scale: 120 },
-            { label: "크게", scale: 140 },
-            { label: "가장 크게", scale: 160 },
-          ].map((opt) => (
+      <Group aria-labelledby="size-title">
+        <Title id="size-title">화면 크기</Title>
+        <Options role="radiogroup" aria-label="화면 크기 선택">
+          {SIZE_OPTIONS.map((opt) => (
             <Option key={opt.scale}>
               <Radio
                 id={`scale-${opt.scale}`}
                 name="fontScale"
                 value={opt.scale}
-                checked={Number(access.font ?? 100) === opt.scale}
+                checked={currentScale === opt.scale}
                 onChange={() => handleScale(opt.scale)}
+                aria-checked={currentScale === opt.scale}
               />
               <Label htmlFor={`scale-${opt.scale}`}>{opt.label}</Label>
             </Option>
@@ -74,9 +77,10 @@ export default function Step2Access() {
         </Options>
       </Group>
 
-      <Group>
-        <Title>화면 대비</Title>
+      <Group aria-labelledby="contrast-title">
+        <Title id="contrast-title">화면 대비</Title>
         <ContrastBox>
+          {/* 기본 화면 미리보기 */}
           <Preview $active={!isHC}>
             <img src="/img/login/baseScreen.png" alt="" aria-hidden />
           </Preview>
@@ -86,10 +90,12 @@ export default function Step2Access() {
               name="contrast"
               checked={!isHC}
               onChange={() => handleContrast(false)}
+              aria-checked={!isHC}
             />
             <Label htmlFor="contrast-base">기본 화면</Label>
           </Option>
 
+          {/* 고대비 화면 미리보기 */}
           <Preview $active={isHC}>
             <img src="/img/login/hcScreen.png" alt="" aria-hidden />
           </Preview>
@@ -99,6 +105,7 @@ export default function Step2Access() {
               name="contrast"
               checked={isHC}
               onChange={() => handleContrast(true)}
+              aria-checked={isHC}
             />
             <Label htmlFor="contrast-hc">고대비 화면</Label>
           </Option>
@@ -117,6 +124,14 @@ const Wrapper = styled.div`
   gap: 10rem;
   margin-top: 24px;
   width: 100%;
+
+  @media (max-width: 960px) {
+    gap: 4rem;
+  }
+  @media (max-width: 720px) {
+    flex-direction: column;
+    gap: 2rem;
+  }
 `;
 
 const Group = styled.section`
@@ -129,6 +144,11 @@ const Title = styled.h2`
   font-size: 1.25rem;
   font-weight: 700;
   margin-bottom: 4px;
+  color: var(--c-black);
+
+  html.hc & {
+    color: var(--c-white);
+  }
 `;
 
 const Options = styled.div`
@@ -145,12 +165,26 @@ const Option = styled.div`
 const Label = styled.label`
   cursor: pointer;
   ${fonts.regular20}
+  color: var(--c-black);
+
+  html.hc & {
+    color: var(--c-white);
+  }
 `;
 
 const Radio = styled.input.attrs({ type: "radio" })`
   margin-right: 15px;
   accent-color: var(--c-radio-accent, var(--c-blue));
   cursor: pointer;
+
+  &:focus-visible {
+    outline: 3px solid var(--c-blue);
+    outline-offset: 2px;
+
+    html.hc & {
+      outline-color: var(--c-yellowM);
+    }
+  }
 `;
 
 const ContrastBox = styled.div`
@@ -158,6 +192,11 @@ const ContrastBox = styled.div`
   grid-template-columns: auto 1fr;
   gap: 31px 35px;
   align-items: center;
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
 `;
 
 const Preview = styled.div<{ $active: boolean }>`
@@ -170,6 +209,11 @@ const Preview = styled.div<{ $active: boolean }>`
   display: flex;
   justify-content: center;
   align-items: center;
+
+  html.hc & {
+    border-color: ${({ $active }) =>
+      $active ? "var(--c-yellowM)" : "var(--c-beige)"};
+  }
 
   img {
     width: 100%;

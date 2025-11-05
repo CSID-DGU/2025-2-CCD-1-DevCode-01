@@ -63,7 +63,7 @@ instance.interceptors.response.use(
         if (!refresh) throw new Error("No refresh token");
 
         const res = await axios.post<{ access: string }>(
-          `${import.meta.env.VITE_BASE_URL}/api/auth/refresh/`,
+          `${import.meta.env.VITE_BASE_URL}/auth/refresh/`,
           { refresh },
           { withCredentials: false }
         );
@@ -119,6 +119,29 @@ export const getResponse = async <T>(url: string): Promise<T | null> => {
   } catch (e: unknown) {
     console.error("GET 요청 실패:", e);
     return null;
+  }
+};
+
+export const patchResponse = async <TRequest, TResponse>(
+  url: string,
+  body: TRequest
+): Promise<TResponse | null> => {
+  try {
+    const res = await instance.patch<TResponse>(url, body);
+    return res.data;
+  } catch (e) {
+    console.error("PATCH 요청 실패:", e);
+    return null;
+  }
+};
+
+export const deleteResponse = async (url: string): Promise<boolean> => {
+  try {
+    await instance.delete(url);
+    return true;
+  } catch (e) {
+    console.error("DELETE 요청 실패:", e);
+    return false;
   }
 };
 

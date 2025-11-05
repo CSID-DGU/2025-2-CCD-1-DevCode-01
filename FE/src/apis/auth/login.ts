@@ -8,11 +8,16 @@ export interface LoginRequest {
 export interface LoginResponse {
   access: string;
   refresh: string;
+  role: "student" | "helper" | string;
+  font: number;
+  high_contrast: boolean;
+  username: string;
+  message?: string;
 }
 
 export const loginApi = async (data: LoginRequest) => {
   const res = await postResponse<LoginRequest, LoginResponse>(
-    "/api/auth/login/",
+    "/auth/login/",
     data
   );
   return res;

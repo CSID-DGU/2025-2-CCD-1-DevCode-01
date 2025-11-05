@@ -37,7 +37,7 @@ body, button, input, select, table, textarea {font-size:12px;border:none;font-fa
 h1, h2, h3, h4, h5, h6 {font-size:inherit;line-height:inherit}
 textarea {-webkit-backface-visibility:hidden;backface-visibility:hidden;background-color:transparent;border:0;word-break:keep-all;word-wrap:break-word;outline:none;}
 button, input {-webkit-border-radius:0;border-radius:0;border:none;outline: none;}
-button {background-color:transparent;border:none;outline: none;}
+button {background-color:transparent;outline: none;}
 fieldset, img {border:0}
 img {vertical-align:top}
 ol, ul {list-style:none}
@@ -97,23 +97,8 @@ body {
   scrollbar-width: none; /* 파이어폭스 */
 }
 
-&:focus {
-    outline: none;
-  }
 
-  button {
-  background-color: transparent;
-  border: none;
-  outline: none;
-  box-shadow: none;
-}
 
-button:focus,
-button:active {
-  outline: none;
-  border: none;
-  box-shadow: none;
-}
 
 
 `;
