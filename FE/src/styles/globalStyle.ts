@@ -47,7 +47,7 @@ iframe {overflow:hidden;margin:0;border:0;padding:0;vertical-align:top}
 mark {background-color:transparent}
 i {font-style:normal}
 
-html, body, #root { height: 100%; }
+/* html, body, #root { height: 100%; } */
 #root {
 	display: flex;
 	flex-direction: column;
@@ -97,9 +97,17 @@ body {
   scrollbar-width: none; /* 파이어폭스 */
 }
 
-
-
-
+ .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 
 `;
 
