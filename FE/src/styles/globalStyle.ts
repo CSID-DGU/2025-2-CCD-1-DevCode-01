@@ -47,7 +47,7 @@ iframe {overflow:hidden;margin:0;border:0;padding:0;vertical-align:top}
 mark {background-color:transparent}
 i {font-style:normal}
 
-html, body, #root { height: 100%; }
+/* html, body, #root { height: 100%; } */
 #root {
 	display: flex;
 	flex-direction: column;

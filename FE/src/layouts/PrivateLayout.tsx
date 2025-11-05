@@ -5,7 +5,7 @@ const PrivateRoute = () => {
 
   if (!accessToken) {
     alert("로그인이 필요해요!");
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   return <Outlet />;
