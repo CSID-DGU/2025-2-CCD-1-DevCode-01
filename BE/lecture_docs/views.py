@@ -99,7 +99,8 @@ class DocUploadView(APIView):
 
 class DocDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    queryset = Doc.objects.all()
+    def get_queryset(self):
+        return Doc.objects.all()    
     def get(self, request, docId):
         doc = Doc.objects.get(id=docId)
         pages = doc.pages.all()
@@ -152,7 +153,7 @@ class DocDetailView(APIView):
     def delete(self, request, docId):
         doc = self.get_queryset().get(id=docId)
         doc.delete()
-        return Response({"message": "파일이 삭제되었습니다."}, status=204)
+        return Response({"message": "파일이 삭제되었습니다."}, status=200)
 
 
 class PageDetailView(APIView):
