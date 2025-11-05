@@ -1,4 +1,3 @@
-// src/components/home/OptionsMenu.tsx
 import styled from "styled-components";
 import { fonts } from "@styles/fonts";
 import { forwardRef, useEffect, useRef } from "react";

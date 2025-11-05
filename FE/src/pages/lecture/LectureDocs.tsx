@@ -1,10 +1,10 @@
 import { useParams, useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import { fonts } from "@styles/fonts";
 import UploadBar from "src/components/lecture/UploadBar";
 import { DocList, ListItem } from "src/components/lecture/DocList";
 import DocItem from "src/components/lecture/DocItem";
 import { useLectureDocs } from "src/hooks/useLectureDocs";
+import MemoCard from "src/components/lecture/MemoCard";
 
 type RouteParams = { courseId?: string };
 
@@ -65,17 +65,18 @@ export default function LectureDocs() {
       </Left>
 
       <Right role="complementary" aria-label="메모">
-        <MemoCard>
-          <MemoTitle id="memo-title">MEMO</MemoTitle>
-          <MemoBody aria-describedby="memo-title">
-            • 다음주까지 과제 제출
-            <br />• 수업 때 명찰 꼭 가져오기
-          </MemoBody>
-          <label className="sr-only" htmlFor="memo-input">
-            메모 입력
-          </label>
-          <MsgInput id="memo-input" placeholder="메시지 입력" />
-        </MemoCard>
+        <MemoCard
+          // TODO: 서버에서 불러온 값이 있으면 initialValue에 넣어주세요.
+          initialValue={"• 다음주까지 과제 제출\n• 수업 때 명찰 꼭 가져오기"}
+          // TODO: API 연결 지점
+          onSave={async (text) => {
+            // await api.saveLectureMemo(lectureNumericId, text);
+            // 임시: 콘솔 확인
+            console.log("memo saved:", { lectureId: lectureNumericId, text });
+          }}
+          stickyTop="1rem"
+          title="MEMO"
+        />
       </Right>
     </Wrap>
   );
@@ -98,36 +99,6 @@ const Left = styled.section`
 const Right = styled.aside`
   grid-row: 2;
   min-width: 280px;
-`;
-const MemoCard = styled.section`
-  background: #fde68a;
-  border-radius: 12px;
-  padding: 1.25rem;
-  border: 1px solid #e6c65a;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
-  position: sticky;
-  top: 1rem;
-`;
-const MemoTitle = styled.h3`
-  margin: 0 0 1rem;
-  ${fonts.bold32};
-`;
-const MemoBody = styled.p`
-  ${fonts.regular20};
-  min-height: 8rem;
-`;
-const MsgInput = styled.input`
-  margin-top: 1rem;
-  width: 100%;
-  ${fonts.regular20};
-  padding: 0.9rem 1rem;
-  border: 2px solid var(--c-grayL);
-  border-radius: 12px;
-  background: #fff5d1;
-  &:focus-visible {
-    outline: 3px solid var(--c-blue);
-    outline-offset: 2px;
-  }
 `;
 const SrOnly = styled.h2`
   position: absolute;
