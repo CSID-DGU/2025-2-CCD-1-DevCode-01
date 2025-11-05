@@ -16,6 +16,7 @@ import Step2Access from "@pages/auth/steps/Step2Access";
 import Step3TTS from "@pages/auth/steps/Step3TTS";
 import Step4Credentials from "@pages/auth/steps/Step4Credentials";
 import FoldersRoute from "./FoldersRoute";
+import LectureDocs from "@pages/lecture/LectureDocs";
 
 const router = createBrowserRouter([
   {
@@ -50,8 +51,19 @@ const router = createBrowserRouter([
         children: [
           {
             path: "/",
-            element: <FoldersRoute />, // ✅ 홈
+            element: <FoldersRoute />,
             handle: { nav: { variant: "folder" } as NavMeta },
+          },
+          {
+            path: "/class/:courseId/doc",
+            element: <LectureDocs />,
+            handle: {
+              nav: {
+                variant: "folder",
+                title: ({ courseId }: { courseId?: string }) =>
+                  `강의 ${courseId ?? ""}`,
+              },
+            },
           },
           {
             path: "/class/:courseId/pre",

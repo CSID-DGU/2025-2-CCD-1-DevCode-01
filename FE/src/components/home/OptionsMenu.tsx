@@ -1,3 +1,4 @@
+// src/components/home/OptionsMenu.tsx
 import styled from "styled-components";
 import { fonts } from "@styles/fonts";
 import { forwardRef } from "react";
@@ -5,16 +6,57 @@ import { forwardRef } from "react";
 type Props = {
   onEdit: () => void;
   onDelete: () => void;
+  className?: string;
+  style?: React.CSSProperties;
+  /** 배치 커스텀 (필요한 것만 넘겨도 됨) */
+  top?: string;
+  left?: string;
+  right?: string;
+  transform?: string;
 };
 
 export const OptionsMenu = forwardRef<HTMLDivElement, Props>(
-  function OptionsMenu({ onEdit, onDelete }, ref) {
+  function OptionsMenu(
+    { onEdit, onDelete, className, style, top, left, right, transform },
+    ref
+  ) {
+    const stopAll: React.MouseEventHandler = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
     return (
-      <Dropdown ref={ref} role="menu">
-        <DropdownItem role="menuitem" onClick={onEdit}>
+      <Dropdown
+        ref={ref}
+        role="menu"
+        className={className}
+        style={style}
+        $top={top}
+        $left={left}
+        $right={right}
+        $transform={transform}
+        onMouseDown={stopAll}
+        onClick={stopAll}
+      >
+        <DropdownItem
+          role="menuitem"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onEdit();
+          }}
+        >
           ✏️ 수정
         </DropdownItem>
-        <DropdownItem role="menuitem" $danger onClick={onDelete}>
+        <DropdownItem
+          role="menuitem"
+          $danger
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
           🗑 삭제
         </DropdownItem>
       </Dropdown>
@@ -22,11 +64,19 @@ export const OptionsMenu = forwardRef<HTMLDivElement, Props>(
   }
 );
 
-const Dropdown = styled.div`
+const Dropdown = styled.div<{
+  $top?: string;
+  $left?: string;
+  $right?: string;
+  $transform?: string;
+}>`
   position: absolute;
-  top: 1.75rem;
-  left: 50%;
-  transform: translateX(0.5rem);
+  /* 기본값(이전 동작 유지) */
+  top: ${({ $top }) => $top ?? "1.75rem"};
+  left: ${({ $left }) => $left ?? "50%"};
+  right: ${({ $right }) => $right ?? "auto"};
+  transform: ${({ $transform }) => $transform ?? "translateX(0.5rem)"};
+
   background: white;
   border: 1px solid var(--c-grayL);
   border-radius: 12px;
