@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styled from "styled-components";
 import AddLectureDialog from "./AddLectureDialog";
 import { fetchLectures } from "src/entities/lecture/api";
@@ -13,7 +13,9 @@ type Props = {
 export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [open, setOpen] = useState(false);
+  const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   const columnMin = useMemo(() => {
     const baseRem = 14;
@@ -29,6 +31,16 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
 
   useEffect(() => {
     void load();
+  }, []);
+
+  useEffect(() => {
+    const onClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpenId(null);
+      }
+    };
+    document.addEventListener("click", onClickOutside);
+    return () => document.removeEventListener("click", onClickOutside);
   }, []);
 
   return (
@@ -78,11 +90,35 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
             </Tile>
 
             <LabelWrap>
-              <Title id={`lec-${lec.lecture_id}-title`} title={lec.title}>
-                {lec.title}
-              </Title>
-
+              <TitleRow>
+                <Title id={`lec-${lec.lecture_id}-title`}>{lec.title}</Title>
+                <MenuButton
+                  aria-label="옵션"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpenId((prev) =>
+                      prev === lec.lecture_id ? null : lec.lecture_id
+                    );
+                  }}
+                >
+                  <img src="/img/home/arrowDown.png" />
+                </MenuButton>
+              </TitleRow>
               <Meta>{lec.code}</Meta>
+
+              {menuOpenId === lec.lecture_id && (
+                <Dropdown ref={menuRef}>
+                  <DropdownItem onClick={() => alert(`수정: ${lec.title}`)}>
+                    ✏️ 수정
+                  </DropdownItem>
+                  <DropdownItem
+                    $danger
+                    onClick={() => alert(`삭제: ${lec.title}`)}
+                  >
+                    🗑 삭제
+                  </DropdownItem>
+                </Dropdown>
+              )}
             </LabelWrap>
           </FolderTileContainer>
         ))}
@@ -120,7 +156,6 @@ const Grid = styled.section`
 `;
 
 const TileBase = styled.div`
-  position: relative;
   width: 100%;
   border-radius: 10px;
   background: var(--c-white);
@@ -210,24 +245,49 @@ const FolderTileContainer = styled.section`
   display: flex;
   flex-direction: column;
   align-items: center;
+  position: relative;
   ${fonts.regular32};
-  gap: 15px;
+`;
+
+const TitleRow = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
 `;
 
 const Title = styled.h2`
-  font-size: 1rem;
-  font-weight: 800;
   margin: 0;
-  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  ${fonts.regular32};
+`;
+
+const MenuButton = styled.button`
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--c-grayD);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+
+  &:hover {
+    color: var(--c-blue);
+  }
+
+  img {
+    width: 22px;
+    height: 11px;
+  }
 `;
 
 const Meta = styled.p`
   margin: 0;
   color: var(--c-grayD);
-  font-size: 0.875rem;
+  ${fonts.regular24}
 `;
 
 const SrOnly = styled.h1`
@@ -240,4 +300,38 @@ const SrOnly = styled.h1`
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+`;
+
+const Dropdown = styled.div`
+  position: absolute;
+  top: 80%;
+  left: 70%;
+  background: var(--c-white);
+  border: 1px solid var(--c-grayL);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  width: 120px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const DropdownItem = styled.button<{ $danger?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  text-align: left;
+  ${fonts.regular20}
+  color: ${({ $danger }) => ($danger ? "var(--c-blueD)" : "var(--c-black)")};
+  cursor: pointer;
+  justify-content: center;
+
+  &:hover {
+    background: var(--c-blueL);
+  }
 `;
