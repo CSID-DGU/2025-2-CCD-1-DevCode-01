@@ -1,5 +1,7 @@
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import styled from "styled-components";
+import { useContext } from "react";
+import { TTSContext } from "@shared/tts/TTSProvider";
 
 type SignupLayoutProps = {
   title: string;
@@ -9,6 +11,7 @@ type SignupLayoutProps = {
   footer?: ReactNode;
   onSubmit?: () => void;
   submitDisabled?: boolean;
+  nextBtnRef?: RefObject<HTMLButtonElement | null>;
 };
 
 const SignupLayout = ({
@@ -19,14 +22,34 @@ const SignupLayout = ({
   footer,
   onSubmit,
   submitDisabled,
+  nextBtnRef,
 }: SignupLayoutProps) => {
+  const tts = useContext(TTSContext);
+
   return (
     <Wrap>
       {header}
       <Title>{title}</Title>
       <Container>{children}</Container>
       {footer}
-      <Btn type="button" onClick={onSubmit} disabled={submitDisabled}>
+      <Btn
+        ref={nextBtnRef}
+        type="button"
+        tabIndex={0}
+        aria-disabled={submitDisabled ? "true" : "false"}
+        onClick={() => {
+          if (!submitDisabled) onSubmit?.();
+        }}
+        onKeyDown={(e) => {
+          if ((e.key === "Enter" || e.key === " ") && !submitDisabled) {
+            e.preventDefault();
+            onSubmit?.();
+          }
+        }}
+        onFocus={() => {
+          tts?.speak("다음 버튼입니다.");
+        }}
+      >
         {btn}
       </Btn>
     </Wrap>
@@ -45,18 +68,21 @@ const Wrap = styled.div`
   margin: 0 auto;
   margin-top: 3rem;
 `;
+
 const Title = styled.h1`
   font-size: 1.8rem;
   font-weight: 800;
   text-align: center;
   margin-top: 0.25rem;
 `;
+
 const Container = styled.section`
   display: flex;
   flex-direction: column;
   gap: 1rem;
   width: 100%;
 `;
+
 const Btn = styled.button`
   margin-top: 1rem;
   width: 28.125rem;
@@ -68,11 +94,15 @@ const Btn = styled.button`
   border: 0;
   border-radius: 10px;
   cursor: pointer;
-  &:hover {
-    background: var(--c-blue);
-  }
-  &:disabled {
+  transition: background 0.15s ease-in-out;
+
+  &[aria-disabled="true"] {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--c-blue);
+    outline-offset: 2px;
   }
 `;

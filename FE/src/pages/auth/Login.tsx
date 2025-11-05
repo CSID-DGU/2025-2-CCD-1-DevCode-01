@@ -6,7 +6,6 @@ import { useContrastImage } from "@shared/useContrastImage";
 import { loginApi } from "@apis/auth/login";
 import { applyUiScale } from "@shared/applyUiScale";
 
-/** 👇 추가: TTS 컨텍스트 & 포커스-읽기 훅 */
 import { TTSContext } from "@shared/tts/TTSProvider";
 import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
@@ -29,7 +28,6 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
-  /** 👇 포커스 시 읽어줄 문구 지정 */
   const idSpeak = useFocusSpeak({ text: "아이디 입력" });
   const pwSpeak = useFocusSpeak({ text: "비밀번호 입력" });
   const loginBtnSpeak = useFocusSpeak({ text: "로그인 버튼" });
@@ -61,14 +59,10 @@ const Login = () => {
       localStorage.setItem("high_contrast", String(r.high_contrast));
       localStorage.setItem("username", r.username);
 
-      try {
-        applyUiScale?.(r.font);
-        const root = document.documentElement;
-        if (r.high_contrast) root.classList.add("hc");
-        else root.classList.remove("hc");
-      } catch {
-        // 적용 실패해도 로그인 플로우는 계속
-      }
+      applyUiScale?.(r.font);
+      const root = document.documentElement;
+      if (r.high_contrast) root.classList.add("hc");
+      else root.classList.remove("hc");
 
       tts?.speak("로그인 되었습니다. 홈으로 이동합니다.");
       navigate("/");
@@ -98,7 +92,6 @@ const Login = () => {
         <h1>캠퍼스 메이트에 오신 것을 환영합니다.</h1>
 
         <s.InputContainer>
-          {/* ✅ 포커스-읽기: onFocus/onBlur 전달 */}
           <InputField
             label="아이디"
             placeholder="아이디를 입력하세요"
@@ -126,7 +119,7 @@ const Login = () => {
             disabled={busy}
             aria-busy={busy}
             aria-label="로그인"
-            {...loginBtnSpeak} // ✅ 버튼도 포커스-읽기
+            {...loginBtnSpeak}
           >
             로그인
           </button>
@@ -139,7 +132,7 @@ const Login = () => {
               role="link"
               tabIndex={0}
               onKeyDown={(e) => e.key === "Enter" && handleSignupClick()}
-              {...signupLinkSpeak} // ✅ 링크도 포커스-읽기
+              {...signupLinkSpeak}
             >
               회원가입
             </p>

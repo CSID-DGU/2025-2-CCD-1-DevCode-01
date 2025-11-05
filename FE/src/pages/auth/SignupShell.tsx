@@ -1,5 +1,5 @@
 import { Outlet, useLocation, Navigate } from "react-router-dom";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import SignupLayout from "src/components/auth/SignupLayout";
 import Stepper from "src/components/auth/Step";
 import { SignupProvider } from "src/features/signup/SignupProvider";
@@ -19,10 +19,24 @@ type Controls = {
   submitDisabled?: boolean;
 };
 
+export type ShellContext = {
+  setControls: (c: Partial<Controls>) => void;
+  focusNext: () => void;
+};
+
+function shallowEqual(a: Partial<Controls>, b: Partial<Controls>) {
+  const ka = Object.keys(a) as (keyof Controls)[];
+  const kb = Object.keys(b) as (keyof Controls)[];
+  if (ka.length !== kb.length) return false;
+  for (const k of ka) {
+    if (a[k] !== b[k]) return false;
+  }
+  return true;
+}
+
 function Guarded() {
   const loc = useLocation();
   const { role, access, tts, info } = useSignup();
-
   const stepNo = Number(/\/signup\/(\d)/.exec(loc.pathname)?.[1] ?? 1);
 
   useEffect(() => {
@@ -34,7 +48,15 @@ function Guarded() {
     console.groupEnd();
   }, [stepNo, role, access, tts, info]);
 
-  const [controls, setControls] = useState<Controls>({});
+  const [controls, _setControls] = useState<Controls>({});
+  const nextBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  const setControls = useCallback((c: Partial<Controls>) => {
+    _setControls((prev) => {
+      const next = { ...prev, ...c };
+      return shallowEqual(prev, next) ? prev : next;
+    });
+  }, []);
 
   const header = useMemo(
     () => <Stepper current={stepNo} total={4} labels={TITLES} />,
@@ -48,12 +70,20 @@ function Guarded() {
   return (
     <SignupLayout
       title={displayTitle}
-      btn={controls.btn ?? ""}
+      btn={controls.btn ?? "다음"}
       header={header}
       onSubmit={controls.onSubmit}
-      submitDisabled={controls.submitDisabled}
+      submitDisabled={!!controls.submitDisabled}
+      nextBtnRef={nextBtnRef}
     >
-      <Outlet context={{ setControls }} />
+      <Outlet
+        context={
+          {
+            setControls,
+            focusNext: () => nextBtnRef.current?.focus(),
+          } satisfies ShellContext
+        }
+      />
     </SignupLayout>
   );
 }
