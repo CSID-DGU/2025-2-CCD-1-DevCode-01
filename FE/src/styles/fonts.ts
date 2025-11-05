@@ -30,4 +30,6 @@ export const fonts = {
 
   // Bold
   bold32: fontGenerator(700, "32px"),
+  bold26: fontGenerator(700, "26px"),
+  bold20: fontGenerator(700, "20px"),
 };

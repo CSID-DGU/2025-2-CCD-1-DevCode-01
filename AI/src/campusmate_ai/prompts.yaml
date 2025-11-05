@@ -1,0 +1,75 @@
+categories:
+  table:
+    aliases:
+      [
+        "a table",
+        "data table",
+        "tabular data",
+        "spreadsheet",
+        "rows and columns",
+        "grid of cells",
+        "gridlines",
+        "header row",
+        "표",
+        "스프레드시트",
+        "행과 열",
+        "셀 그리드",
+        "머리글 행",
+      ]
+  chart:
+    aliases:
+      [
+        "a chart",
+        "bar chart",
+        "line chart",
+        "plot",
+        "graph",
+        "axes",
+        "legend",
+        "차트",
+        "그래프",
+        "축",
+        "범례",
+      ]
+  formula:
+    aliases:
+      [
+        "a formula",
+        "equation",
+        "math formula",
+        "integral",
+        "sigma",
+        "sqrt",
+        "fraction",
+        "수식",
+        "공식",
+      ]
+  diagram:
+    aliases:
+      [
+        "a diagram",
+        "schematic",
+        "figure",
+        "arrow diagram",
+        "flow chart",
+        "beam diagram",
+        "도식",
+        "도해",
+        "화살표 다이어그램",
+      ]
+  text:
+    aliases:
+      [
+        "paragraph text",
+        "title",
+        "heading",
+        "caption",
+        "subtitle",
+        "bullet list",
+        "footnote",
+        "label",
+        "본문 텍스트",
+        "제목",
+        "캡션",
+        "글머리표",
+      ]
