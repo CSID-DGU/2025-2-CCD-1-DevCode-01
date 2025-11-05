@@ -175,6 +175,7 @@ const Title = styled.h3`
   margin: 0;
   ${fonts.bold20};
   line-height: 1.1;
+  color: black;
 `;
 
 const Meta = styled.div`
