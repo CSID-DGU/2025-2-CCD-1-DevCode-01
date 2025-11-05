@@ -3,6 +3,7 @@ import { fonts } from "@styles/fonts";
 import type { Lecture } from "src/entities/lecture/types";
 import { OptionsMenu } from "./OptionsMenu";
 import { EditTitleBar } from "./EditTitleBar";
+import { useContrastImage } from "@shared/useContrastImage";
 
 type Props = {
   style?: React.CSSProperties;
@@ -39,6 +40,8 @@ export const LectureCard = ({
   onDelete,
   onCopyCode,
 }: Props) => {
+  const arrowDown = useContrastImage("/img/home/arrowDown");
+
   return (
     <FolderBox style={style}>
       <Tile
@@ -72,7 +75,7 @@ export const LectureCard = ({
                 );
               }}
             >
-              <img src="/img/home/arrowDown.png" alt="" />
+              <img src={arrowDown} alt="" />
             </MenuButton>
           </TitleRow>
 
