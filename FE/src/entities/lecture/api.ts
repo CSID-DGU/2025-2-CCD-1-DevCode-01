@@ -42,7 +42,7 @@ const mapListItem = (dto: LectureListItemDTO): Lecture => ({
 
 // 모든 강의 목록 조회
 export const fetchLectures = async (): Promise<Lecture[]> => {
-  const res = await getResponse<LectureListResponse>("/api/lectures/");
+  const res = await getResponse<LectureListResponse>("/lecture/");
   if (!isLectureListResponse(res)) {
     console.warn("[fetchLectures] 예상치 못한 응답:", res);
     return [];
@@ -55,7 +55,7 @@ export const createLecture = async (
   payload: CreateLectureReq
 ): Promise<Lecture | null> => {
   const res = await postResponse<CreateLectureReq, CreateLectureRes>(
-    "/api/lectures/",
+    "/lecture/",
     payload
   );
   if (!res) return null;
@@ -72,7 +72,7 @@ export const joinLecture = async (
   payload: JoinLectureReq
 ): Promise<Lecture | null> => {
   const res = await postResponse<JoinLectureReq, JoinLectureRes>(
-    "/api/lectures/join/",
+    "/lectures/join/",
     payload
   );
   if (!res) return null;

@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from "react";
 import * as S from "./style";
 
 interface InputFieldProps {
@@ -6,6 +7,7 @@ interface InputFieldProps {
   value?: string;
   placeholder?: string;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
 }
 
 const InputField = ({
@@ -14,6 +16,7 @@ const InputField = ({
   value,
   placeholder,
   onChange,
+  onKeyDown,
 }: InputFieldProps) => {
   return (
     <S.Container>
@@ -23,6 +26,7 @@ const InputField = ({
         value={value}
         placeholder={placeholder}
         onChange={onChange}
+        onKeyDown={onKeyDown}
       />
     </S.Container>
   );

@@ -38,4 +38,4 @@ export const toSignupFlat = (
 });
 
 export const signupApi = (payload: SignupFlatRequest): Promise<boolean> =>
-  postNoResponse<SignupFlatRequest>("/api/auth/signup/", payload);
+  postNoResponse<SignupFlatRequest>("/auth/signup/", payload);
