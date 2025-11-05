@@ -72,7 +72,7 @@ export const joinLecture = async (
   payload: JoinLectureReq
 ): Promise<Lecture | null> => {
   const res = await postResponse<JoinLectureReq, JoinLectureRes>(
-    "/lectures/join/",
+    "/lecture/join/",
     payload
   );
   if (!res) return null;
