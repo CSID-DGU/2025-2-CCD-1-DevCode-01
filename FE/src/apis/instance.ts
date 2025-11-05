@@ -122,4 +122,27 @@ export const getResponse = async <T>(url: string): Promise<T | null> => {
   }
 };
 
+export const patchResponse = async <TRequest, TResponse>(
+  url: string,
+  body: TRequest
+): Promise<TResponse | null> => {
+  try {
+    const res = await instance.patch<TResponse>(url, body);
+    return res.data;
+  } catch (e) {
+    console.error("PATCH 요청 실패:", e);
+    return null;
+  }
+};
+
+export const deleteResponse = async (url: string): Promise<boolean> => {
+  try {
+    await instance.delete(url);
+    return true;
+  } catch (e) {
+    console.error("DELETE 요청 실패:", e);
+    return false;
+  }
+};
+
 export default instance;
