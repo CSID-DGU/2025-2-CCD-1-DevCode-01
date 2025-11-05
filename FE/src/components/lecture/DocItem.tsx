@@ -1,3 +1,4 @@
+// src/components/lecture/DocItem.tsx
 import styled from "styled-components";
 import { fonts } from "@styles/fonts";
 import { OptionsMenu } from "src/components/home/OptionsMenu";
@@ -22,23 +23,40 @@ export default function DocItem({
   fmtDate,
   onTitleUpdated,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [newTitle, setNewTitle] = useState(doc.title);
+
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuBtnRef = useRef<HTMLButtonElement | null>(null);
+  const firstMenuItemRef = useRef<HTMLButtonElement | null>(null);
+  const titleBtnRef = useRef<HTMLButtonElement | null>(null);
+
   const arrow = useContrastImage("/img/home/arrowDown");
 
   useEffect(() => {
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
+    const onDocClick = (e: MouseEvent) => {
+      if (
+        menuOpen &&
+        menuRef.current &&
+        !menuRef.current.contains(e.target as Node)
+      ) {
+        setMenuOpen(false);
+        menuBtnRef.current?.focus();
       }
     };
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, []);
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, [menuOpen]);
 
-  const saveEdit = async () => {
+  useEffect(() => {
+    if (menuOpen) {
+      const t = setTimeout(() => firstMenuItemRef.current?.focus(), 0);
+      return () => clearTimeout(t);
+    }
+  }, [menuOpen]);
+
+  const saveEdit = async (by: "enter" | "blur" = "blur") => {
     const next = newTitle.trim();
     if (!next) {
       toast.error("제목을 입력하세요.");
@@ -46,74 +64,107 @@ export default function DocItem({
     }
 
     const updated = await updateLectureDoc(doc.id, next);
-    if (updated) {
-      onTitleUpdated(doc.id, updated.title);
-      toast.success("수정 완료");
-      setEditing(false);
-    } else {
-      toast.error("수정 실패");
-    }
+    if (!updated) throw new Error("no-updated");
+
+    onTitleUpdated(doc.id, updated.title);
+    setEditing(false);
+
+    requestAnimationFrame(() => {
+      if (by === "enter") {
+        titleBtnRef.current?.focus({ preventScroll: true });
+      } else {
+        (document.activeElement as HTMLElement | null)?.blur();
+      }
+    });
+
+    toast.success("수정 완료");
   };
 
   return (
-    <ItemBody
-      role="button"
-      tabIndex={0}
-      aria-labelledby={`doc-title-${doc.id}`}
-      onClick={() => !editing && onOpen(doc)}
-    >
+    <ItemRow aria-label={`${doc.title} 문서`}>
       {editing ? (
         <EditInput
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
-          onBlur={saveEdit}
+          onBlur={() => void saveEdit("blur")}
           onKeyDown={(e) => {
-            if (e.key === "Enter") saveEdit();
-            if (e.key === "Escape") setEditing(false);
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.stopPropagation();
+              void saveEdit("enter");
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              setEditing(false);
+              titleBtnRef.current?.focus();
+            }
           }}
+          aria-label="문서 제목 편집"
           autoFocus
         />
       ) : (
-        <TitleCol id={`doc-title-${doc.id}`}>{doc.title}</TitleCol>
+        <TitleBtn
+          ref={titleBtnRef}
+          type="button"
+          onClick={() => onOpen(doc)}
+          aria-labelledby={`doc-title-${doc.id}`}
+        >
+          <span id={`doc-title-${doc.id}`}>{doc.title}</span>
+        </TitleBtn>
       )}
 
       <DateCol aria-label="작성일">{fmtDate(doc.created_at)}</DateCol>
 
       <MenuBtn
+        ref={menuBtnRef}
+        type="button"
         aria-label="교안 옵션 열기"
         aria-haspopup="menu"
-        aria-expanded={open}
+        aria-expanded={menuOpen}
+        aria-controls={`doc-menu-${doc.id}`}
         onClick={(e) => {
           e.stopPropagation();
-          setOpen((p) => !p);
+          setMenuOpen((p) => !p);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" && !menuOpen) {
+            e.preventDefault();
+            setMenuOpen(true);
+          } else if (e.key === "Escape" && menuOpen) {
+            e.preventDefault();
+            setMenuOpen(false);
+            menuBtnRef.current?.focus();
+          }
         }}
       >
         <img src={arrow} alt="" aria-hidden />
       </MenuBtn>
 
-      {open && (
+      {menuOpen && (
         <OptionsMenu
           ref={menuRef}
           onEdit={() => {
-            setOpen(false);
+            setMenuOpen(false);
             setEditing(true);
           }}
           onDelete={() => {
-            setOpen(false);
+            setMenuOpen(false);
             void onDelete(doc);
           }}
           top="calc(80%)"
           left="auto"
           right="0"
           transform="none"
+          firstItemRef={firstMenuItemRef}
         />
       )}
-    </ItemBody>
+    </ItemRow>
   );
 }
 
 /* styled */
-const ItemBody = styled.div`
+const ItemRow = styled.div`
+  position: relative;
   display: grid;
   grid-template-columns: 1fr auto 36px;
   align-items: center;
@@ -122,13 +173,22 @@ const ItemBody = styled.div`
   border-radius: 12px;
   background: white;
   border: 1px solid color-mix(in srgb, var(--c-blueL) 30%, white);
-  cursor: pointer;
-  position: relative;
 `;
 
-const TitleCol = styled.span`
+const TitleBtn = styled.button`
   ${fonts.regular20};
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 0;
   color: black;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 3px solid var(--c-blue);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
 `;
 
 const EditInput = styled.input`
@@ -146,6 +206,7 @@ const DateCol = styled.time`
   ${fonts.regular20};
   color: ${({ theme }) => theme.colors.base.grayD};
   text-align: right;
+  padding-right: 0.25rem;
 `;
 
 const MenuBtn = styled.button`
@@ -161,5 +222,10 @@ const MenuBtn = styled.button`
   img {
     width: 16px;
     height: 11px;
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--c-blue);
+    outline-offset: 2px;
   }
 `;

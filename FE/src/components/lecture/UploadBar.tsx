@@ -1,32 +1,50 @@
 // src/components/lecture/UploadBar.tsx
+import { useRef } from "react";
 import styled from "styled-components";
 import { fonts } from "@styles/fonts";
 
 type Props = {
   onSelectFile: (file: File) => void;
+  busy?: boolean; // 선택(로딩 스피너 등 쓸 때)
 };
 
-export default function UploadBar({ onSelectFile }: Props) {
+export default function UploadBar({ onSelectFile, busy }: Props) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const openPicker = () => inputRef.current?.click();
+
+  const onChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+    const file = e.target.files?.[0];
+    if (file) onSelectFile(file);
+    e.currentTarget.value = ""; // 같은 파일 재선택 대비 초기화
+  };
+
   return (
-    <AddBar role="region" aria-label="자료 추가 영역">
-      <FileLabel htmlFor="doc-file-input">
+    <AddBar role="region" aria-label="자료 추가 영역" aria-busy={!!busy}>
+      <AddBtn
+        type="button"
+        onClick={openPicker}
+        aria-controls="doc-file-input"
+        aria-describedby="doc-file-desc"
+      >
         <Plus aria-hidden>＋</Plus>
         <span>자료 추가</span>
-      </FileLabel>
+      </AddBtn>
+
+      <VisuallyHidden id="doc-file-desc">
+        PDF 또는 파워포인트 파일을 선택합니다.
+      </VisuallyHidden>
+
       <input
         id="doc-file-input"
+        ref={inputRef}
         type="file"
         accept="
           application/pdf,
           application/vnd.ms-powerpoint,
           application/vnd.openxmlformats-officedocument.presentationml.presentation
         "
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onSelectFile(file);
-
-          e.currentTarget.value = "";
-        }}
+        onChange={onChange}
         aria-label="교안 파일 선택"
         style={{ display: "none" }}
       />
@@ -34,6 +52,7 @@ export default function UploadBar({ onSelectFile }: Props) {
   );
 }
 
+/* styles */
 const AddBar = styled.div`
   grid-column: 1 / -1;
   grid-row: 1;
@@ -47,7 +66,7 @@ const AddBar = styled.div`
   justify-content: center;
 `;
 
-const FileLabel = styled.label`
+const AddBtn = styled.button`
   width: 100%;
   ${fonts.regular24};
   border-radius: 12px;
@@ -70,4 +89,17 @@ const FileLabel = styled.label`
 const Plus = styled.span`
   font-size: 1.5rem;
   line-height: 1;
+`;
+
+// 스크린리더 전용
+const VisuallyHidden = styled.span`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 `;

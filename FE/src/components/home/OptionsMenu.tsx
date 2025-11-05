@@ -1,34 +1,97 @@
 // src/components/home/OptionsMenu.tsx
 import styled from "styled-components";
 import { fonts } from "@styles/fonts";
-import { forwardRef } from "react";
+import { forwardRef, useEffect, useRef } from "react";
 
 type Props = {
   onEdit: () => void;
   onDelete: () => void;
+  onRequestClose?: () => void;
   className?: string;
   style?: React.CSSProperties;
-  /** 배치 커스텀 (필요한 것만 넘겨도 됨) */
   top?: string;
   left?: string;
   right?: string;
   transform?: string;
+
+  autoFocusFirst?: boolean;
+  firstItemRef?: React.Ref<HTMLButtonElement>;
+  labelledby?: string;
 };
 
 export const OptionsMenu = forwardRef<HTMLDivElement, Props>(
   function OptionsMenu(
-    { onEdit, onDelete, className, style, top, left, right, transform },
+    {
+      onEdit,
+      onDelete,
+      onRequestClose,
+      className,
+      style,
+      top,
+      left,
+      right,
+      transform,
+      autoFocusFirst = true,
+      firstItemRef,
+      labelledby,
+    },
     ref
   ) {
+    const localFirstItemRef = useRef<HTMLButtonElement | null>(null);
+
+    useEffect(() => {
+      if (!autoFocusFirst) return;
+      const t = setTimeout(() => {
+        const el =
+          (typeof firstItemRef === "object" &&
+            (firstItemRef as React.MutableRefObject<HTMLButtonElement | null>)
+              ?.current) ||
+          localFirstItemRef.current;
+        el?.focus();
+      }, 0);
+      return () => clearTimeout(t);
+    }, [autoFocusFirst, firstItemRef]);
+
     const stopAll: React.MouseEventHandler = (e) => {
       e.preventDefault();
       e.stopPropagation();
+    };
+
+    const onKeyDown: React.KeyboardEventHandler<HTMLDivElement> = (e) => {
+      const items = Array.from(
+        (e.currentTarget as HTMLDivElement).querySelectorAll<HTMLButtonElement>(
+          '[role="menuitem"]'
+        )
+      );
+      const idx = items.findIndex((n) => n === document.activeElement);
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onRequestClose?.();
+        return;
+      }
+      if (!items.length) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        items[(idx + 1) % items.length].focus();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        items[(idx - 1 + items.length) % items.length].focus();
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        items[0].focus();
+      } else if (e.key === "End") {
+        e.preventDefault();
+        items[items.length - 1].focus();
+      }
     };
 
     return (
       <Dropdown
         ref={ref}
         role="menu"
+        aria-labelledby={labelledby}
         className={className}
         style={style}
         $top={top}
@@ -37,9 +100,15 @@ export const OptionsMenu = forwardRef<HTMLDivElement, Props>(
         $transform={transform}
         onMouseDown={stopAll}
         onClick={stopAll}
+        onKeyDown={onKeyDown}
       >
         <DropdownItem
+          ref={
+            (firstItemRef as React.RefObject<HTMLButtonElement>) ??
+            localFirstItemRef
+          }
           role="menuitem"
+          tabIndex={0}
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -50,6 +119,7 @@ export const OptionsMenu = forwardRef<HTMLDivElement, Props>(
         </DropdownItem>
         <DropdownItem
           role="menuitem"
+          tabIndex={0}
           $danger
           onClick={(e) => {
             e.preventDefault();
@@ -71,7 +141,6 @@ const Dropdown = styled.div<{
   $transform?: string;
 }>`
   position: absolute;
-  /* 기본값(이전 동작 유지) */
   top: ${({ $top }) => $top ?? "1.75rem"};
   left: ${({ $left }) => $left ?? "50%"};
   right: ${({ $right }) => $right ?? "auto"};
@@ -96,8 +165,11 @@ const DropdownItem = styled.button<{ $danger?: boolean }>`
   padding: 0.625rem 0.75rem;
   border-radius: 8px;
   cursor: pointer;
-  color: black;
-  &:hover {
+  color: ${({ $danger }) => ($danger ? "crimson" : "black")};
+
+  &:hover,
+  &:focus-visible {
     background: var(--c-blueL);
+    outline: none;
   }
 `;
