@@ -8,6 +8,10 @@ interface InputFieldProps {
   placeholder?: string;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+
+  /** ✅ 추가: 포커스/블러 이벤트 (TTS용) */
+  onFocus?: (e: React.FocusEvent<HTMLInputElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
 }
 
 const InputField = ({
@@ -17,6 +21,8 @@ const InputField = ({
   placeholder,
   onChange,
   onKeyDown,
+  onFocus,
+  onBlur,
 }: InputFieldProps) => {
   return (
     <S.Container>
@@ -27,6 +33,8 @@ const InputField = ({
         placeholder={placeholder}
         onChange={onChange}
         onKeyDown={onKeyDown}
+        onFocus={onFocus} // ✅ 포커스 이벤트 전달
+        onBlur={onBlur} // ✅ 블러 이벤트 전달
       />
     </S.Container>
   );

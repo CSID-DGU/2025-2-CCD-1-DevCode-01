@@ -1,10 +1,14 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as s from "./Login_style";
 import InputField from "@layouts/components/login/InputContainer";
 import { useContrastImage } from "@shared/useContrastImage";
 import { loginApi } from "@apis/auth/login";
 import { applyUiScale } from "@shared/applyUiScale";
+
+/** 👇 추가: TTS 컨텍스트 & 포커스-읽기 훅 */
+import { TTSContext } from "@shared/tts/TTSProvider";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 type LoginOk = {
   access: string;
@@ -19,14 +23,21 @@ type LoginOk = {
 const Login = () => {
   const logo = useContrastImage("/img/login/logoBig");
   const navigate = useNavigate();
+  const tts = useContext(TTSContext);
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-
   const [busy, setBusy] = useState(false);
+
+  /** 👇 포커스 시 읽어줄 문구 지정 */
+  const idSpeak = useFocusSpeak({ text: "아이디 입력" });
+  const pwSpeak = useFocusSpeak({ text: "비밀번호 입력" });
+  const loginBtnSpeak = useFocusSpeak({ text: "로그인 버튼" });
+  const signupLinkSpeak = useFocusSpeak({ text: "회원가입 이동 링크" });
 
   const handleLogin = async () => {
     if (!username || !password) {
+      tts?.speak("아이디와 비밀번호를 입력하세요.");
       alert("아이디와 비밀번호를 입력하세요.");
       return;
     }
@@ -36,6 +47,7 @@ const Login = () => {
 
       const res = await loginApi({ username, password });
       if (!res) {
+        tts?.speak("아이디나 비밀번호를 확인하세요.");
         alert("아이디나 비밀번호를 확인하세요.");
         return;
       }
@@ -51,17 +63,18 @@ const Login = () => {
 
       try {
         applyUiScale?.(r.font);
-
         const root = document.documentElement;
         if (r.high_contrast) root.classList.add("hc");
         else root.classList.remove("hc");
       } catch {
-        // 적용 함수가 없거나 에러여도 로그인 자체 흐름엔 영향 없음
+        // 적용 실패해도 로그인 플로우는 계속
       }
 
+      tts?.speak("로그인 되었습니다. 홈으로 이동합니다.");
       navigate("/");
     } catch (e) {
       console.error("로그인 오류:", e);
+      tts?.speak("로그인 중 오류가 발생했습니다.");
       alert("로그인 중 오류가 발생했습니다.");
     } finally {
       setBusy(false);
@@ -69,6 +82,7 @@ const Login = () => {
   };
 
   const handleSignupClick = () => {
+    tts?.speak("회원가입으로 이동합니다.");
     navigate("/signup");
   };
 
@@ -84,11 +98,14 @@ const Login = () => {
         <h1>캠퍼스 메이트에 오신 것을 환영합니다.</h1>
 
         <s.InputContainer>
+          {/* ✅ 포커스-읽기: onFocus/onBlur 전달 */}
           <InputField
             label="아이디"
             placeholder="아이디를 입력하세요"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            onFocus={idSpeak.onFocus}
+            onBlur={idSpeak.onBlur}
           />
 
           <InputField
@@ -97,6 +114,8 @@ const Login = () => {
             placeholder="비밀번호를 입력하세요"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            onFocus={pwSpeak.onFocus}
+            onBlur={pwSpeak.onBlur}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !busy) handleLogin();
             }}
@@ -107,6 +126,7 @@ const Login = () => {
             disabled={busy}
             aria-busy={busy}
             aria-label="로그인"
+            {...loginBtnSpeak} // ✅ 버튼도 포커스-읽기
           >
             로그인
           </button>
@@ -119,6 +139,7 @@ const Login = () => {
               role="link"
               tabIndex={0}
               onKeyDown={(e) => e.key === "Enter" && handleSignupClick()}
+              {...signupLinkSpeak} // ✅ 링크도 포커스-읽기
             >
               회원가입
             </p>
