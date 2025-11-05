@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
 import styled from "styled-components";
+
 import UploadBar from "src/components/lecture/UploadBar";
 import { DocList, ListItem } from "src/components/lecture/DocList";
 import DocItem from "src/components/lecture/DocItem";
@@ -66,16 +67,12 @@ export default function LectureDocs() {
 
       <Right role="complementary" aria-label="메모">
         <MemoCard
-          // TODO: 서버에서 불러온 값이 있으면 initialValue에 넣어주세요.
           initialValue={"• 다음주까지 과제 제출\n• 수업 때 명찰 꼭 가져오기"}
-          // TODO: API 연결 지점
+          // TODO: API 연결
           onSave={async (text) => {
-            // await api.saveLectureMemo(lectureNumericId, text);
-            // 임시: 콘솔 확인
             console.log("memo saved:", { lectureId: lectureNumericId, text });
           }}
           stickyTop="1rem"
-          title="MEMO"
         />
       </Right>
     </Wrap>

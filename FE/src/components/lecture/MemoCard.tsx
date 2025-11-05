@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import styled from "styled-components";
 import { fonts } from "@styles/fonts";
 
@@ -6,34 +6,65 @@ type Props = {
   initialValue?: string;
   onSave?: (text: string) => Promise<void> | void;
   stickyTop?: string;
-  title?: string;
   ariaLabel?: string;
 };
 
 export default function MemoCard({
-  initialValue = "• 다음주까지 과제 제출\n• 수업 때 명찰 꼭 가져오기",
+  initialValue = "",
   onSave,
   stickyTop = "1rem",
-  title = "MEMO",
   ariaLabel = "메모",
 }: Props) {
   const [text, setText] = useState(initialValue);
   const [saving, setSaving] = useState(false);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [touched, setTouched] = useState(false);
   const liveRef = useRef<HTMLDivElement | null>(null);
 
+  const escapeRegex = useCallback(
+    (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+    []
+  );
+
+  const makeNormalizer = useCallback(
+    (icon: string) => {
+      const iconRe = new RegExp(
+        `^\\s*(?:${escapeRegex(icon)}\\s+|•\\s+)+`,
+        "u"
+      );
+      return (val: string) =>
+        val
+          .split("\n")
+          .map((line) => {
+            const stripped = line.replace(iconRe, "");
+            const trimmed = stripped.trimStart();
+            if (!trimmed) return "";
+            return `${icon} ${trimmed}`;
+          })
+          .join("\n");
+    },
+    [escapeRegex]
+  );
+
+  const role = useMemo<"student" | "assistant">(() => {
+    return localStorage.getItem("role") === "assistant"
+      ? "assistant"
+      : "student";
+  }, []);
+
+  const icon = role === "student" ? "🐰" : "🐣";
+
+  const normalize = useMemo(() => makeNormalizer(icon), [icon, makeNormalizer]);
+
   useEffect(() => {
-    setText(initialValue);
+    setText(normalize(initialValue));
     setTouched(false);
-  }, [initialValue]);
+  }, [initialValue, normalize]);
 
   const handleSave = async () => {
     if (!onSave) return;
     try {
       setSaving(true);
       await onSave(text);
-      setLastSaved(new Date());
       setTouched(false);
       requestAnimationFrame(() => {
         if (liveRef.current)
@@ -44,26 +75,42 @@ export default function MemoCard({
     }
   };
 
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    // @ts-expect-error isComposing
+    if (e.nativeEvent?.isComposing) {
+      setText(e.target.value);
+      setTouched(true);
+      return;
+    }
+    setText(normalize(e.target.value));
+    setTouched(true);
+  };
+
+  const handleCompositionEnd = (
+    e: React.CompositionEvent<HTMLTextAreaElement>
+  ) => {
+    setText(normalize(e.currentTarget.value));
+  };
+
+  const handleEnterKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      handleSave();
+    } else if (e.key === "Enter") {
+      setTimeout(() => {
+        const el = e.target as HTMLTextAreaElement;
+        setText(normalize(el.value));
+      }, 0);
+    }
+  };
+
   const isDisabled = saving || !touched || !text.trim();
 
   return (
     <Card $top={stickyTop} role="complementary" aria-label={ariaLabel}>
       <Hdr>
-        <Title id="memo-title">{title}</Title>
-        <Meta>
-          {lastSaved ? (
-            <span>
-              마지막 저장:{" "}
-              {lastSaved.toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
-          ) : (
-            <span>아직 저장 전</span>
-          )}
-          {touched && <Dot aria-hidden>• 변경됨</Dot>}
-        </Meta>
+        <Title id="memo-title">MEMO </Title>
+        <Meta>{touched && <Dot aria-hidden>• 변경됨</Dot>}</Meta>
       </Hdr>
 
       <InputArea>
@@ -74,43 +121,9 @@ export default function MemoCard({
           id="memo-input"
           value={text}
           placeholder="메시지 입력"
-          onChange={(e) => {
-            const val = e.target.value;
-
-            const lines = val
-              .split("\n")
-              .map((line) => {
-                const trimmed = line.trimStart();
-
-                if (trimmed.length > 0 && !trimmed.startsWith("•")) {
-                  return `• ${trimmed}`;
-                }
-                return line;
-              })
-              .join("\n");
-
-            setText(lines);
-            setTouched(true);
-          }}
-          onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-              e.preventDefault();
-              handleSave();
-            } else if (e.key === "Enter") {
-              setTimeout(() => {
-                const el = e.target as HTMLTextAreaElement;
-                const { selectionStart } = el;
-                const val = el.value;
-                const before = val.slice(0, selectionStart);
-                const after = val.slice(selectionStart);
-                const updated = `${before}• ${after}`;
-                setText(updated);
-                requestAnimationFrame(() => {
-                  el.selectionStart = el.selectionEnd = selectionStart + 2;
-                });
-              }, 0);
-            }
-          }}
+          onChange={handleChange}
+          onCompositionEnd={handleCompositionEnd}
+          onKeyDown={handleEnterKey}
           aria-describedby="memo-title"
           aria-busy={saving}
         />
@@ -138,17 +151,17 @@ export default function MemoCard({
 
 /* styled */
 const Card = styled.section<{ $top: string }>`
-  background: #fde68a;
+  background: #fff5d1;
   border-radius: 12px;
   padding: 1.25rem;
-  gap: 1rem;
-  display: flex;
-  flex-direction: column;
   border: 1px solid #e6c65a;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
   position: sticky;
   top: ${({ $top }) => $top};
   min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 `;
 
 const Hdr = styled.div`
@@ -156,12 +169,11 @@ const Hdr = styled.div`
   align-items: end;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 0.75rem;
 `;
 
 const Title = styled.h3`
   margin: 0;
-  ${fonts.bold32};
+  ${fonts.bold20};
   line-height: 1.1;
 `;
 
@@ -178,9 +190,7 @@ const Dot = styled.span`
   color: ${({ theme }) => theme.colors.base.blue};
 `;
 
-const InputArea = styled.div`
-  margin-bottom: 0.75rem;
-`;
+const InputArea = styled.div``;
 
 const Input = styled.textarea`
   width: 100%;
@@ -188,7 +198,7 @@ const Input = styled.textarea`
   padding: 0.9rem 1rem;
   border: 2px solid var(--c-grayL);
   border-radius: 12px;
-  background: #fff5d1;
+  background: #fff;
   min-height: 15rem;
   resize: vertical;
   &:focus-visible {
@@ -201,7 +211,6 @@ const Toolbar = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
 `;
 
 const Hint = styled.span`
@@ -224,16 +233,9 @@ const SaveButton = styled.button`
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
   transition: transform 0.02s ease-in-out;
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+
   &:active {
     transform: translateY(1px);
-  }
-  &:focus-visible {
-    outline: 3px solid var(--c-blue);
-    outline-offset: 2px;
   }
 `;
 
