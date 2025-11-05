@@ -1,4 +1,9 @@
-import { getResponse, postResponse } from "@apis/instance";
+import {
+  deleteResponse,
+  getResponse,
+  patchResponse,
+  postResponse,
+} from "@apis/instance";
 import type { Lecture } from "./types";
 
 type LectureListItemDTO = {
@@ -73,3 +78,17 @@ export const joinLecture = async (
     title: res.title,
   };
 };
+
+export const updateLecture = async (
+  lectureId: number,
+  payload: { title: string }
+): Promise<Lecture | null> => {
+  const res = await patchResponse<{ title: string }, Lecture>(
+    `/lecture/${lectureId}/`,
+    payload
+  );
+  if (!res) return null;
+  return res;
+};
+
+export const deleteLecture = (id: number) => deleteResponse(`/lecture/${id}/`);

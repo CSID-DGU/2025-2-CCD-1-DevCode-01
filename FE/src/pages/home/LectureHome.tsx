@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import styled from "styled-components";
-import AddLectureDialog from "./AddLectureDialog";
-import { fetchLectures } from "src/entities/lecture/api";
+
+import {
+  fetchLectures,
+  updateLecture,
+  deleteLecture,
+} from "src/entities/lecture/api";
 import type { Lecture } from "src/entities/lecture/types";
 import { fonts } from "@styles/fonts";
+import toast from "react-hot-toast";
+import { LectureCard } from "src/components/home/LectureCard";
+import { copyLectureCode } from "src/utils/home/clipboard";
+import AddLectureDialog from "./AddLectureDialog";
 
 type Props = {
   uiScale?: 1 | 1.2 | 1.4 | 1.6;
@@ -14,25 +22,11 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [open, setOpen] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
   const [busy, setBusy] = useState(false);
+
   const menuRef = useRef<HTMLDivElement | null>(null);
-
-  const columnMin = useMemo(() => {
-    const baseRem = 14;
-    return `${(baseRem * uiScale).toFixed(2)}rem`;
-  }, [uiScale]);
-
-  const load = async () => {
-    setBusy(true);
-    const data = await fetchLectures();
-    setLectures(data);
-    setBusy(false);
-  };
-
-  useEffect(() => {
-    void load();
-  }, []);
-
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -42,6 +36,60 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
     document.addEventListener("click", onClickOutside);
     return () => document.removeEventListener("click", onClickOutside);
   }, []);
+
+  const columnMin = useMemo(() => `${(14 * uiScale).toFixed(2)}rem`, [uiScale]);
+
+  const load = async () => {
+    setBusy(true);
+    const data = await fetchLectures();
+    setLectures(data);
+    setBusy(false);
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+
+  // 편집 시작/저장/취소
+  const startEdit = (lec: Lecture) => {
+    setEditingId(lec.lecture_id);
+    setEditValue(lec.title);
+    setMenuOpenId(null);
+  };
+
+  const saveEdit = async (lec: Lecture) => {
+    const title = editValue.trim();
+    if (!title || title === lec.title) {
+      setEditingId(null);
+      return;
+    }
+    setBusy(true);
+    const updated = await updateLecture(lec.lecture_id, { title });
+    setBusy(false);
+    if (!updated) {
+      toast.error("수정에 실패했어요. 다시 시도해주세요.");
+      return;
+    }
+    setLectures((prev) =>
+      prev.map((x) =>
+        x.lecture_id === lec.lecture_id ? { ...x, title: updated.title } : x
+      )
+    );
+    setEditingId(null);
+  };
+
+  const cancelEdit = () => setEditingId(null);
+
+  const onDelete = async (lec: Lecture) => {
+    if (!confirm(`정말 삭제할까요? \n[${lec.title}]`)) return;
+    setBusy(true);
+    const ok = await deleteLecture(lec.lecture_id);
+    setBusy(false);
+    if (!ok) {
+      toast.error("삭제에 실패했어요.");
+      return;
+    }
+    setLectures((prev) => prev.filter((x) => x.lecture_id !== lec.lecture_id));
+  };
 
   return (
     <Main
@@ -53,91 +101,52 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
       <SrOnly as="h1">강의실 홈</SrOnly>
 
       <Grid
-        style={{
-          gridTemplateColumns: `repeat(auto-fill, ${columnMin})`,
-        }}
+        style={{ gridTemplateColumns: `repeat(auto-fill, ${columnMin})` }}
         aria-label="강의 목록 그리드"
       >
-        {/* ── (+) 강의 추가 타일 ───────────────────────────────── */}
-        <AddTileContainer style={{ width: columnMin }}>
+        {/* (+) 강의 추가 */}
+        <AddTileBox style={{ width: columnMin }}>
           <AddTile aria-label="강의 추가" onClick={() => setOpen(true)}>
             <AddInner>
               <AddPlus aria-hidden>＋</AddPlus>
             </AddInner>
           </AddTile>
           <AddText>강의 추가</AddText>
-        </AddTileContainer>
+        </AddTileBox>
 
-        {/* ── 폴더 타일 리스트 ──────────────────────────────── */}
+        {/* 폴더 타일들 */}
         {lectures.map((lec) => (
-          <FolderTileContainer
+          <LectureCard
             key={lec.lecture_id}
             style={{ width: columnMin }}
-          >
-            <Tile
-              tabIndex={0}
-              role="button"
-              aria-labelledby={`lec-${lec.lecture_id}-title`}
-              onClick={() => onOpenLecture?.(lec)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onOpenLecture?.(lec);
-                }
-              }}
-            >
-              <FolderImg src="/img/home/folder.png" alt="" aria-hidden />
-            </Tile>
-
-            <LabelWrap>
-              <TitleRow>
-                <Title id={`lec-${lec.lecture_id}-title`}>{lec.title}</Title>
-                <MenuButton
-                  aria-label="옵션"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMenuOpenId((prev) =>
-                      prev === lec.lecture_id ? null : lec.lecture_id
-                    );
-                  }}
-                >
-                  <img src="/img/home/arrowDown.png" />
-                </MenuButton>
-              </TitleRow>
-              <Meta>{lec.code}</Meta>
-
-              {menuOpenId === lec.lecture_id && (
-                <Dropdown ref={menuRef}>
-                  <DropdownItem onClick={() => alert(`수정: ${lec.title}`)}>
-                    ✏️ 수정
-                  </DropdownItem>
-                  <DropdownItem
-                    $danger
-                    onClick={() => alert(`삭제: ${lec.title}`)}
-                  >
-                    🗑 삭제
-                  </DropdownItem>
-                </Dropdown>
-              )}
-            </LabelWrap>
-          </FolderTileContainer>
+            lecture={lec}
+            isEditing={editingId === lec.lecture_id}
+            menuOpenId={menuOpenId}
+            setMenuOpenId={setMenuOpenId}
+            menuRef={menuRef}
+            editValue={editValue}
+            setEditValue={setEditValue}
+            onOpen={() => onOpenLecture?.(lec)}
+            onStartEdit={() => startEdit(lec)}
+            onSaveEdit={() => void saveEdit(lec)}
+            onCancelEdit={cancelEdit}
+            onDelete={() => void onDelete(lec)}
+            onCopyCode={() => void copyLectureCode(lec.code)}
+          />
         ))}
       </Grid>
 
-      {/* ── 강의 추가 모달 (만들기/코드 참여) ───────────────── */}
+      {/* 강의 추가 모달 */}
       <AddLectureDialog
         open={open}
         onClose={() => setOpen(false)}
-        onSuccess={(lec) => {
-          setLectures((prev) => [lec, ...prev]);
-        }}
+        onSuccess={(lec) => setLectures((prev) => [lec, ...prev])}
       />
     </Main>
   );
 }
 
 /* ============================= styled ============================= */
-
 const Main = styled.main<{ $uiScale: number }>`
   font-size: ${({ $uiScale }) => `${16 * $uiScale}px`};
   padding: 3rem;
@@ -160,12 +169,10 @@ const TileBase = styled.div`
   border-radius: 10px;
   background: var(--c-white);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
-
   &:focus-visible {
     outline: 3px solid var(--c-blue);
     outline-offset: 2px;
   }
-
   @media (prefers-reduced-motion: no-preference) {
     transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
     &:hover {
@@ -174,21 +181,6 @@ const TileBase = styled.div`
       filter: brightness(1.02);
     }
   }
-`;
-
-const Tile = styled(TileBase)`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-`;
-
-const FolderImg = styled.img`
-  width: 92%;
-  height: 92%;
-  object-fit: contain;
-  pointer-events: none;
-  user-select: none;
 `;
 
 const AddTile = styled.button`
@@ -202,7 +194,6 @@ const AddTile = styled.button`
   width: 12.5rem;
   height: 9.5rem;
   border-radius: 10px;
-
   &:focus-visible {
     outline: 3px solid var(--c-blue);
     outline-offset: 2px;
@@ -223,71 +214,17 @@ const AddPlus = styled.span`
   transform: translateY(-2px);
 `;
 
-const LabelWrap = styled.div`
-  text-align: center;
-  width: 100%;
-`;
-
 const AddText = styled.span`
   display: block;
   margin-top: 0.125rem;
 `;
 
-const AddTileContainer = styled.section`
+const AddTileBox = styled.section`
   display: flex;
   flex-direction: column;
   align-items: center;
   ${fonts.regular32};
-  gap: 15px;
-`;
-
-const FolderTileContainer = styled.section`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  position: relative;
-  ${fonts.regular32};
-`;
-
-const TitleRow = styled.div`
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 4px;
-`;
-
-const Title = styled.h2`
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  ${fonts.regular32};
-`;
-
-const MenuButton = styled.button`
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--c-grayD);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px;
-
-  &:hover {
-    color: var(--c-blue);
-  }
-
-  img {
-    width: 22px;
-    height: 11px;
-  }
-`;
-
-const Meta = styled.p`
-  margin: 0;
-  color: var(--c-grayD);
-  ${fonts.regular24}
+  gap: 14px;
 `;
 
 const SrOnly = styled.h1`
@@ -300,38 +237,4 @@ const SrOnly = styled.h1`
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-`;
-
-const Dropdown = styled.div`
-  position: absolute;
-  top: 80%;
-  left: 70%;
-  background: var(--c-white);
-  border: 1px solid var(--c-grayL);
-  border-radius: 8px;
-  padding: 1rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-  width: 120px;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-`;
-
-const DropdownItem = styled.button<{ $danger?: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  background: transparent;
-  border: none;
-  text-align: left;
-  ${fonts.regular20}
-  color: ${({ $danger }) => ($danger ? "var(--c-blueD)" : "var(--c-black)")};
-  cursor: pointer;
-  justify-content: center;
-
-  &:hover {
-    background: var(--c-blueL);
-  }
 `;

@@ -1,4 +1,5 @@
-// src/widgets/Nav/types.ts
+import type { Params } from "react-router-dom";
+
 export type NavVariant =
   | "auth" // 로그인/회원가입
   | "folder" // 폴더
@@ -9,5 +10,5 @@ export type NavVariant =
 
 export type NavMeta = {
   variant: NavVariant;
-  title?: string | ((params: Record<string, string>) => string);
+  title?: string | ((params: Params<string>) => string);
 };
