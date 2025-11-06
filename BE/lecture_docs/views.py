@@ -28,6 +28,7 @@ class DocUploadView(APIView):
                 {
                     "docId": d.id,
                     "title": d.title,
+                    "review": True if d.stt_summary else False,                    
                     "createdAt": d.created_at.strftime("%Y-%m-%d %H:%M")
                 }
                 for d in docs
