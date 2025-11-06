@@ -1,5 +1,5 @@
 import { Outlet, useLocation, Navigate } from "react-router-dom";
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import SignupLayout from "src/components/auth/SignupLayout";
 import Stepper from "src/components/auth/Step";
 import { SignupProvider } from "src/features/signup/SignupProvider";
@@ -36,17 +36,8 @@ function shallowEqual(a: Partial<Controls>, b: Partial<Controls>) {
 
 function Guarded() {
   const loc = useLocation();
-  const { role, access, tts, info } = useSignup();
+  const { role } = useSignup();
   const stepNo = Number(/\/signup\/(\d)/.exec(loc.pathname)?.[1] ?? 1);
-
-  useEffect(() => {
-    console.groupCollapsed(`📦 Signup Progress | Step ${stepNo}`);
-    console.log("▶ role:", role);
-    console.log("▶ access:", access);
-    console.log("▶ tts:", tts);
-    console.log("▶ info:", info);
-    console.groupEnd();
-  }, [stepNo, role, access, tts, info]);
 
   const [controls, _setControls] = useState<Controls>({});
   const nextBtnRef = useRef<HTMLButtonElement | null>(null);
