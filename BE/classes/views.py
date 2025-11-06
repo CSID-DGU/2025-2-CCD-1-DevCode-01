@@ -1,8 +1,8 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 from classes.serializers import SpeechCreateSerializer
-from classes.models import Speech
-from classes.utils import speech_to_text, text_to_speech, text_to_speech_local
+from classes.models import Bookmark, Speech
+from classes.utils import get_duration, speech_to_text, text_to_speech, text_to_speech_local, time_to_seconds
 from lecture_docs.models import Page
 from rest_framework.response import Response
 from rest_framework import status, generics, permissions
@@ -32,7 +32,10 @@ class SpeechView(generics.CreateAPIView):
         
         try:
             audio = serializer.validated_data['audio']
+            end_time = serializer.validated_data['timestamp']
 
+            end_time_sec = time_to_seconds(end_time)
+                
             # 1️⃣ STT 변환
             stt_text = speech_to_text(audio)
             if not stt_text or stt_text.strip() == "":
@@ -42,14 +45,19 @@ class SpeechView(generics.CreateAPIView):
             rate = (user.rate or "보통")
 
             # 2️⃣ TTS 변환 + S3 업로드
-            s3_url = text_to_speech(stt_text, s3_folder="tts/speech/")
+            s3_url = text_to_speech(stt_text, voice, rate, s3_folder="tts/speech/")
 
+            duration_sec, duration = get_duration(audio)
 
             # 3️⃣ DB 저장
             speech = Speech.objects.create(
                 stt=stt_text,
                 stt_tts=s3_url,
-                page=page
+                page=page,
+                end_time=end_time,
+                end_time_sec=end_time_sec,
+                duration=duration,
+                duration_sec=duration_sec,
             )
 
             # 성공 응답
@@ -57,7 +65,9 @@ class SpeechView(generics.CreateAPIView):
                 "speech_id": speech.id,
                 "stt": stt_text,
                 "stt_tts": s3_url,
-                "page": page.page_number
+                "page": page.page_number,
+                "end_time": end_time,
+                "duration": duration,
             }, status=200)
         
         except Exception as e:
@@ -92,3 +102,71 @@ class TTSTestView(APIView):
                 {"error": f"TTS 테스트 중 오류 발생: {str(e)}"},
                 status=500
             )
+        
+class BookmarkView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pageId):
+        try:
+            page = Page.objects.get(id=pageId)
+        except Page.DoesNotExist:
+            return JsonResponse({"error": "해당 페이지를 찾을 수 없습니다."}, status=404)\
+            
+        timestamp = request.data['timestamp']
+
+        if not timestamp:
+            return JsonResponse({"error": "타임스탬프가 제공되지 않았습니다."}, status=400)
+
+        timestamp_sec = time_to_seconds(timestamp)
+
+        bookmark = Bookmark.objects.create(
+            page=page,
+            user=request.user,
+            timestamp=timestamp,
+            timestamp_sec=timestamp_sec
+        )
+
+        return JsonResponse({
+            "bookmark_id": bookmark.id,
+            "page": page.page_number,
+            "timestamp": timestamp
+        }, status=200)
+    
+class BookmarkDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, bookmarkId):
+        try:
+            bookmark = Bookmark.objects.get(id=bookmarkId)
+        except Bookmark.DoesNotExist:
+            return JsonResponse({"error": "해당 북마크를 찾을 수 없습니다."}, status=404)
+        
+        speeches = Speech.objects.filter(page__doc=bookmark.page.doc)
+
+        matched_speech = next(
+            (
+                s for s in speeches
+                if(s.end_time_sec - s.duration_sec) <= bookmark.timestamp_sec <= s.end_time_sec
+            ), None
+        )
+
+        if not matched_speech:
+            return JsonResponse({"error": "해당 북마크에 매칭되는 음성 파일이 없습니다."}, status=404)
+        
+
+        start_time_sec = matched_speech.end_time_sec - matched_speech.duration_sec
+        relative_time = round(bookmark.timestamp_sec - start_time_sec, 2)
+        
+        return JsonResponse({
+            "stt_tts": matched_speech.stt_tts,
+            "relative_time": relative_time
+        }, status=200)
+    
+    def delete(self, request, bookmarkId):
+        try:
+            bookmark = Bookmark.objects.get(id=bookmarkId)
+        except Bookmark.DoesNotExist:
+            return JsonResponse({"error": "해당 북마크를 찾을 수 없습니다."}, status=404)
+        
+        bookmark.delete()
+        return JsonResponse({"message": "북마크가 삭제되었습니다."}, status=204)
