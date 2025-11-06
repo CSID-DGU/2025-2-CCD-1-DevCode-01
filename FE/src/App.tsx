@@ -4,18 +4,22 @@ import GlobalStyle from "@styles/globalStyle";
 import { ThemeProvider } from "styled-components";
 import { theme } from "@styles/theme";
 import { Toaster } from "react-hot-toast";
+import { TTSProvider } from "@shared/tts/TTSProvider";
 
 function App() {
   return (
     <ThemeProvider theme={theme}>
-      <GlobalStyle />
-      <Toaster
-        position="top-center"
-        toastOptions={{
-          style: { zIndex: 999999 },
-        }}
-      />
-      <RouterProvider router={router} />
+      <TTSProvider>
+        <GlobalStyle />
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            style: { zIndex: 999999 },
+          }}
+        />
+
+        <RouterProvider router={router} />
+      </TTSProvider>
     </ThemeProvider>
   );
 }

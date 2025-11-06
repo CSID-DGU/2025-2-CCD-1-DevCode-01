@@ -8,6 +8,8 @@ interface InputFieldProps {
   placeholder?: string;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+  onFocus?: (e: React.FocusEvent<HTMLInputElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
 }
 
 const InputField = ({
@@ -17,6 +19,8 @@ const InputField = ({
   placeholder,
   onChange,
   onKeyDown,
+  onFocus,
+  onBlur,
 }: InputFieldProps) => {
   return (
     <S.Container>
@@ -27,6 +31,8 @@ const InputField = ({
         placeholder={placeholder}
         onChange={onChange}
         onKeyDown={onKeyDown}
+        onFocus={onFocus}
+        onBlur={onBlur}
       />
     </S.Container>
   );
