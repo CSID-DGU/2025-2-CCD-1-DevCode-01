@@ -41,6 +41,15 @@ class LectureDetailView(APIView):
             return Lecture.objects.get(id=lectureId)
         except Lecture.DoesNotExist:
             return None
+        
+    def get(self, request, lectureId):
+        """강의 상세 조회"""
+        lecture = self.get_object(lectureId)
+        if not lecture:
+            return Response({"error": "해당 강의를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = LectureSerializer(lecture)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def patch(self, request, lectureId):
         """강의 이름 수정"""
