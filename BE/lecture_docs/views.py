@@ -11,7 +11,7 @@ from django.core.files.storage import default_storage
 from classes.utils import text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
-from .utils import pdf_to_text, pdf_to_image, pdf_to_embedded_images, summarize_doc, summarize_stt
+from .utils import  pdf_to_image, summarize_stt
 
 
 class DocUploadView(APIView):
@@ -44,53 +44,52 @@ class DocUploadView(APIView):
         pdf = fitz.open(stream=file.read(), filetype="pdf")
 
         file.seek(0)
-        page_texts = pdf_to_text(file)
+        #page_texts = pdf_to_text(file)
 
-        all_sum = [] # 페이지 별 요약문 리스트
+        #all_sum = [] # 페이지 별 요약문 리스트
+
+        # for page_num, page in enumerate(pdf, start=1):
+        #     text = page_texts[page_num - 1] if page_num - 1 < len(page_texts) else ""
+        #     embedded_images = pdf_to_embedded_images(page, pdf)
+
+        #     image_urls = []
 
         for page_num, page in enumerate(pdf, start=1):
-            text = page_texts[page_num - 1] if page_num - 1 < len(page_texts) else ""
-            embedded_images = pdf_to_embedded_images(page, pdf)
-
-            image_urls = []
-        for page_num, page in enumerate(pdf, start=1):
-            text = page_texts[page_num - 1] if page_num - 1 < len(page_texts) else ""
-            embedded_images = pdf_to_embedded_images(page, pdf)
-
-
+            #text = page_texts[page_num - 1] if page_num - 1 < len(page_texts) else ""
+            #embedded_images = pdf_to_embedded_images(page, pdf)
             page_image_file = pdf_to_image(page, doc.title, page_num)
 
-            image_urls = []
-            for img_data in embedded_images:
-                image_file = ContentFile(img_data["bytes"], name=img_data["name"])
-                s3_path = default_storage.save(f"embedded/{img_data['name']}", image_file)
-                image_urls.append(default_storage.url(s3_path))
+            #image_urls = []
+
+            # for img_data in embedded_images:
+            #     image_file = ContentFile(img_data["bytes"], name=img_data["name"])
+            #     s3_path = default_storage.save(f"embedded/{img_data['name']}", image_file)
+            #     image_urls.append(default_storage.url(s3_path))
 
             Page.objects.create(
                 doc=doc,
                 page_number=page_num,
-                ocr=text if text else None,
+                ocr="텍스트 삽입예정입니다",
                 image=page_image_file,            
-                embedded_images=image_urls or None  
             )
 
-            # 페이지별 요약문 생성
-            if text and text.strip():
-                page_summary = summarize_doc(doc.id)
-                all_sum.append(page_summary)
+            # # 페이지별 요약문 생성
+            # if text and text.strip():
+            #     page_summary = summarize_doc(doc.id)
+            #     all_sum.append(page_summary)
 
         pdf.close()
         
         # 페이지별 요약문 병합 후 doc 요약문 및 TTS 생성
-        combined_summary = "\n\n".join(
-            [f"[{idx+1} 페이지] {summary}" for idx, summary in enumerate(all_sum)]
-        ).strip()
-        doc.summary = combined_summary
-        doc.save(update_fields=["summary"])
+        # combined_summary = "\n\n".join(
+        #     [f"[{idx+1} 페이지] {summary}" for idx, summary in enumerate(all_sum)]
+        # ).strip()
+        # doc.summary = combined_summary
+        # doc.save(update_fields=["summary"])
 
-        tts_url = text_to_speech(combined_summary, s3_folder="tts/doc_summary/")
-        doc.page_tts = tts_url
-        doc.save(update_fields=["page_tts"])
+        # tts_url = text_to_speech(combined_summary, s3_folder="tts/doc_summary/")
+        # doc.page_tts = tts_url
+        # doc.save(update_fields=["page_tts"])
 
         return Response({
             "docId": doc.id,
@@ -101,48 +100,7 @@ class DocDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     def get_queryset(self):
         return Doc.objects.all()    
-    def get(self, request, docId):
-        doc = Doc.objects.get(id=docId)
-        pages = doc.pages.all()
-        role = getattr(request.user, "role", None)
-
-        data = []
-
-        if role == 'assistant':
-            data = [
-                {
-                    "docId": doc.id,
-                    "pageNumber": p.page_number,
-                    "image": p.image.url if p.image else None
-                }
-                for p in pages
-            ]
-
-        elif role == 'student':
-            for p in pages:
-                page_data = {
-                    "docId": doc.id,
-                    "pageNumber": p.page_number,
-                }
-
-                if p.ocr and not p.embedded_images:
-                    page_data["ocr"] = p.ocr
-
-
-                elif p.ocr and p.embedded_images:
-                    page_data["ocr"] = p.ocr
-                    page_data["embedded_images"] = p.embedded_images
-
-                elif not p.ocr and p.image:
-                    page_data["image"] = p.image.url
-
-                data.append(page_data)
-
-        return Response({
-            "docId": doc.id,
-            "title": doc.title,
-            "pages": data
-        }, status=status.HTTP_200_OK)    
+    
     def patch(self, request, docId):
             doc = self.get_queryset().get(id=docId)
             new_title = request.data.get("title")
@@ -170,31 +128,14 @@ class PageDetailView(APIView):
         except Page.DoesNotExist:
             return Response({"detail": "페이지를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
-        role = getattr(request.user, "role", None)
-
-        if role == "assistant":
-            data = {
-                "docId": doc.id,
-                "pageNumber": page.page_number,
-                "image": page.image.url if page.image else None,
-                "sum": None,  
-                "tts": None,   
-            }
-
-        elif role == "student":
-            data = {
+        return Response({
                 "docId": doc.id,
                 "pageNumber": page.page_number,
                 "image": page.image.url if page.image else None,
                 "ocr": page.ocr if page.ocr else None,
                 "sum": None,  
                 "tts": None,   
-            }
-
-        else:
-            return Response({"detail": "사용자 인증 오류"}, status=status.HTTP_401_UNAUTHORIZED)
-
-        return Response(data, status=status.HTTP_200_OK)
+            }, status=status.HTTP_200_OK)
     
 class BoardView(APIView):
 
@@ -272,7 +213,6 @@ class BoardView(APIView):
             },
         )
         
-
         return Response(
             {
                 "boardId": board.id,
