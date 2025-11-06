@@ -20,7 +20,7 @@ class DocUploadView(APIView):
     def get(self, request, lectureId):
         lecture = Lecture.objects.get(id=lectureId)
         
-        docs = Doc.objects.filter(lecture=lecture).order_by("-created_at")
+        docs = Doc.objects.filter(lecture=lecture).exclude(users=request.user)
 
         data = {
             "lectureId": lecture.id,
@@ -111,8 +111,19 @@ class DocDetailView(APIView):
 
     def delete(self, request, docId):
         doc = self.get_queryset().get(id=docId)
-        doc.delete()
+
+        doc.users.add(request.user)
+
+        lecture_users = [doc.lecture.assistant, doc.lecture.student] 
+        deleted_users = list(doc.users.all())
+
+        if all(u in deleted_users for u in lecture_users if u is not None):
+            doc.delete()
+            return Response({"message": "파일이 삭제되었습니다."}, status=200)
+
+
         return Response({"message": "파일이 삭제되었습니다."}, status=200)
+
 
 
 class PageDetailView(APIView):
@@ -132,6 +143,7 @@ class PageDetailView(APIView):
         return Response({
                 "docId": doc.id,
                 "pageNumber": page.page_number,
+                "pagId": page.id,
                 "image": page.image.url if page.image else None,
                 "ocr": page.ocr if page.ocr else None,
                 "sum": None,  
@@ -221,7 +233,26 @@ class BoardView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-    
+    def delete(self, request, boardId):
+        board = get_object_or_404(Board, id=boardId)
+        page = board.page
+        board_id = board.id
+
+        board.delete()
+
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"doc_{page.doc.id}",
+            {
+                "type": "board.event",
+                "event": "deleted",
+                "data": {
+                    "boardId": board_id,
+                },
+            },
+        )
+
+        return Response({"message": "판서가 삭제되었습니다."}, status=status.HTTP_200_OK)
 class DocSttSummaryView(APIView):
     """
     교안 STT 요약문 생성 및 수정

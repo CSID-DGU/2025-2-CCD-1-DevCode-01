@@ -15,3 +15,4 @@ class Lecture(models.Model):
     code = models.CharField(max_length=10, unique=True, default=lecture_code)
     lecture_tts =  models.URLField(blank=True, null=True) 
     created_at = models.DateTimeField(auto_now_add=True)
+    
