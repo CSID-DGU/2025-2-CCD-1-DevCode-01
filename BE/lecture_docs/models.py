@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 class Doc(models.Model):
     lecture = models.ForeignKey(Lecture, on_delete=models.CASCADE, related_name='docs', null=True, blank=True)
     title = models.CharField(max_length=100)
-    summary = models.TextField(blank=True, null=True) 
-    page_tts =  models.URLField(blank=True, null=True) 
+    #summary = models.TextField(blank=True, null=True) 
+    #page_tts =  models.URLField(blank=True, null=True) 
     created_at = models.DateTimeField(auto_now_add=True)
     stt_summary = models.TextField(blank=True, null=True)
     stt_summary_tts = models.URLField(blank=True, null=True)
@@ -22,7 +22,7 @@ class Page(models.Model):
     doc = models.ForeignKey(Doc, on_delete=models.CASCADE, related_name='pages', null=True, blank=True)
     page_number = models.IntegerField()
     image = models.ImageField(upload_to='docs/')  # 변환된 이미지 경로 (S3에 업로드)
-    embedded_images = models.JSONField(blank=True, null=True)
+    #embedded_images = models.JSONField(blank=True, null=True)
     ocr = models.TextField(blank=True, null=True)  # OCR 결과 텍스트
     page_tts =  models.URLField(blank=True, null=True) 
     created_at = models.DateTimeField(auto_now_add=True)
