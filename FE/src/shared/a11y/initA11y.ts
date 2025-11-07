@@ -3,6 +3,20 @@ import { A11Y_STORAGE_KEYS } from "./a11y.constants";
 import { normalizeFontToPct } from "./a11y.mappers";
 import type { FontInput } from "./a11y.types";
 
+export function migrateA11yKeysOnce() {
+  const legacy = localStorage.getItem("mode");
+  const hcStored = localStorage.getItem("high_contrast");
+
+  if (legacy && hcStored == null) {
+    const next = legacy === "hc";
+    localStorage.setItem("high_contrast", String(next));
+  }
+
+  if (legacy != null) {
+    localStorage.removeItem("mode");
+  }
+}
+
 export function applyA11yFromStorage() {
   const raw = localStorage.getItem(A11Y_STORAGE_KEYS.font);
   const fontPct = normalizeFontToPct(raw);

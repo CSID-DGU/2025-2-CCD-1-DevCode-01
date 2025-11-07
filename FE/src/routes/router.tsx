@@ -17,7 +17,7 @@ import Step3TTS from "@pages/auth/steps/Step3TTS";
 import Step4Credentials from "@pages/auth/steps/Step4Credentials";
 import FoldersRoute from "./FoldersRoute";
 import LectureDocs from "@pages/lecture/LectureDocs";
-import ScrollToTop from "src/hooks/scrollToTop";
+import ScrollToTop from "src/hooks/ScrollToTop";
 
 const router = createBrowserRouter([
   {

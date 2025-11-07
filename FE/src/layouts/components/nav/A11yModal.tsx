@@ -167,10 +167,14 @@ const Overlay = styled.div`
   display: grid;
   place-items: center;
   z-index: 1000;
+
+  overscroll-behavior: contain;
 `;
 
 const Card = styled.div`
   width: min(720px, calc(100vw - 32px));
+  max-height: min(88vh, 100dvh - 48px);
+  overflow: auto;
   border-radius: 20px;
   background: var(--c-white);
   color: var(--c-black);
@@ -178,6 +182,11 @@ const Card = styled.div`
   padding: 24px 28px 20px;
   transition: background 0.25s, color 0.25s;
   border: 1px solid var(--c-black);
+
+  &:focus-within {
+    outline: 2px solid var(--c-blue);
+    outline-offset: 2px;
+  }
 `;
 
 const Header = styled.div`
