@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 
+from classes.models import Bookmark, Note, Speech
 from classes.utils import text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
@@ -402,4 +403,72 @@ class DocSummaryView(APIView):
             "page_id": page.id,
             "summary": page.summary,
             "summary_tts": page.summary_tts
+        }, status=status.HTTP_200_OK)
+    
+class PageView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pageId):
+        try:
+            page = Page.objects.get(id=pageId)
+        except Page.DoesNotExist:
+            return Response({"detail": "페이지를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        user = request.user
+
+        # page_data = {
+        #     "doc_id": page.doc.id,
+        #     "page_id": page.id,
+        #     "page_number": page.page_number,
+        #     "ocr": page.ocr or None,
+        #     "page_tts": page.page_tts or None,
+        #     "embedded_images": page.embedded_images or None,
+        #     "image": page.image.url if page.image else None,
+        # }
+
+        note = Note.objects.filter(page=page, user=user).first()
+        note_data = {
+            "note_id": note.id,
+            "content": note.content,
+            "note_tts": note.note_tts or None,
+        } if note else None
+
+        speeches = Speech.objects.filter(page=page).order_by("-created_at")
+        speech_data = [
+            {
+                "speech_id": speech.id,
+                "stt": speech.stt,
+                "stt_tts": speech.stt_tts or None,
+                "end_time": speech.end_time,
+                "duration": speech.duration,
+            }
+            for speech in speeches
+        ]
+
+        bookmarks = Bookmark.objects.filter(page=page, user=user).order_by("-created_at")
+        bookmark_data = [
+            {
+                "bookmark_id": bookmark.id,
+                "timestamp": bookmark.timestamp,
+            }
+            for bookmark in bookmarks
+        ]
+
+        # boards = Board.objects.filter(page=page).order_by("-created_at")
+        # board_data = [
+        #     {
+        #         "board_id": board.id,
+        #         "text": board.text or None,
+        #         "image": board.image.url if board.image else None,
+        #         "board_tts": board.board_tts or None,
+        #     }
+        #     for board in boards
+        # ]
+
+        return Response({
+            # "page": page_data,
+            "note": note_data,
+            "speeches": speech_data,
+            "bookmarks": bookmark_data,
+            # "boards": board_data,
         }, status=status.HTTP_200_OK)
