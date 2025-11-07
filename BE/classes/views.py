@@ -226,3 +226,4 @@ class NoteDetailView(APIView):
             "content": note.content,
             "note_tts": note.note_tts
         }, status=status.HTTP_200_OK)
+    
