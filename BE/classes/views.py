@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 from classes.serializers import SpeechCreateSerializer
-from classes.models import Bookmark, Speech
+from classes.models import Bookmark, Note, Speech
 from classes.utils import get_duration, speech_to_text, text_to_speech, text_to_speech_local, time_to_seconds
 from lecture_docs.models import Page
 from rest_framework.response import Response
@@ -167,3 +167,62 @@ class BookmarkDetailView(APIView):
         
         bookmark.delete()
         return JsonResponse({"message": "북마크가 삭제되었습니다."}, status=204)
+    
+class NoteView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pageId):
+        """페이지별 개인 노트 작성"""
+        try:
+            page = Page.objects.get(id=pageId)
+        except Page.DoesNotExist:
+            return JsonResponse({"error": "해당 페이지를 찾을 수 없습니다."}, status=404)
+        
+        user = request.user
+        content = request.data.get("content")
+
+        # ✅ 이미 해당 페이지에 본인 노트가 존재하면 작성 불가 (1페이지당 1개)
+        if Note.objects.filter(page=page, user=user).exists():
+            return Response({"error": "이미 이 페이지에 작성한 노트가 있습니다."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        note_tts = text_to_speech(content, user, "tts/note/")
+
+        note = Note.objects.create(
+            page=page,
+            user=user,
+            content=content.strip(),
+            note_tts=note_tts
+        )
+
+        return Response({
+            "note_id": note.id,
+            "content": note.content,
+            "note_tts": note.note_tts,
+        }, status=status.HTTP_201_CREATED)
+    
+class NoteDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, noteId):
+        """개인 노트 수정"""
+        note = Note.objects.filter(id=noteId).first()
+        if not note:
+            return Response({"error": "해당 노트를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        user = request.user
+        if note.user != user:
+            return Response({"error": "본인이 작성한 노트만 수정할 수 있습니다."},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        content = request.data.get("content")
+        note_tts = text_to_speech(content, user, "tts/note/")
+
+        note.content = content.strip()
+        note.note_tts = note_tts
+        note.save()
+
+        return Response({
+            "note_id": note.id,
+            "content": note.content,
+            "note_tts": note.note_tts
+        }, status=status.HTTP_200_OK)
