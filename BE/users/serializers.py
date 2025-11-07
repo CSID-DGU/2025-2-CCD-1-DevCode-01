@@ -18,10 +18,10 @@ class SignupSerializer(serializers.ModelSerializer):
             username=validated_data['username'],
             password=validated_data['password'],
             role=validated_data['role'],
-            font=validated_data.get('font', 125),
+            font=validated_data.get('font'),
             high_contrast=validated_data.get('high_contrast', False),
-            rate = validated_data.get('rate', '보통'),
-            voice = validated_data.get('voice', '남성')
+            rate = validated_data.get('rate'),
+            voice = validated_data.get('voice')
         )
         return user
 
