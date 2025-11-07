@@ -12,7 +12,7 @@ from classes.models import Bookmark, Note, Speech
 from classes.utils import text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
-from .utils import pdf_to_text, pdf_to_image, pdf_to_embedded_images, summarize_doc, summarize_stt
+from .utils import  pdf_to_image, summarize_stt
 
 
 class DocUploadView(APIView):
@@ -21,7 +21,7 @@ class DocUploadView(APIView):
     def get(self, request, lectureId):
         lecture = Lecture.objects.get(id=lectureId)
         
-        docs = Doc.objects.filter(lecture=lecture).order_by("-created_at")
+        docs = Doc.objects.filter(lecture=lecture).exclude(users=request.user)
 
         data = {
             "lectureId": lecture.id,
@@ -29,6 +29,7 @@ class DocUploadView(APIView):
                 {
                     "docId": d.id,
                     "title": d.title,
+                    "review": True if d.stt_summary else False,                    
                     "createdAt": d.created_at.strftime("%Y-%m-%d %H:%M")
                 }
                 for d in docs
@@ -45,40 +46,38 @@ class DocUploadView(APIView):
         pdf = fitz.open(stream=file.read(), filetype="pdf")
 
         file.seek(0)
-        page_texts = pdf_to_text(file)
+        #page_texts = pdf_to_text(file)
 
-        all_sum = [] # 페이지 별 요약문 리스트
+        # for page_num, page in enumerate(pdf, start=1):
+        #     text = page_texts[page_num - 1] if page_num - 1 < len(page_texts) else ""
+        #     embedded_images = pdf_to_embedded_images(page, pdf)
+
+        #     image_urls = []
 
         for page_num, page in enumerate(pdf, start=1):
-            text = page_texts[page_num - 1] if page_num - 1 < len(page_texts) else ""
-            embedded_images = pdf_to_embedded_images(page, pdf)
-
-            image_urls = []
-        for page_num, page in enumerate(pdf, start=1):
-            text = page_texts[page_num - 1] if page_num - 1 < len(page_texts) else ""
-            embedded_images = pdf_to_embedded_images(page, pdf)
-
-
+            #text = page_texts[page_num - 1] if page_num - 1 < len(page_texts) else ""
+            #embedded_images = pdf_to_embedded_images(page, pdf)
             page_image_file = pdf_to_image(page, doc.title, page_num)
 
-            image_urls = []
-            for img_data in embedded_images:
-                image_file = ContentFile(img_data["bytes"], name=img_data["name"])
-                s3_path = default_storage.save(f"embedded/{img_data['name']}", image_file)
-                image_urls.append(default_storage.url(s3_path))
+            #image_urls = []
+
+            # for img_data in embedded_images:
+            #     image_file = ContentFile(img_data["bytes"], name=img_data["name"])
+            #     s3_path = default_storage.save(f"embedded/{img_data['name']}", image_file)
+            #     image_urls.append(default_storage.url(s3_path))
 
             # 페이지별 요약문 생성
-            if text and text.strip():
-                try:
-                    summary = summarize_doc(doc.id, text)
-                    summary_tts = text_to_speech(summary, user=request.user, s3_folder="tts/page_summary/")
-                except Exception as e:
-                    raise ValueError(f"[{page_num}] 페이지 요약 생성 실패: {e}")
+#             if text and text.strip():
+#                 try:
+#                     summary = summarize_doc(doc.id, text)
+#                     summary_tts = text_to_speech(summary, user=request.user, s3_folder="tts/page_summary/")
+#                 except Exception as e:
+#                     raise ValueError(f"[{page_num}] 페이지 요약 생성 실패: {e}")
 
             Page.objects.create(
                 doc=doc,
                 page_number=page_num,
-                ocr=text if text else None,
+                ocr="텍스트 삽입예정입니다",
                 image=page_image_file,            
                 embedded_images=image_urls or None,
                 summary=summary if text else None,
@@ -87,7 +86,7 @@ class DocUploadView(APIView):
 
         pdf.close()
         
-        # # 페이지별 요약문 병합 후 doc 요약문 및 TTS 생성
+        # 페이지별 요약문 병합 후 doc 요약문 및 TTS 생성
         # combined_summary = "\n\n".join(
         #     [f"[{idx+1} 페이지] {summary}" for idx, summary in enumerate(all_sum)]
         # ).strip()
@@ -107,48 +106,7 @@ class DocDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     def get_queryset(self):
         return Doc.objects.all()    
-    def get(self, request, docId):
-        doc = Doc.objects.get(id=docId)
-        pages = doc.pages.all()
-        role = getattr(request.user, "role", None)
-
-        data = []
-
-        if role == 'assistant':
-            data = [
-                {
-                    "docId": doc.id,
-                    "pageNumber": p.page_number,
-                    "image": p.image.url if p.image else None
-                }
-                for p in pages
-            ]
-
-        elif role == 'student':
-            for p in pages:
-                page_data = {
-                    "docId": doc.id,
-                    "pageNumber": p.page_number,
-                }
-
-                if p.ocr and not p.embedded_images:
-                    page_data["ocr"] = p.ocr
-
-
-                elif p.ocr and p.embedded_images:
-                    page_data["ocr"] = p.ocr
-                    page_data["embedded_images"] = p.embedded_images
-
-                elif not p.ocr and p.image:
-                    page_data["image"] = p.image.url
-
-                data.append(page_data)
-
-        return Response({
-            "docId": doc.id,
-            "title": doc.title,
-            "pages": data
-        }, status=status.HTTP_200_OK)    
+    
     def patch(self, request, docId):
             doc = self.get_queryset().get(id=docId)
             new_title = request.data.get("title")
@@ -158,8 +116,19 @@ class DocDetailView(APIView):
 
     def delete(self, request, docId):
         doc = self.get_queryset().get(id=docId)
-        doc.delete()
+
+        doc.users.add(request.user)
+
+        lecture_users = [doc.lecture.assistant, doc.lecture.student] 
+        deleted_users = list(doc.users.all())
+
+        if all(u in deleted_users for u in lecture_users if u is not None):
+            doc.delete()
+            return Response({"message": "파일이 삭제되었습니다."}, status=200)
+
+
         return Response({"message": "파일이 삭제되었습니다."}, status=200)
+
 
 
 class PageDetailView(APIView):
@@ -176,31 +145,15 @@ class PageDetailView(APIView):
         except Page.DoesNotExist:
             return Response({"detail": "페이지를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
-        role = getattr(request.user, "role", None)
-
-        if role == "assistant":
-            data = {
+        return Response({
                 "docId": doc.id,
                 "pageNumber": page.page_number,
-                "image": page.image.url if page.image else None,
-                "sum": None,  
-                "tts": None,   
-            }
-
-        elif role == "student":
-            data = {
-                "docId": doc.id,
-                "pageNumber": page.page_number,
+                "pagId": page.id,
                 "image": page.image.url if page.image else None,
                 "ocr": page.ocr if page.ocr else None,
                 "sum": None,  
                 "tts": None,   
-            }
-
-        else:
-            return Response({"detail": "사용자 인증 오류"}, status=status.HTTP_401_UNAUTHORIZED)
-
-        return Response(data, status=status.HTTP_200_OK)
+            }, status=status.HTTP_200_OK)
     
 class BoardView(APIView):
 
@@ -278,7 +231,6 @@ class BoardView(APIView):
             },
         )
         
-
         return Response(
             {
                 "boardId": board.id,
@@ -286,7 +238,26 @@ class BoardView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-    
+    def delete(self, request, boardId):
+        board = get_object_or_404(Board, id=boardId)
+        page = board.page
+        board_id = board.id
+
+        board.delete()
+
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"doc_{page.doc.id}",
+            {
+                "type": "board.event",
+                "event": "deleted",
+                "data": {
+                    "boardId": board_id,
+                },
+            },
+        )
+
+        return Response({"message": "판서가 삭제되었습니다."}, status=status.HTTP_200_OK)
 class DocSttSummaryView(APIView):
     """
     교안 STT 요약문 생성 및 수정
