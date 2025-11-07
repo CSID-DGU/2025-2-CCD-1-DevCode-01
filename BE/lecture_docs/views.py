@@ -70,7 +70,7 @@ class DocUploadView(APIView):
             if text and text.strip():
                 try:
                     summary = summarize_doc(doc.id, text)
-                    summary_tts = text_to_speech(summary, s3_folder="tts/page_summary/")
+                    summary_tts = text_to_speech(summary, user=request.user, s3_folder="tts/page_summary/")
                 except Exception as e:
                     raise ValueError(f"[{page_num}] 페이지 요약 생성 실패: {e}")
 
@@ -317,7 +317,7 @@ class DocSttSummaryView(APIView):
             return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
         # ✅ 요약 + TTS 생성
-        summary, tts_url = summarize_stt(doc.id)
+        summary, tts_url = summarize_stt(doc.id, user=request.user)
 
         # ✅ 결과 DB 반영
         doc.stt_summary = summary
@@ -345,7 +345,7 @@ class DocSttSummaryView(APIView):
         doc.stt_summary = new_summary.strip()
 
         # ✅ 수정된 텍스트로 새 TTS 생성
-        tts_url = text_to_speech(doc.stt_summary, s3_folder="tts/stt_summary/")
+        tts_url = text_to_speech(doc.stt_summary, user=request.user, s3_folder="tts/stt_summary/")
         doc.stt_summary_tts = tts_url
         doc.save()
 
@@ -393,7 +393,7 @@ class DocSummaryView(APIView):
         page.summary = new_summary.strip()
 
         # ✅ 수정된 텍스트로 새 TTS 생성
-        tts_url = text_to_speech(page.summary, s3_folder="tts/page_summary/")
+        tts_url = text_to_speech(page.summary, user=request.user, s3_folder="tts/page_summary/")
         page.summary_tts = tts_url
         page.save()
 

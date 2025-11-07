@@ -5,7 +5,8 @@ from django.core.files.base import ContentFile
 from classes.utils import text_to_speech
 from lecture_docs.models import Doc
 from vertexai import generative_models
-import vertexai
+
+from users.models import User
 
 def special_char(text):
     replacements = {
@@ -68,7 +69,7 @@ def pdf_to_image(page, title, page_num):
     image_file = ContentFile(img_bytes, name=f"{title}_page{page_num}.png")
     return image_file
 
-def summarize_stt(doc_id: int) -> tuple[str, str]:
+def summarize_stt(doc_id: int, user: User) -> tuple[str, str]:
     """
     1. Doc ID로 모든 Page.speeches의 STT 텍스트 병합
     2. 강의명, 교안명을 포함한 프롬프트 구성
@@ -114,7 +115,7 @@ def summarize_stt(doc_id: int) -> tuple[str, str]:
 
     # Google TTS 변환 + S3 업로드
     try:
-        tts_url = text_to_speech(summary_text, s3_folder="tts/stt_summary/")
+        tts_url = text_to_speech(summary_text, user, s3_folder="tts/stt_summary/")
     except Exception as e:
         raise RuntimeError(f"TTS 변환 중 오류 발생: {e}")
     

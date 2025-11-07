@@ -40,12 +40,9 @@ class SpeechView(generics.CreateAPIView):
             stt_text = speech_to_text(audio)
             if not stt_text or stt_text.strip() == "":
                 return JsonResponse({"error": "변환된 텍스트가 비어 있습니다."}, status=400)
-            
-            voice = (user.voice or "여성")
-            rate = (user.rate or "보통")
 
             # 2️⃣ TTS 변환 + S3 업로드
-            s3_url = text_to_speech(stt_text, voice, rate, s3_folder="tts/speech/")
+            s3_url = text_to_speech(stt_text, user, s3_folder="tts/speech/")
 
             duration_sec, duration = get_duration(audio)
 

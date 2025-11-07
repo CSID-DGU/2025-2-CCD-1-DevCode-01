@@ -7,6 +7,8 @@ import uuid
 from datetime import datetime, timedelta
 from mutagen import File
 
+from users.models import User
+
 def speech_to_text(audio_file) -> str:
     """
     업로드된 음성 파일을 Google Speech-to-Text로 변환
@@ -58,10 +60,13 @@ def speech_to_text(audio_file) -> str:
 
     return transcript
 
-def text_to_speech(text: str, voice: str, rate: str, s3_folder: str = "tts/") -> str:
+def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     
     if not text or text.strip() == "":
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
+    
+    voice = (user.voice or "여성")
+    rate = (user.rate or "보통")
 
     # 1️⃣ Google TTS 클라이언트 생성
     client = texttospeech.TextToSpeechClient()
