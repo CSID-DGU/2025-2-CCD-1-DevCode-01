@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import LectureView, LectureDetailView, LectureJoinView, SharedNoteDetailView, SharedNoteView
+from .views import LectureView, LectureDetailView, LectureJoinView, SharedNoteView
 
 urlpatterns = [
     path('', LectureView.as_view(), name='lecture'),

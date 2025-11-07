@@ -181,7 +181,7 @@ class SharedNoteView(APIView):
 # class SharedNoteDetailView(APIView):
 #     permission_classes = [permissions.IsAuthenticated]
 
-#     def put(self, request, noteId):
+#     def patch(self, request, noteId):
 #         """공유 노트 수정"""
 #         shared_note = SharedNote.objects.filter(id=noteId).first()
 #         if not shared_note:
