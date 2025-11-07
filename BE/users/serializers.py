@@ -57,7 +57,7 @@ class SoundOptionSerializer(serializers.ModelSerializer):
         fields = ['rate', 'voice']
 
     def update(self, instance, validated_data):
-        instance.font = validated_data.get('font', instance.font)
-        instance.high_contrast = validated_data.get('high_contrast', instance.high_contrast)
+        instance.rate = validated_data.get('rate', instance.rate)
+        instance.voice = validated_data.get('voice', instance.voice)
         instance.save()
         return instance

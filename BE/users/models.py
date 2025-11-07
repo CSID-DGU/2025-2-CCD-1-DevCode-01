@@ -10,3 +10,4 @@ class User(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True)
     rate=models.CharField(max_length=10, choices=[('느림','느림'),('보통','보통'),('빠름','빠름')],default='보통')
     voice= models.CharField(max_length=10, choices=[('여성','여성'),('남성','남성')],default='여성')
+    
