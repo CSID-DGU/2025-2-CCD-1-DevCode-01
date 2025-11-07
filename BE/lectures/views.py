@@ -2,7 +2,9 @@ from django.shortcuts import render
 from rest_framework import permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from .models import Lecture
+
+from classes.utils import text_to_speech
+from .models import Lecture, SharedNote
 from .serializers import LectureSerializer, LectureUpdateSerializer, LectureCreateSerializer
 
 class LectureView(APIView):
@@ -41,6 +43,15 @@ class LectureDetailView(APIView):
             return Lecture.objects.get(id=lectureId)
         except Lecture.DoesNotExist:
             return None
+        
+    def get(self, request, lectureId):
+        """강의 상세 조회"""
+        lecture = self.get_object(lectureId)
+        if not lecture:
+            return Response({"error": "해당 강의를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = LectureSerializer(lecture)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def patch(self, request, lectureId):
         """강의 이름 수정"""
@@ -95,26 +106,115 @@ class LectureJoinView(APIView):
         except Lecture.DoesNotExist:
             return Response({"error": "유효하지 않은 강의 코드입니다."}, status=status.HTTP_404_NOT_FOUND)
 
-        # ✅ 학습도우미만 코드로 접근 가능
-        if user.role != 'assistant':
-            return Response(
-                {"error": "강의코드로 접근할 수 있는 권한이 없습니다."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
         # ✅ 이미 다른 도우미가 연결돼 있을 경우 예외 처리
-        if lecture.assistant and lecture.assistant != user:
-            return Response(
-                {"error": "이미 다른 학습도우미가 참여 중인 강의입니다."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        if user.role == "assistant":
+            if lecture.assistant and lecture.assistant != user:
+                return Response(
+                    {"error": "이미 다른 학습도우미가 참여 중인 강의입니다."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        # ✅ 도우미 정보 등록
-        if lecture.assistant != user:
+            # ✅ 도우미 정보 등록
             lecture.assistant = user
-            lecture.save()
+            lecture.save(update_fields=['assistant'])
+
+        elif user.role == "student":
+            if lecture.student and lecture.student != user:
+                return Response(
+                    {"error": "이미 다른 학생이 참여 중인 강의입니다."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # ✅ 학생 정보 등록
+            lecture.student = user
+            lecture.save(update_fields=['student'])
 
         return Response({
             "lecture_id": lecture.id,
             "title": lecture.title,
+            "role": user.role
         }, status=status.HTTP_200_OK)
+
+class SharedNoteView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, lectureId):
+        """공유 노트 조회"""
+        lecture = Lecture.objects.filter(id=lectureId).first()
+        if not lecture:
+            return Response({"error": "해당 강의를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        shared_notes = lecture.shared_notes.all()
+        return Response([
+            {
+                "note_id": note.id,
+                "user_role": note.user.role,
+                "content": note.content,
+                "note_tts": note.note_tts,
+                "created_at": note.created_at,
+            } for note in shared_notes
+        ], status=status.HTTP_200_OK)
+    
+    def post(self, request, lectureId):
+        """공유 노트 생성"""
+        lecture = Lecture.objects.filter(id=lectureId).first()
+        if not lecture:
+            return Response({"error": "해당 강의를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        content = request.data.get("content")
+        user = request.user
+        note_tts = text_to_speech(content, user, "tts/shared_note/")
+
+        shared_note = lecture.shared_notes.create(
+            lecture=lecture,
+            user=user,
+            content=content.strip(),
+            note_tts=note_tts
+        )
+
+        return Response({
+            "note_id": shared_note.id,
+            "content": shared_note.content,
+            "note_tts": shared_note.note_tts
+        }, status=status.HTTP_201_CREATED)
+    
+# class SharedNoteDetailView(APIView):
+#     permission_classes = [permissions.IsAuthenticated]
+
+#     def patch(self, request, noteId):
+#         """공유 노트 수정"""
+#         shared_note = SharedNote.objects.filter(id=noteId).first()
+#         if not shared_note:
+#             return Response({"error": "해당 공유 노트를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+#         user = request.user
+#         if shared_note.user != user:
+#             return Response({"error": "본인이 작성한 공유 노트만 수정할 수 있습니다."},
+#                             status=status.HTTP_403_FORBIDDEN)
+
+#         content = request.data.get("content")
+#         note_tts = text_to_speech(content, user, "tts/shared_note/")
+
+#         shared_note.content = content.strip()
+#         shared_note.note_tts = note_tts
+#         shared_note.save()
+
+#         return Response({
+#             "note_id": shared_note.id,
+#             "content": shared_note.content,
+#             "note_tts": shared_note.note_tts
+#         }, status=status.HTTP_200_OK)
+    
+#     def delete(self, request, noteId):
+#         """공유 노트 삭제"""
+#         shared_note = SharedNote.objects.filter(id=noteId).first()
+#         if not shared_note:
+#             return Response({"error": "해당 공유 노트를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+#         user = request.user
+#         if shared_note.user != user:
+#             return Response({"error": "본인이 작성한 공유 노트만 삭제할 수 있습니다."},
+#                             status=status.HTTP_403_FORBIDDEN)
+
+#         shared_note.delete()
+#         return Response({"message": "공유 노트가 삭제되었습니다."}, status=status.HTTP_204_NO_CONTENT)
