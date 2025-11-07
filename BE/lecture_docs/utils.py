@@ -120,23 +120,16 @@ def summarize_stt(doc_id: int) -> tuple[str, str]:
     
     return summary_text, tts_url
 
-def summarize_doc(doc_id: int) -> tuple[str, str]:
+def summarize_doc(doc_id: int, ocr_text: str) -> str:
     # 1️⃣ 교안 및 연관 데이터 불러오기
-    doc = Doc.objects.select_related("lecture").prefetch_related("pages__speeches").get(id=doc_id)
-    lecture_title = doc.lecture.title if doc.lecture else "강의"
+    doc = Doc.objects.select_related("lecture").get(id=doc_id)
+    lecture_title = doc.lecture.title
     doc_title = doc.title
 
-    # 2️⃣ 모든 페이지의 ocr 텍스트 병합
-    ocr_texts = [
-        page.ocr.strip()
-        for page in doc.pages.all()
-        if page.ocr and page.ocr.strip()
-    ]
-
-    if not ocr_texts:
+    if not ocr_text or not ocr_text.strip():
         raise ValueError("요약할 OCR 데이터가 없습니다.")
 
-    combined_ocr = "\n".join(ocr_texts)
+    ocr_text = ocr_text.strip()
 
     # 3️⃣ Gemini 프롬프트 생성
     prompt = f"""
@@ -149,7 +142,7 @@ def summarize_doc(doc_id: int) -> tuple[str, str]:
     중복된 설명은 생략하고,
     중요하고 핵심적인 개념 위주로 정리해.
     ---
-    {combined_ocr}
+    {ocr_text}
     ---
     요약문:
     """
