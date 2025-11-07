@@ -4,10 +4,12 @@ import * as s from "./Login_style";
 import InputField from "@layouts/components/login/InputContainer";
 import { useContrastImage } from "@shared/useContrastImage";
 import { loginApi } from "@apis/auth/login";
-import { applyUiScale } from "@shared/applyUiScale";
 
 import { TTSContext } from "@shared/tts/TTSProvider";
 import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
+
+import { setA11yAndApply } from "@shared/a11y/initA11y";
+import { normalizeFontToPct } from "@shared/a11y/a11y.mappers";
 
 type LoginOk = {
   access: string;
@@ -59,7 +61,11 @@ const Login = () => {
       localStorage.setItem("high_contrast", String(r.high_contrast));
       localStorage.setItem("username", r.username);
 
-      applyUiScale?.(r.font);
+      setA11yAndApply({
+        font: normalizeFontToPct(r.font),
+        high_contrast: r.high_contrast,
+      });
+
       const root = document.documentElement;
       if (r.high_contrast) root.classList.add("hc");
       else root.classList.remove("hc");
