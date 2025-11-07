@@ -5,19 +5,20 @@ import { useContrastImage } from "@shared/useContrastImage";
 import { useAudioRecorder } from "@shared/useAudioRecorder";
 import * as s from "./style";
 import type { NavVariant } from "./types";
+import A11yModal from "@layouts/components/nav/A11yModal";
 
 type Props = { variant: NavVariant; title?: string };
 
 // 오른쪽 공통 액션
 const RightActions = ({
   isHC,
-  toggleMode,
+  onOpenA11y,
   soundSrc,
   eyeSrc,
   onRead,
 }: {
   isHC: boolean;
-  toggleMode: () => void;
+  onOpenA11y: () => void;
   soundSrc: string;
   eyeSrc: string;
   onRead?: () => void;
@@ -34,7 +35,7 @@ const RightActions = ({
     </s.ActionButton>
     <s.ActionButton
       type="button"
-      onClick={toggleMode}
+      onClick={onOpenA11y}
       aria-pressed={isHC}
       aria-label="화면설정"
       title="화면설정"
@@ -90,7 +91,8 @@ const formatTime = (sec: number) => {
 
 const Nav = ({ variant, title }: Props) => {
   const nav = useNavigate();
-  const { isHC, toggleMode } = useContrastMode();
+  const { isHC } = useContrastMode();
+  const [a11yOpen, setA11yOpen] = useState(false);
 
   const logo = useContrastImage("/img/nav/logo");
   const sound = useContrastImage("/img/nav/sound");
@@ -130,7 +132,7 @@ const Nav = ({ variant, title }: Props) => {
         <s.Actions>
           <RightActions
             isHC={isHC}
-            toggleMode={toggleMode}
+            onOpenA11y={() => setA11yOpen(true)}
             soundSrc={sound}
             eyeSrc={eye}
           />
@@ -156,11 +158,12 @@ const Nav = ({ variant, title }: Props) => {
         <s.Right>
           <RightActions
             isHC={isHC}
-            toggleMode={toggleMode}
+            onOpenA11y={() => setA11yOpen(true)}
             soundSrc={sound}
             eyeSrc={eye}
           />
         </s.Right>
+        <A11yModal open={a11yOpen} onClose={() => setA11yOpen(false)} />
       </s.NavWrapper>
     );
   }
@@ -286,12 +289,14 @@ const Nav = ({ variant, title }: Props) => {
       <s.Right>
         <RightActions
           isHC={isHC}
-          toggleMode={toggleMode}
+          onOpenA11y={() => setA11yOpen(true)}
           soundSrc={sound}
           eyeSrc={eye}
           onRead={() => {}}
         />
       </s.Right>
+
+      <A11yModal open={a11yOpen} onClose={() => setA11yOpen(false)} />
 
       {error && (
         <span role="alert" style={{ position: "absolute", left: -9999 }}>
