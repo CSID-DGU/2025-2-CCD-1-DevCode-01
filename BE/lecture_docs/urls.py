@@ -8,5 +8,6 @@ urlpatterns = [
     path('page/<int:pageId>/board/', BoardView.as_view(), name='board-upload'),
     path('board/<int:boardId>/', BoardView.as_view(), name="board-detail"),
     path("doc/<int:docId>/speech/summary/", DocSttSummaryView.as_view(), name="doc-stt-summary"),
-    path("doc/<int:docId>/summary/", DocSummaryView.as_view(), name="doc-summary"),
+    path("page/<int:pageId>/summary/", DocSummaryView.as_view(), name="doc-summary"),
+    path('page/<int:pageId>/review/', PageView.as_view(), name='page-review'),
 ]

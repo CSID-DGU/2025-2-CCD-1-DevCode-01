@@ -4,6 +4,10 @@ import boto3
 from django.conf import settings
 import io, os
 import uuid
+from datetime import datetime, timedelta
+from mutagen import File
+
+from users.models import User
 
 def speech_to_text(audio_file) -> str:
     """
@@ -56,10 +60,13 @@ def speech_to_text(audio_file) -> str:
 
     return transcript
 
-def text_to_speech(text: str, voice: str, rate: str, s3_folder: str = "tts/") -> str:
+def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     
     if not text or text.strip() == "":
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
+    
+    voice = (user.voice or "여성")
+    rate = (user.rate or "보통")
 
     # 1️⃣ Google TTS 클라이언트 생성
     client = texttospeech.TextToSpeechClient()
@@ -178,3 +185,22 @@ def text_to_speech_local(text: str, voice: str, rate: str) -> str:
         out.write(response.audio_content)
 
     return local_path
+
+def time_to_seconds(hhmmss: str) -> float:
+    try:
+        t = datetime.strptime(hhmmss, "%H:%M:%S")
+        return t.hour * 3600 + t.minute * 60 + t.second
+    except ValueError:
+        raise ValueError("시간 형식이 잘못되었습니다. (예: 00:12:45)")
+    
+def get_duration(audio):
+    audio.seek(0)
+    audio_obj = File(audio)
+
+    if not audio_obj or not hasattr(audio_obj, "info") or not hasattr(audio_obj.info, "length"):
+        raise ValueError("오디오 파일의 길이를 계산할 수 없습니다.")
+
+    duration_sec = round(audio_obj.info.length, 2)
+    duration = str(timedelta(seconds=int(duration_sec)))
+
+    return duration_sec, duration

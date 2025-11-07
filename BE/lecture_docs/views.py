@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 
+from classes.models import Bookmark, Note, Speech
 from classes.utils import text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
@@ -47,8 +48,6 @@ class DocUploadView(APIView):
         file.seek(0)
         #page_texts = pdf_to_text(file)
 
-        #all_sum = [] # 페이지 별 요약문 리스트
-
         # for page_num, page in enumerate(pdf, start=1):
         #     text = page_texts[page_num - 1] if page_num - 1 < len(page_texts) else ""
         #     embedded_images = pdf_to_embedded_images(page, pdf)
@@ -56,22 +55,23 @@ class DocUploadView(APIView):
         #     image_urls = []
 
         for page_num, page in enumerate(pdf, start=1):
-            #text = page_texts[page_num - 1] if page_num - 1 < len(page_texts) else ""
-            #embedded_images = pdf_to_embedded_images(page, pdf)
             page_image_file = pdf_to_image(page, doc.title, page_num)
 
-            #image_urls = []
-
-            # for img_data in embedded_images:
-            #     image_file = ContentFile(img_data["bytes"], name=img_data["name"])
-            #     s3_path = default_storage.save(f"embedded/{img_data['name']}", image_file)
-            #     image_urls.append(default_storage.url(s3_path))
+            # 페이지별 요약문 생성
+#             if text and text.strip():
+#                 try:
+#                     summary = summarize_doc(doc.id, text)
+#                     summary_tts = text_to_speech(summary, user=request.user, s3_folder="tts/page_summary/")
+#                 except Exception as e:
+#                     raise ValueError(f"[{page_num}] 페이지 요약 생성 실패: {e}")
 
             page_obj = Page.objects.create(
                 doc=doc,
                 page_number=page_num,
                 ocr="처리중입니다",
                 image=page_image_file,            
+                #summary=summary if text else None,
+                #summary_tts=summary_tts if text else None,
             )
 
             # # 페이지별 요약문 생성
@@ -79,6 +79,7 @@ class DocUploadView(APIView):
             #     page_summary = summarize_doc(doc.id)
             #     all_sum.append(page_summary)
             # ✅ 바로 OCR 수행 (Celery 없이)
+
             try:
                 page_ocr(page_obj)
             except Exception as e:
@@ -293,7 +294,7 @@ class DocSttSummaryView(APIView):
             return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
         # ✅ 요약 + TTS 생성
-        summary, tts_url = summarize_stt(doc.id)
+        summary, tts_url = summarize_stt(doc.id, user=request.user)
 
         # ✅ 결과 DB 반영
         doc.stt_summary = summary
@@ -321,7 +322,7 @@ class DocSttSummaryView(APIView):
         doc.stt_summary = new_summary.strip()
 
         # ✅ 수정된 텍스트로 새 TTS 생성
-        tts_url = text_to_speech(doc.stt_summary, s3_folder="tts/stt_summary/")
+        tts_url = text_to_speech(doc.stt_summary, user=request.user, s3_folder="tts/stt_summary/")
         doc.stt_summary_tts = tts_url
         doc.save()
 
@@ -337,46 +338,113 @@ class DocSummaryView(APIView):
     교안 OCR 요약문 조회 및 수정
     """
 
-    def get_object(self, docId):
+    def get_object(self, pageId):
         try:
-            return Doc.objects.get(id=docId)
-        except Doc.DoesNotExist:
+            return Page.objects.get(id=pageId)
+        except Page.DoesNotExist:
             return None
         
-    def get(self, request, docId):
+    def get(self, request, pageId):
         """교안 요약문 조회"""
-        doc = self.get_object(docId)
-        if not doc:
-            return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+        page = self.get_object(pageId)
+        if not page:
+            return Response({"error": "해당 페이지를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
         return Response({
-            "doc_id": doc.id,
-            "title": doc.title,
-            "summary": doc.summary or None,
-            "page_tts": doc.page_tts or None
+            "page_id": page.id,
+            "summary": page.summary or None,
+            "summary_tts": page.summary_tts or None
         }, status=status.HTTP_200_OK)
 
-    def patch(self, request, docId):
+    def patch(self, request, pageId):
         """교안 요약문 직접 수정 시 TTS 재생성"""
-        doc = self.get_object(docId)
-        if not doc:
-            return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+        page = self.get_object(pageId)
+        if not page:
+            return Response({"error": "해당 페이지를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
         new_summary = request.data.get("summary")
         if not new_summary or not new_summary.strip():
             return Response({"error": "수정할 summary 내용이 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
 
         # ✅ 수정된 요약 저장
-        doc.summary = new_summary.strip()
+        page.summary = new_summary.strip()
 
         # ✅ 수정된 텍스트로 새 TTS 생성
-        tts_url = text_to_speech(doc.summary, s3_folder="tts/doc_summary/")
-        doc.page_tts = tts_url
-        doc.save()
+        tts_url = text_to_speech(page.summary, user=request.user, s3_folder="tts/page_summary/")
+        page.summary_tts = tts_url
+        page.save()
 
         return Response({
             "message": "요약문이 성공적으로 수정되고 새 TTS가 생성되었습니다.",
-            "doc_id": doc.id,
-            "summary": doc.summary,
-            "page_tts": doc.page_tts
+            "page_id": page.id,
+            "summary": page.summary,
+            "summary_tts": page.summary_tts
+        }, status=status.HTTP_200_OK)
+    
+class PageView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pageId):
+        try:
+            page = Page.objects.get(id=pageId)
+        except Page.DoesNotExist:
+            return Response({"detail": "페이지를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+
+        user = request.user
+
+        # page_data = {
+        #     "doc_id": page.doc.id,
+        #     "page_id": page.id,
+        #     "page_number": page.page_number,
+        #     "ocr": page.ocr or None,
+        #     "page_tts": page.page_tts or None,
+        #     "embedded_images": page.embedded_images or None,
+        #     "image": page.image.url if page.image else None,
+        # }
+
+        note = Note.objects.filter(page=page, user=user).first()
+        note_data = {
+            "note_id": note.id,
+            "content": note.content,
+            "note_tts": note.note_tts or None,
+        } if note else None
+
+        speeches = Speech.objects.filter(page=page).order_by("-created_at")
+        speech_data = [
+            {
+                "speech_id": speech.id,
+                "stt": speech.stt,
+                "stt_tts": speech.stt_tts or None,
+                "end_time": speech.end_time,
+                "duration": speech.duration,
+            }
+            for speech in speeches
+        ]
+
+        bookmarks = Bookmark.objects.filter(page=page, user=user).order_by("-created_at")
+        bookmark_data = [
+            {
+                "bookmark_id": bookmark.id,
+                "timestamp": bookmark.timestamp,
+            }
+            for bookmark in bookmarks
+        ]
+
+        # boards = Board.objects.filter(page=page).order_by("-created_at")
+        # board_data = [
+        #     {
+        #         "board_id": board.id,
+        #         "text": board.text or None,
+        #         "image": board.image.url if board.image else None,
+        #         "board_tts": board.board_tts or None,
+        #     }
+        #     for board in boards
+        # ]
+
+        return Response({
+            # "page": page_data,
+            "note": note_data,
+            "speeches": speech_data,
+            "bookmarks": bookmark_data,
+            # "boards": board_data,
         }, status=status.HTTP_200_OK)

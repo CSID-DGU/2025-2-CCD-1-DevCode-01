@@ -15,4 +15,11 @@ class Lecture(models.Model):
     code = models.CharField(max_length=10, unique=True, default=lecture_code)
     lecture_tts =  models.URLField(blank=True, null=True) 
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
+#공유 노트
+class SharedNote(models.Model):
+    lecture = models.ForeignKey(Lecture, on_delete=models.CASCADE, related_name='shared_notes', null=True, blank=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='shared_notes')
+    content = models.TextField()
+    note_tts =  models.URLField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)

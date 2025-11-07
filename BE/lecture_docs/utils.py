@@ -2,12 +2,12 @@ import base64
 import os
 import fitz
 from openai import OpenAI
-from pdfminer.high_level import extract_pages
-from pdfminer.layout import LTTextContainer
 from django.core.files.base import ContentFile
 from classes.utils import text_to_speech
 from lecture_docs.models import Doc, Page
 from dotenv import load_dotenv
+from vertexai import generative_models
+from users.models import User
 
 def pdf_to_image(page, title, page_num):
 
@@ -58,7 +58,7 @@ def page_ocr(page: Page):
     page.save(update_fields=["ocr"])
     return result
 
-def summarize_stt(doc_id: int) -> tuple[str, str]:
+def summarize_stt(doc_id: int, user: User) -> tuple[str, str]:
     """
     1. Doc ID로 모든 Page.speeches의 STT 텍스트 병합
     2. 강의명, 교안명을 포함한 프롬프트 구성
@@ -104,66 +104,59 @@ def summarize_stt(doc_id: int) -> tuple[str, str]:
 
     # Google TTS 변환 + S3 업로드
     try:
-        tts_url = text_to_speech(summary_text, s3_folder="tts/stt_summary/")
+        tts_url = text_to_speech(summary_text, user, s3_folder="tts/stt_summary/")
     except Exception as e:
         raise RuntimeError(f"TTS 변환 중 오류 발생: {e}")
     
     return summary_text, tts_url
 
-# def summarize_doc(doc_id: int) -> tuple[str, str]:
-#     # 1️⃣ 교안 및 연관 데이터 불러오기
-#     doc = Doc.objects.select_related("lecture").prefetch_related("pages__speeches").get(id=doc_id)
-#     lecture_title = doc.lecture.title if doc.lecture else "강의"
-#     doc_title = doc.title
+def summarize_doc(doc_id: int, ocr_text: str) -> str:
+    # 1️⃣ 교안 및 연관 데이터 불러오기
+    doc = Doc.objects.select_related("lecture").get(id=doc_id)
+    lecture_title = doc.lecture.title
+    doc_title = doc.title
 
-#     # 2️⃣ 모든 페이지의 ocr 텍스트 병합
-#     ocr_texts = [
-#         page.ocr.strip()
-#         for page in doc.pages.all()
-#         if page.ocr and page.ocr.strip()
-#     ]
+    if not ocr_text or not ocr_text.strip():
+        raise ValueError("요약할 OCR 데이터가 없습니다.")
 
-#     if not ocr_texts:
-#         raise ValueError("요약할 OCR 데이터가 없습니다.")
+    ocr_text = ocr_text.strip()
 
-#     combined_ocr = "\n".join(ocr_texts)
+    # 3️⃣ Gemini 프롬프트 생성
+    prompt = f"""
+    너는 '{lecture_title}' 강의의 '{doc_title}' 교안에 대한 전문가야.
+    아래는 강의 교안의 OCR 인식 결과야.
+    이 내용을 전체적으로 읽고, 200자 이내로 요약해줘.
 
-#     # 3️⃣ Gemini 프롬프트 생성
-#     prompt = f"""
-#     너는 '{lecture_title}' 강의의 '{doc_title}' 교안에 대한 전문가야.
-#     아래는 강의 교안의 OCR 인식 결과야.
-#     이 내용을 전체적으로 읽고, 200자 이내로 요약해줘.
+    단, 오탈자나 일부 누락이 있을 수 있으니 의미를 올바르게 해석하고,
+    원문에 없는 새로운 사실은 추가하지 말고,
+    중복된 설명은 생략하고,
+    중요하고 핵심적인 개념 위주로 정리해.
+    ---
+    {ocr_text}
+    ---
+    요약문:
+    """
 
-#     단, 오탈자나 일부 누락이 있을 수 있으니 의미를 올바르게 해석하고,
-#     원문에 없는 새로운 사실은 추가하지 말고,
-#     중복된 설명은 생략하고,
-#     중요하고 핵심적인 개념 위주로 정리해.
-#     ---
-#     {combined_ocr}
-#     ---
-#     요약문:
-#     """
+    return summarize(prompt)
 
-#     return summarize(prompt)
+def summarize(prompt: str) -> str:
+    """
+    Gemini 호출 요약본 생성 함수
+    프롬프트를 받아서 요약문 반환
+    """
 
-# def summarize(prompt: str) -> str:
-#     """
-#     Gemini 호출 요약본 생성 함수
-#     프롬프트를 받아서 요약문 반환
-#     """
+    # Gemini 모델 호출
+    try:
+        model = generative_models.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(prompt)
 
-#     # Gemini 모델 호출
-#     try:
-#         model = generative_models.GenerativeModel("gemini-2.5-flash")
-#         response = model.generate_content(prompt)
-
-#         if not response or not getattr(response, "text", "").strip():
-#             raise ValueError("Gemini 응답이 비어 있습니다.")
+        if not response or not getattr(response, "text", "").strip():
+            raise ValueError("Gemini 응답이 비어 있습니다.")
         
-#         summary_text = response.text.strip()
+        summary_text = response.text.strip()
 
-#     except Exception as e:
-#         raise RuntimeError(f"Gemini 요약 생성 중 오류 발생: {e}")
+    except Exception as e:
+        raise RuntimeError(f"Gemini 요약 생성 중 오류 발생: {e}")
 
-#     return summary_text
+    return summary_text
 
