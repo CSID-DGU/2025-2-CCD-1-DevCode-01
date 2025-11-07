@@ -11,7 +11,7 @@ from django.core.files.storage import default_storage
 from classes.utils import text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
-from .utils import  pdf_to_image, summarize_stt
+from .utils import  page_ocr, pdf_to_image, summarize_stt
 
 
 class DocUploadView(APIView):
@@ -67,10 +67,10 @@ class DocUploadView(APIView):
             #     s3_path = default_storage.save(f"embedded/{img_data['name']}", image_file)
             #     image_urls.append(default_storage.url(s3_path))
 
-            Page.objects.create(
+            page_obj = Page.objects.create(
                 doc=doc,
                 page_number=page_num,
-                ocr="텍스트 삽입예정입니다",
+                ocr="처리중입니다",
                 image=page_image_file,            
             )
 
@@ -78,7 +78,14 @@ class DocUploadView(APIView):
             # if text and text.strip():
             #     page_summary = summarize_doc(doc.id)
             #     all_sum.append(page_summary)
-
+            # ✅ 바로 OCR 수행 (Celery 없이)
+            try:
+                page_ocr(page_obj)
+            except Exception as e:
+                print(f"[오류] {page_num}페이지 OCR 실패:", e)
+                page_obj.ocr = "OCR 변환 실패"
+                page_obj.save(update_fields=["ocr"])
+                
         pdf.close()
         
         # 페이지별 요약문 병합 후 doc 요약문 및 TTS 생성
@@ -100,8 +107,9 @@ class DocUploadView(APIView):
 class DocDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     def get_queryset(self):
-        return Doc.objects.all()    
+        return Doc.objects.all()       
     
+        
     def patch(self, request, docId):
             doc = self.get_queryset().get(id=docId)
             new_title = request.data.get("title")
@@ -130,6 +138,7 @@ class PageDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, docId, pageNumber):
+        
         try:
             doc = Doc.objects.get(id=docId)
         except Doc.DoesNotExist:

@@ -50,3 +50,14 @@ class AccessibilitySerializer(serializers.ModelSerializer):
         return instance
     
 
+
+class SoundOptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['font', 'high_contrast']
+
+    def update(self, instance, validated_data):
+        instance.font = validated_data.get('font', instance.font)
+        instance.high_contrast = validated_data.get('high_contrast', instance.high_contrast)
+        instance.save()
+        return instance
