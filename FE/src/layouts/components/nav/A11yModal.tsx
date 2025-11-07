@@ -10,6 +10,8 @@ import {
 import { normalizeFontToPct } from "@shared/a11y/a11y.mappers";
 import { setA11yAndApply } from "@shared/a11y/initA11y";
 import { patchAccessibility } from "@apis/nav/a11y";
+import { lockBodyScroll, unlockBodyScroll } from "@shared/ui/scrollLock";
+import Portal from "@shared/ui/portal";
 
 type Props = {
   open: boolean;
@@ -18,6 +20,12 @@ type Props = {
 };
 
 export default function A11yModal({ open, onClose }: Props) {
+  useEffect(() => {
+    if (!open) return;
+    lockBodyScroll();
+    return () => unlockBodyScroll();
+  }, [open]);
+
   const { isHC, toggleMode } = useContrastMode();
 
   const getStoredFont = () =>
@@ -82,79 +90,82 @@ export default function A11yModal({ open, onClose }: Props) {
   if (!open) return null;
 
   return (
-    <Overlay role="presentation" onMouseDown={onOverlayMouseDown}>
-      <Card
-        ref={cardRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="a11y-title"
-        aria-describedby="a11y-desc"
-      >
-        <Header>
-          <h2 id="a11y-title">화면 설정</h2>
-          <CloseBtn aria-label="닫기" title="닫기" onClick={handleCancel}>
-            ×
-          </CloseBtn>
-        </Header>
+    <Portal>
+      <Overlay role="presentation" onMouseDown={onOverlayMouseDown}>
+        <Card
+          ref={cardRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="a11y-title"
+          aria-describedby="a11y-desc"
+          tabIndex={-1}
+        >
+          <Header>
+            <h2 id="a11y-title">화면 설정</h2>
+            <CloseBtn aria-label="닫기" title="닫기" onClick={handleCancel}>
+              ×
+            </CloseBtn>
+          </Header>
 
-        <Desc id="a11y-desc">
-          고대비 모드와 글자 크기를 한 번에 설정하세요.
-        </Desc>
+          <Desc id="a11y-desc">
+            고대비 모드와 글자 크기를 한 번에 설정하세요.
+          </Desc>
 
-        <Section>
-          <SecTitle>고대비 모드</SecTitle>
-          <Switch
-            role="switch"
-            aria-checked={isHC}
-            tabIndex={0}
-            onClick={onToggleHC}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onToggleHC();
-              }
-            }}
-            $on={isHC}
-          >
-            <span className="track" />
-            <span className="thumb" />
-            <span className="label">{isHC ? "켜짐" : "꺼짐"}</span>
-          </Switch>
-        </Section>
+          <Section>
+            <SecTitle>고대비 모드</SecTitle>
+            <Switch
+              role="switch"
+              aria-checked={isHC}
+              tabIndex={0}
+              onClick={onToggleHC}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onToggleHC();
+                }
+              }}
+              $on={isHC}
+            >
+              <span className="track" />
+              <span className="thumb" />
+              <span className="label">{isHC ? "켜짐" : "꺼짐"}</span>
+            </Switch>
+          </Section>
 
-        <Section>
-          <SecTitle>글자 크기</SecTitle>
-          <RadioRow role="radiogroup" aria-label="글자 크기 선택">
-            {SIZE_PRESETS.map((opt) => (
-              <RadioItem key={opt.valuePct}>
-                <input
-                  type="radio"
-                  id={`fz-${opt.valuePct}`}
-                  name="font-size"
-                  value={opt.valuePct}
-                  checked={currentScaleNum === Number(opt.valuePct)}
-                  onChange={() => setDraftFont(opt.valuePct)}
-                />
-                <label htmlFor={`fz-${opt.valuePct}`}>{opt.label}</label>
-              </RadioItem>
-            ))}
-          </RadioRow>
+          <Section>
+            <SecTitle>글자 크기</SecTitle>
+            <RadioRow role="radiogroup" aria-label="글자 크기 선택">
+              {SIZE_PRESETS.map((opt) => (
+                <RadioItem key={opt.valuePct}>
+                  <input
+                    type="radio"
+                    id={`fz-${opt.valuePct}`}
+                    name="font-size"
+                    value={opt.valuePct}
+                    checked={currentScaleNum === Number(opt.valuePct)}
+                    onChange={() => setDraftFont(opt.valuePct)}
+                  />
+                  <label htmlFor={`fz-${opt.valuePct}`}>{opt.label}</label>
+                </RadioItem>
+              ))}
+            </RadioRow>
 
-          <ScalePreview style={{ fontSize: `${currentScaleNum}%` }}>
-            가독성 미리보기 AaBb123 가독성 미리보기
-          </ScalePreview>
-        </Section>
+            <ScalePreview style={{ fontSize: `${currentScaleNum}%` }}>
+              가독성 미리보기 AaBb123 가독성 미리보기
+            </ScalePreview>
+          </Section>
 
-        <Footer>
-          <Btn type="button" data-variant="ghost" onClick={handleCancel}>
-            취소
-          </Btn>
-          <Btn type="button" onClick={handleSave}>
-            적용하기
-          </Btn>
-        </Footer>
-      </Card>
-    </Overlay>
+          <Footer>
+            <Btn type="button" data-variant="ghost" onClick={handleCancel}>
+              취소
+            </Btn>
+            <Btn type="button" onClick={handleSave}>
+              적용하기
+            </Btn>
+          </Footer>
+        </Card>
+      </Overlay>
+    </Portal>
   );
 }
 
@@ -167,12 +178,14 @@ const Overlay = styled.div`
   display: grid;
   place-items: center;
   z-index: 1000;
+  padding: clamp(12px, 4vh, 24px);
 
-  overscroll-behavior: contain;
+  touch-action: none;
 `;
 
 const Card = styled.div`
-  width: min(720px, calc(100vw - 32px));
+  width: min(720px, 100%);
+  max-width: calc(100vw - 32px);
   max-height: min(88vh, 100dvh - 48px);
   overflow: auto;
   border-radius: 20px;
