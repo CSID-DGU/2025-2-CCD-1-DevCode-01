@@ -104,26 +104,31 @@ class LectureJoinView(APIView):
         except Lecture.DoesNotExist:
             return Response({"error": "유효하지 않은 강의 코드입니다."}, status=status.HTTP_404_NOT_FOUND)
 
-        # ✅ 학습도우미만 코드로 접근 가능
-        if user.role != 'assistant':
-            return Response(
-                {"error": "강의코드로 접근할 수 있는 권한이 없습니다."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
         # ✅ 이미 다른 도우미가 연결돼 있을 경우 예외 처리
-        if lecture.assistant and lecture.assistant != user:
-            return Response(
-                {"error": "이미 다른 학습도우미가 참여 중인 강의입니다."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        if user.role == "assistant":
+            if lecture.assistant and lecture.assistant != user:
+                return Response(
+                    {"error": "이미 다른 학습도우미가 참여 중인 강의입니다."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        # ✅ 도우미 정보 등록
-        if lecture.assistant != user:
+            # ✅ 도우미 정보 등록
             lecture.assistant = user
-            lecture.save()
+            lecture.save(update_fields=['assistant'])
+
+        elif user.role == "student":
+            if lecture.student and lecture.student != user:
+                return Response(
+                    {"error": "이미 다른 학생이 참여 중인 강의입니다."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # ✅ 학생 정보 등록
+            lecture.student = user
+            lecture.save(update_fields=['student'])
 
         return Response({
             "lecture_id": lecture.id,
             "title": lecture.title,
+            "role": user.role
         }, status=status.HTTP_200_OK)
