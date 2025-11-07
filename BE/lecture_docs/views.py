@@ -7,12 +7,12 @@ from rest_framework import status,permissions
 from rest_framework.response import Response
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-
+from classes.models import Bookmark, Note, Speech
 from classes.models import Bookmark, Note, Speech
 from classes.utils import text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
-from .utils import  pdf_to_image, summarize_stt
+from .utils import  page_ocr, pdf_to_image, summarize_doc, summarize_stt
 
 
 class DocUploadView(APIView):
@@ -36,77 +36,83 @@ class DocUploadView(APIView):
             ]
         }
         return Response(data, status=status.HTTP_200_OK)
+    
     #파일업로드
     def post(self, request, lectureId):
         lecture = Lecture.objects.get(id=lectureId)
         file = request.FILES.get("file")
 
         doc = Doc.objects.create(lecture=lecture, title=file.name)
-
         pdf = fitz.open(stream=file.read(), filetype="pdf")
-
         file.seek(0)
-        #page_texts = pdf_to_text(file)
-
-        # for page_num, page in enumerate(pdf, start=1):
-        #     text = page_texts[page_num - 1] if page_num - 1 < len(page_texts) else ""
-        #     embedded_images = pdf_to_embedded_images(page, pdf)
-
-        #     image_urls = []
 
         for page_num, page in enumerate(pdf, start=1):
-            #text = page_texts[page_num - 1] if page_num - 1 < len(page_texts) else ""
-            #embedded_images = pdf_to_embedded_images(page, pdf)
+        
             page_image_file = pdf_to_image(page, doc.title, page_num)
 
-            #image_urls = []
-
-            # for img_data in embedded_images:
-            #     image_file = ContentFile(img_data["bytes"], name=img_data["name"])
-            #     s3_path = default_storage.save(f"embedded/{img_data['name']}", image_file)
-            #     image_urls.append(default_storage.url(s3_path))
-
-            # 페이지별 요약문 생성
-#             if text and text.strip():
-#                 try:
-#                     summary = summarize_doc(doc.id, text)
-#                     summary_tts = text_to_speech(summary, user=request.user, s3_folder="tts/page_summary/")
-#                 except Exception as e:
-#                     raise ValueError(f"[{page_num}] 페이지 요약 생성 실패: {e}")
-
-            Page.objects.create(
+            # Page 객체 생성
+            page_obj = Page.objects.create(
                 doc=doc,
                 page_number=page_num,
-                ocr="텍스트 삽입예정입니다",
-                image=page_image_file,            
-                embedded_images=image_urls or None,
-                summary=summary if text else None,
-                summary_tts=summary_tts if text else None,
+                image=page_image_file,
             )
 
-        pdf.close()
-        
-        # 페이지별 요약문 병합 후 doc 요약문 및 TTS 생성
-        # combined_summary = "\n\n".join(
-        #     [f"[{idx+1} 페이지] {summary}" for idx, summary in enumerate(all_sum)]
-        # ).strip()
-        # doc.summary = combined_summary
-        # doc.save(update_fields=["summary"])
+            # OCR 수행 
+            try:
+                page_ocr(page_obj)
+            except Exception as e:
+                print(f"[오류] {page_num}페이지 OCR 실패:", e)
+                page_obj.ocr = "OCR 변환 실패"
+                page_obj.save(update_fields=["ocr"])
+                continue  
+            
+            text = page_obj.ocr
 
-        # tts_url = text_to_speech(combined_summary, s3_folder="tts/doc_summary/")
-        # doc.page_tts = tts_url
-        # doc.save(update_fields=["page_tts"])
+            # OCR TTS
+            try:
+                tts_url = text_to_speech(
+                    text,
+                    user=request.user,
+                    s3_folder="tts/page_ocr/"  
+                )
+            except Exception as e:
+                return Response({"error": f"TTS 변환 중 오류 발생: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            page_obj.page_tts = tts_url
+            page_obj.save(update_fields=["page_tts"]) 
+            
+            # 요약+요약tts
+            summary, summary_tts = None, None
+            if text and text.strip():
+                try:
+                    summary = summarize_doc(doc.id, text)
+                    summary_tts = text_to_speech(
+                        summary, 
+                        user=request.user, 
+                        s3_folder="tts/page_summary/"
+                    )
+                    page_obj.summary = summary
+                    page_obj.summary_tts = summary_tts
+                    page_obj.save(update_fields=["summary", "summary_tts"])
+
+                except Exception as e:
+                    raise ValueError(f"[{page_num}] 페이지 요약 생성 실패: {e}")
+
+        pdf.close()
 
         return Response({
             "docId": doc.id,
             "docTitle": doc.title,
         }, status=status.HTTP_201_CREATED)
 
+
+
 class DocDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     def get_queryset(self):
-        return Doc.objects.all()    
+        return Doc.objects.all()       
     
+        
     def patch(self, request, docId):
             doc = self.get_queryset().get(id=docId)
             new_title = request.data.get("title")
@@ -135,6 +141,7 @@ class PageDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, docId, pageNumber):
+        
         try:
             doc = Doc.objects.get(id=docId)
         except Doc.DoesNotExist:
@@ -151,8 +158,7 @@ class PageDetailView(APIView):
                 "pagId": page.id,
                 "image": page.image.url if page.image else None,
                 "ocr": page.ocr if page.ocr else None,
-                "sum": None,  
-                "tts": None,   
+                "tts": page.page_tts,   
             }, status=status.HTTP_200_OK)
     
 class BoardView(APIView):

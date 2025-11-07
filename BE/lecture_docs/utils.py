@@ -1,66 +1,13 @@
+import base64
+import os
 import fitz
-from pdfminer.high_level import extract_pages
-from pdfminer.layout import LTTextContainer
+from openai import OpenAI
 from django.core.files.base import ContentFile
 from classes.utils import text_to_speech
-from lecture_docs.models import Doc
+from lecture_docs.models import Doc, Page
+from dotenv import load_dotenv
 from vertexai import generative_models
-
 from users.models import User
-
-# def special_char(text):
-#     replacements = {
-#         'à': '→', 'â': '⇒', 'á': '▶',
-#         'â€œ': '"', 'â€': '"', 'â€˜': "'", 'â€™': "'",
-#         'â€¦': '...', '·': '·', '•': '•',
-#         'Ã—': '×', 'Ã‚±': '±',
-#         '–': '-', '—': '—',
-#         'Â©': '©', 'Â®': '®', 'Â°': '°',
-#     }
-#     for bad, good in replacements.items():
-#         text = text.replace(bad, good)
-#     return text
-
-
-# def pdf_to_text(file):
-#     try:
-#         import tempfile
-#         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-#             for chunk in file.chunks():
-#                 tmp.write(chunk)
-#             tmp_path = tmp.name
-
-#         page_texts = []
-#         for page_layout in extract_pages(tmp_path):
-#             text = ""
-#             for element in page_layout:
-#                 if isinstance(element, LTTextContainer):
-#                     text += element.get_text()
-
-#             cleaned = special_char(text.strip())      
-#             page_texts.append(cleaned)
-
-#         return page_texts
-
-#     except Exception as e:
-#         print(f"[ERROR] PDFMiner text extraction failed: {e}")
-#         return []
-
-
-# def pdf_to_embedded_images(page, pdf):
-
-#     images = []
-#     for idx, img in enumerate(page.get_images(full=True), start=1):
-#         xref = img[0]
-#         base_image = pdf.extract_image(xref)
-#         image_bytes = base_image["image"]
-#         image_ext = base_image["ext"]
-#         images.append({
-#             "bytes": image_bytes,
-#             "ext": image_ext,
-#             "name": f"embedded_{idx}.{image_ext}"
-#         })
-#     return images
 
 def pdf_to_image(page, title, page_num):
 
@@ -68,6 +15,48 @@ def pdf_to_image(page, title, page_num):
     img_bytes = pix.tobytes("png")
     image_file = ContentFile(img_bytes, name=f"{title}_page{page_num}.png")
     return image_file
+
+load_dotenv() 
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+PROMPT_TEMPLATE = """
+너는 시각장애인이 접근 가능한 학습자료를 제작하는 보조자야. 
+다음은 강의자료를 이미지파일로 만들어낸 거야. 
+이 사진은 PDF의 각 페이지에서 추출된 거야. 
+
+각 페이지를 다음 구조로 가공해줘:
+1. 📌 제목(있다면)
+2. 📄 본문 텍스트: 문단 구분을 유지하며 자연스럽게 정리, 사진 외의 내용은 설명하지마
+3. 🖼️ 이미지/도식 설명(있다면): 보이지 않아도 이해할 수 있도록 이미지 내용을 말로 설명, 본문과 연관지어서 설명, 수업 내용과 관련없는 배경이미지, 로고같은건 설명생략
+4. 📊 표가 있다면: 표 내용을 구조적으로 텍스트로 재구성, 본문과 연관지어서 설명
+"""
+
+def image_to_base64(image_path):
+    with open(image_path, "rb") as f:
+        return base64.b64encode(f.read()).decode("utf-8")
+
+def page_ocr(page: Page):
+    image_b64 = image_to_base64(page.image.path)
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": PROMPT_TEMPLATE},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "이 이미지를 분석해줘."},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}}
+                ]
+            },
+        ],
+        temperature=0.3,
+    )
+
+    result = response.choices[0].message.content.strip()
+    page.ocr = result
+    page.save(update_fields=["ocr"])
+    return result
 
 def summarize_stt(doc_id: int, user: User) -> tuple[str, str]:
     """
