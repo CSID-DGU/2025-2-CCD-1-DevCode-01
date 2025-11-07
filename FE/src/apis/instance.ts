@@ -135,6 +135,19 @@ export const patchResponse = async <TRequest, TResponse>(
   }
 };
 
+export const patchNoResponse = async <TRequest>(
+  url: string,
+  body: TRequest
+): Promise<boolean> => {
+  try {
+    await instance.patch<void>(url, body);
+    return true;
+  } catch (e: unknown) {
+    console.error("PATCH(무응답) 실패:", e);
+    return false;
+  }
+};
+
 export const deleteResponse = async (url: string): Promise<boolean> => {
   try {
     await instance.delete(url);

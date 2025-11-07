@@ -9,6 +9,7 @@ import {
 } from "@shared/a11y/a11y.constants";
 import { normalizeFontToPct } from "@shared/a11y/a11y.mappers";
 import { setA11yAndApply } from "@shared/a11y/initA11y";
+import { patchAccessibility } from "@apis/nav/a11y";
 
 type Props = {
   open: boolean;
@@ -16,7 +17,7 @@ type Props = {
   onApplied?: (v: { font: string; high_contrast: boolean }) => void;
 };
 
-export default function A11yModal({ open, onClose, onApplied }: Props) {
+export default function A11yModal({ open, onClose }: Props) {
   const { isHC, toggleMode } = useContrastMode();
 
   const getStoredFont = () =>
@@ -61,9 +62,18 @@ export default function A11yModal({ open, onClose, onApplied }: Props) {
     toggleMode();
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setA11yAndApply({ font: draftFont, high_contrast: isHC });
-    onApplied?.({ font: draftFont, high_contrast: isHC });
+
+    const res = await patchAccessibility({
+      font: draftFont,
+      high_contrast: isHC,
+    });
+
+    if (!res) {
+      console.error("접근성 설정 PATCH 실패", res);
+    }
+
     onClose();
   };
 
