@@ -1,4 +1,3 @@
-// src/pages/class/Pre/styles.ts
 import styled from "styled-components";
 
 export const CONTAINER_MAX = 1200;
@@ -8,7 +7,6 @@ export const SIDE_MAX = 520;
 export const TOOLBAR_H = 56;
 export const TOOLBAR_GAP = 12;
 
-// 헤더/상단여백 대략치(프로젝트에 맞춰 조정)
 export const PANEL_FIXED_H = `calc(100dvh - 120px - ${TOOLBAR_H}px - ${TOOLBAR_GAP}px - env(safe-area-inset-bottom, 0px))`;
 
 export const Wrap = styled.section`

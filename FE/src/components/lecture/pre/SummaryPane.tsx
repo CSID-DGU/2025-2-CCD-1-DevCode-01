@@ -1,4 +1,5 @@
 import { PANEL_FIXED_H } from "@pages/class/pre/styles";
+import { fonts } from "@styles/fonts";
 import styled from "styled-components";
 
 type Props = {
@@ -49,7 +50,8 @@ export default function SummaryPane({
 const Pane = styled.aside<{ $stack: boolean }>`
   position: ${({ $stack }) => ($stack ? "static" : "sticky")};
   top: 16px;
-  background: #fff;
+  background: var(--c-white);
+  color: var(--c-black);
   border: 1px solid #e7eef6;
   border-radius: 12px;
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
@@ -70,9 +72,8 @@ const Header = styled.div`
   padding: 14px 16px 0;
 `;
 const Title = styled.h3`
-  font-size: 1rem;
-  font-weight: 700;
-  color: #0f172a;
+  ${fonts.bold32}
+  color: var(--c-black);
   margin: 0;
 `;
 const Body = styled.div`
@@ -84,8 +85,8 @@ const Body = styled.div`
 const Paragraph = styled.p`
   white-space: pre-wrap;
   line-height: 1.7;
-  font-size: clamp(0.98rem, 0.96rem + 0.1vw, 1.05rem);
-  color: #0b1220;
+  ${fonts.medium26}
+  color: var(--c-black);
 `;
 const SrOnlyFocusable = styled.button`
   position: absolute;

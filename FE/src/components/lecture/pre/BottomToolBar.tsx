@@ -1,4 +1,5 @@
 import { TOOLBAR_GAP, TOOLBAR_H } from "@pages/class/pre/styles";
+import { fonts } from "@styles/fonts";
 import styled from "styled-components";
 
 type Props = {
@@ -104,8 +105,8 @@ const Bar = styled.div`
   gap: 0.75rem;
   height: ${TOOLBAR_H}px;
   padding: 0 0.75rem;
-  background: #2b62d6;
-  color: #fff;
+  background: var(--c-blue);
+  color: var(--c-white);
   border-radius: 0.5rem;
   box-shadow: 0 6px 10px rgba(0, 0, 0, 0.12);
   z-index: 999;
@@ -116,6 +117,10 @@ const Group = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+
+  span {
+    ${fonts.medium26};
+  }
 `;
 const Divider = styled.div`
   width: 1px;
@@ -123,9 +128,11 @@ const Divider = styled.div`
   background: #ffffff55;
 `;
 const Btn = styled.button`
-  border: 1px solid #ffffff66;
+  border: 2px solid var(--c-white);
+  ${fonts.medium26};
   background: transparent;
-  color: #fff;
+  color: var(--c-white);
+  cursor: pointer;
   padding: 0.25rem 0.6rem;
   border-radius: 0.4rem;
   &:disabled {
@@ -133,7 +140,7 @@ const Btn = styled.button`
     cursor: not-allowed;
   }
   &:focus-visible {
-    outline: 2px solid #fff;
+    outline: 2px solid var(--c-white);
     outline-offset: 2px;
   }
 `;
@@ -143,19 +150,18 @@ const Badge = styled.span`
   justify-content: center;
   min-width: 1.6rem;
   height: 1.6rem;
-  border: 2px solid #fff;
-  border-radius: 999px;
   padding: 0 0.3rem;
-  font-weight: 700;
+  ${fonts.medium26};
 `;
 const Slash = styled.span`
-  opacity: 0.9;
+  ${fonts.medium26};
 `;
 const Primary = styled.button`
-  background: #1048d6;
-  color: #fff;
+  background: var(--c-blue);
+  color: var(--c-white);
   padding: 0.35rem 0.8rem;
   border-radius: 0.5rem;
-  border: 1px solid #ffffff66;
-  font-weight: 600;
+  border: 2px solid var(--c-white);
+  ${fonts.medium26};
+  cursor: pointer;
 `;
