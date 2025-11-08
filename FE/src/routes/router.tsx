@@ -70,7 +70,7 @@ const router = createBrowserRouter([
             },
           },
           {
-            path: "/lecture/:courseId/pre",
+            path: "/lecture/doc/:courseId",
             element: <PreClass />,
             handle: {
               nav: {

@@ -3,10 +3,12 @@ import styled from "styled-components";
 import Nav from "@widgets/Nav/Nav";
 import type { NavMeta } from "@widgets/Nav/types";
 
+type NavState = { navTitle?: string; subject?: string };
+
 const DefaultLayout = () => {
   const matches = useMatches();
   const params = useParams<Record<string, string>>();
-  const { state } = useLocation() as { state?: { subject?: string } };
+  const { state } = useLocation() as { state?: NavState };
 
   const last = matches[matches.length - 1];
   const navMeta = (last?.handle as { nav?: NavMeta })?.nav;
@@ -15,11 +17,16 @@ const DefaultLayout = () => {
   const variant = baseVariant;
 
   const computedTitle =
-    baseVariant === "exam" && state?.subject
+    // 1순위: 페이지 전환 시 넘겨준 제목
+    state?.navTitle ??
+    // 2순위: exam 특수 케이스 유지
+    (baseVariant === "exam" && state?.subject
       ? `${state.subject} 시험`
-      : typeof navMeta?.title === "function"
+      : // 3순위: 함수형 title
+      typeof navMeta?.title === "function"
       ? navMeta.title(params)
-      : navMeta?.title;
+      : // 4순위: 정적 title
+        navMeta?.title);
 
   return (
     <Wrapper>

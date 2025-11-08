@@ -52,7 +52,11 @@ export default function LectureDocs() {
               <DocItem
                 doc={doc}
                 fmtDate={fmtDate}
-                onOpen={(d) => nav(`/lecture/${lectureNumericId}/doc/${d.id}`)}
+                onOpen={(d) =>
+                  nav(`/lecture/doc/${d.id}`, {
+                    state: { navTitle: d.title },
+                  })
+                }
                 onDelete={async () => {
                   await remove(doc.id);
                 }}

@@ -38,8 +38,8 @@ const isLectureDocsResponse = (v: unknown): v is LectureDocsResponse => {
 
 /* ---------- APIs ---------- */
 
-// ✅ GET /api/lecture/{lectureId}/doc/
-export const fetchLectureDocs = async (
+// 강의 교안 리스트 조회
+export const getLectureDocs = async (
   lectureId: number
 ): Promise<LectureDoc[]> => {
   const res = await getResponse<unknown>(`/lecture/${lectureId}/doc/`);
@@ -47,7 +47,7 @@ export const fetchLectureDocs = async (
   return res.doc.map(mapLectureDoc);
 };
 
-// ✅ POST /api/lecture/{lectureId}/doc/ (파일 업로드)
+// 파일 업로드
 export const uploadLectureDoc = async (
   lectureId: number,
   file: File
