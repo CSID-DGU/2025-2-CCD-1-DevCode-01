@@ -1,6 +1,7 @@
 import { TOOLBAR_GAP, TOOLBAR_H } from "@pages/class/pre/styles";
 import { fonts } from "@styles/fonts";
 import styled from "styled-components";
+import { useEffect, useRef, useState } from "react";
 
 type Props = {
   canPrev: boolean;
@@ -12,6 +13,7 @@ type Props = {
   onNext: () => void;
   onToggleMode: () => void;
   onStart: () => void;
+  onGoTo: (page: number) => void;
   speak?: (msg: string) => void;
 };
 
@@ -25,8 +27,54 @@ export default function BottomToolbar({
   onNext,
   onToggleMode,
   onStart,
+  onGoTo,
   speak,
 }: Props) {
+  const [draft, setDraft] = useState<string>(String(page));
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setDraft(String(page));
+  }, [page]);
+
+  const min = 1;
+  const max = totalPages && totalPages > 0 ? totalPages : undefined;
+
+  const normalize = (raw: string): number | null => {
+    const n = Number.parseInt(raw, 10);
+    if (!Number.isFinite(n)) return null;
+    if (n < min) return min;
+    if (max && n > max) return max;
+    return n;
+  };
+
+  const goDraft = () => {
+    const n = normalize(draft);
+    if (n == null) {
+      speak?.("유효한 숫자를 입력하세요.");
+      setDraft(String(page));
+      inputRef.current?.focus();
+      return;
+    }
+    if (n === page) {
+      speak?.(`이미 ${n}페이지입니다.`);
+      return;
+    }
+    onGoTo(n);
+    speak?.(`${n}페이지로 이동`);
+  };
+
+  const onKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      goDraft();
+    }
+  };
+
+  const onFocus: React.FocusEventHandler<HTMLInputElement> = () => {
+    speak?.("페이지 번호 입력");
+  };
+
   return (
     <Bar role="toolbar" aria-label="페이지 조작">
       <Group>
@@ -42,7 +90,26 @@ export default function BottomToolbar({
           ‹
         </Btn>
 
-        <Badge aria-label={`현재 페이지 ${page}`}>{page}</Badge>
+        <PageInputWrap>
+          <PageInput
+            ref={inputRef}
+            inputMode="numeric"
+            type="text"
+            role="spinbutton"
+            aria-label="페이지 번호 입력"
+            aria-valuemin={min}
+            aria-valuemax={max ?? undefined}
+            aria-valuenow={page}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value.replace(/[^\d]/g, ""))}
+            onKeyDown={onKeyDown}
+            onFocus={onFocus}
+            onBlur={() => {
+              setDraft(String(page));
+            }}
+          />
+        </PageInputWrap>
+
         <Slash>/</Slash>
         <span aria-label="전체 페이지">{totalPages ?? "?"}</span>
 
@@ -104,13 +171,13 @@ const Bar = styled.div`
   justify-content: center;
   gap: 0.75rem;
   height: ${TOOLBAR_H}px;
-  padding: 0 0.75rem;
+  padding: 2rem;
   background: var(--c-blue);
   color: var(--c-white);
   border-radius: 0.5rem;
   box-shadow: 0 6px 10px rgba(0, 0, 0, 0.12);
   z-index: 999;
-  max-width: min(92vw, 720px);
+  max-width: min(92vw, 820px);
   width: max-content;
 `;
 const Group = styled.div`
@@ -144,15 +211,7 @@ const Btn = styled.button`
     outline-offset: 2px;
   }
 `;
-const Badge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.6rem;
-  height: 1.6rem;
-  padding: 0 0.3rem;
-  ${fonts.medium26};
-`;
+
 const Slash = styled.span`
   ${fonts.medium26};
 `;
@@ -164,4 +223,30 @@ const Primary = styled.button`
   border: 2px solid var(--c-white);
   ${fonts.medium26};
   cursor: pointer;
+`;
+
+const PageInputWrap = styled.div`
+  display: inline-flex;
+  align-items: center;
+  border: 2px solid var(--c-white);
+  border-radius: 0.4rem;
+  padding: 0.1rem 0.4rem;
+  background: #ffffff22;
+`;
+
+const PageInput = styled.input`
+  width: 3.2ch;
+  text-align: center;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--c-white);
+  ${fonts.medium26};
+
+  /* 모바일에서 스크롤로 값 바뀌는 것 방지 */
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
 `;

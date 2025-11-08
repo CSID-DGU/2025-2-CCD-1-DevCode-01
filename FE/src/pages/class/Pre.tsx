@@ -202,6 +202,7 @@ export default function PreClass() {
         onToggleMode={toggleMode}
         onStart={() => announce("강의가 시작되었습니다.")}
         speak={speak}
+        onGoTo={(n) => setPage(n)}
       />
     </Wrap>
   );
