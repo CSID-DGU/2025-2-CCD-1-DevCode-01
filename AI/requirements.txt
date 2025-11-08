@@ -1,0 +1,5 @@
+paddleocr>=2.7
+opencv-python-headless>=4.9
+pdf2image>=1.16
+requests>=2.31
+PyYAML>=6.0
