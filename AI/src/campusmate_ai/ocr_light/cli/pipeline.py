@@ -4,14 +4,12 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # (1) OCR → elements JSON
-from src.ocr.page_to_text import PageToText
+from campusmate_ai.ocr_light.ocr.page_to_text import PageToText
 
 # (2) JSON → TXT
 # 통일: postprocess_unified가 있으면 우선 사용, 없으면 기존 process_pages로 폴백
-try:
-    from src.ocr.postprocess_unified import process_pages_unified as _process_pages
-except Exception:
-    from src.ocr.postprocess import process_pages as _process_pages
+
+from campusmate_ai.ocr_light.ocr.postprocess import process_pages as _process_pages
 
 # (3) TXT → MD (Ollama)
 import requests

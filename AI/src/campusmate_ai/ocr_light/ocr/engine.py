@@ -18,36 +18,55 @@ _OCR_CACHE: dict[Tuple[str, bool, int, int], PaddleOCR] = {}
 def _create_engine(
     lang: str,
     use_angle_cls: bool = True,
-    use_gpu: Optional[bool] = None,
     det_limit_side_len: int = 1920,
     rec_batch_num: int = 8,
 ) -> PaddleOCR:
     """
-    PaddleOCR 버전 차이를 흡수. 인자 일부는 무시될 수 있음(버전별).
+    PaddleOCR 엔진 생성 (버전 호환)
+    - ko: PP-OCRv3 우선
+    - 그 외: PP-OCRv4 우선
+    - det_limit_side_len/rec_batch_num은 지원 버전에서만 사용, 아니면 자동 폴백
+    - show_log 같은 미지원 인자는 절대 전달하지 않음
     """
-    # 환경변수로 GPU 허용(기본 False). e.g. OCR_USE_GPU=1
-    if use_gpu is None:
-        use_gpu = os.getenv("OCR_USE_GPU", "0") == "1"
-
     key = (lang, use_angle_cls, det_limit_side_len, rec_batch_num)
     if key in _OCR_CACHE:
         return _OCR_CACHE[key]
 
-    try:
-        eng = PaddleOCR(
-            lang=lang,
-            use_angle_cls=use_angle_cls,
-            ocr_version="PP-OCRv4",
-            show_log=False,
-            use_gpu=use_gpu,
-            det_limit_side_len=det_limit_side_len,
-            rec_batch_num=rec_batch_num,
-        )
-    except TypeError:
-        eng = PaddleOCR(lang=lang, use_angle_cls=use_angle_cls, show_log=False)
+    def _build(version: str | None):
+        # 최소 인자만 먼저 시도
+        base_kwargs = dict(lang=lang, use_angle_cls=use_angle_cls)
+        if version is not None:
+            base_kwargs["ocr_version"] = version
+
+        # 1) 확장 인자 포함 시도
+        try:
+            return PaddleOCR(
+                **base_kwargs,
+                det_limit_side_len=det_limit_side_len,
+                rec_batch_num=rec_batch_num,
+            )
+        except Exception:
+            # 2) 확장 인자 제거하고 순수 기본 인자만
+            return PaddleOCR(**base_kwargs)
+
+    eng = None
+    if lang == "korean":
+        # ko는 v4 모델이 없어서 v3 우선
+        try:
+            eng = _build("PP-OCRv3")
+        except Exception:
+            eng = _build(None)
+    else:
+        # en 등은 v4 우선, 실패 시 v3
+        try:
+            eng = _build("PP-OCRv4")
+        except Exception:
+            eng = _build("PP-OCRv3")
 
     _OCR_CACHE[key] = eng
     return eng
+
+
 
 # ---------- 유틸 ----------
 def _bbox_from_quad(quad):
@@ -88,15 +107,14 @@ class DualOCREngine:
         min_conf: float = 0.70,
         det_limit_side_len: int = 1920,
         rec_batch_num: int = 8,
-        use_gpu: Optional[bool] = None,
         enable_board_preprocess: bool = True,
     ):
         self.min_conf = float(min_conf)
         self.ko = _create_engine(
-            "korean", True, use_gpu, det_limit_side_len, rec_batch_num
+            "korean", True, det_limit_side_len, rec_batch_num
         )
         self.en = _create_engine(
-            "en", True, use_gpu, det_limit_side_len, rec_batch_num
+            "en", True, det_limit_side_len, rec_batch_num
         )
         self.hdet = HeuristicDetector()
         self.enable_board_preprocess = enable_board_preprocess

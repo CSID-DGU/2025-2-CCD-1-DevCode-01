@@ -45,7 +45,6 @@ class PageToText:
             min_conf=float(ocr_cfg.get("min_conf", self.cfg.get("min_conf", 0.70))),
             det_limit_side_len=int(ocr_cfg.get("det_limit_side_len", 1920)),
             rec_batch_num=int(ocr_cfg.get("rec_batch_num", self.cfg.get("rec_batch", 8))),
-            use_gpu=self.cfg.get("use_gpu", None),
             enable_board_preprocess=self.cfg.get("enable_board_preprocess", True),
         )
         self.workers = int(self.cfg.get("workers", os.cpu_count() or 2))

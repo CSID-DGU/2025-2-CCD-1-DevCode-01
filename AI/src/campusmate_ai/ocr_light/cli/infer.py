@@ -2,7 +2,7 @@
 import argparse, os, json
 from pathlib import Path
 import yaml
-from src.ocr.page_to_text import PageToText
+from campusmate_ai.ocr_light.ocr.page_to_text import PageToText
 
 def _discover_inputs(inp: Path):
     if inp.is_file():
