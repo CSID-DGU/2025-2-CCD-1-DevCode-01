@@ -138,7 +138,7 @@ export const TabNav = styled.nav`
 `;
 
 export const TabLink = styled(NavLink)`
-  ${fonts.regular17}
+  ${fonts.medium24}
   text-decoration: none;
   color: var(--c-white);
   border-radius: 6px;

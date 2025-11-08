@@ -209,7 +209,7 @@ const Header = styled.div`
   margin-bottom: 6px;
 
   h2 {
-    ${fonts.bold26};
+    ${fonts.bold32};
     margin: 0;
   }
 `;

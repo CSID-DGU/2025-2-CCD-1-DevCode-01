@@ -164,9 +164,9 @@ const Label = styled.label`
   ${fonts.regular20}
   color: var(--c-black);
 
-  html.hc & {
+  /* html.hc & {
     color: var(--c-white);
-  }
+  } */
 `;
 
 const Radio = styled.input.attrs({ type: "radio" })`

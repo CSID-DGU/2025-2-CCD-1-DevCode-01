@@ -29,7 +29,6 @@ export default function Step3TTS() {
   const { setControls } = useOutletContext<ShellContext>();
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  /* ---------------- 상단 컨트롤/타이틀 ---------------- */
   useEffect(() => {
     setControls({
       title: "화면 읽기 속도와 목소리를 설정해주세요",
@@ -39,39 +38,36 @@ export default function Step3TTS() {
     });
   }, [navigate, setControls]);
 
-  /* ---------------- 기본값 보정 ---------------- */
   useEffect(() => {
     const patch: Partial<TTS> = {};
     if (!tts.voice) patch.voice = "female";
-    if (typeof tts.rate !== "number") patch.rate = 1.0; // 보통
+    if (typeof tts.rate !== "string") patch.rate = "1.0";
     if (Object.keys(patch).length) setTts(patch);
   }, [tts.voice, tts.rate, setTts]);
 
-  /* ---------------- 현재 선택값 계산 ---------------- */
   const voiceId = useMemo<VoiceId>(() => {
     const found = VOICES.find((v) => v.id === tts.voice)?.id;
     return (found ?? "female") as VoiceId;
   }, [tts.voice]);
 
   const speedKey = useMemo<SpeedKey>(
-    () => rateToSpeedKey(tts.rate ?? 1.0),
+    () => rateToSpeedKey(tts.rate ?? "1.0"),
     [tts.rate]
   );
 
-  /* ---------------- 미리듣기: 단일 파일 + playbackRate ---------------- */
-  const playVoice = (v: VoiceId, rate: number) => {
-    const url = `/audio/tts/${v}.mp3`; // /public/audio/tts/(female|male).mp3
+  const playVoice = (v: VoiceId, rateStr: string) => {
+    const url = `/audio/tts/${v}.mp3`; // /public/audio/tts/(female|male).mp3으로 세팅 필요
 
-    // 재생 중지 및 교체
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.src = "";
+      audioRef.current = null;
     }
 
     const a = new Audio(url);
-    a.playbackRate = rate;
+    const pr = Number.isFinite(parseFloat(rateStr)) ? parseFloat(rateStr) : 1.0;
+    a.playbackRate = pr;
 
-    // 속도 변경 시 피치 유지 (브라우저 벤더별 속성 처리)
     a.preservesPitch = true;
     // @ts-expect-error - 사파리/크롬 구버전용
     a.webkitPreservesPitch = true;
@@ -83,19 +79,27 @@ export default function Step3TTS() {
     });
   };
 
-  /* ---------------- 선택 핸들러 ---------------- */
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
   const onPickRate = (key: SpeedKey) => {
-    const rate = speedKeyToRate(key);
-    setTts({ rate });
-    playVoice(voiceId, rate);
+    const rateStr = String(speedKeyToRate(key));
+    setTts({ rate: rateStr });
+    playVoice(voiceId, rateStr);
   };
 
   const onPickVoice = (id: VoiceId) => {
     setTts({ voice: id });
-    playVoice(id, tts.rate ?? 1.0);
+    playVoice(id, tts.rate ?? "1.0");
   };
 
-  /* ---------------- UI ---------------- */
   return (
     <Wrap role="region" aria-label="음성 설정">
       <Cols>
@@ -166,10 +170,6 @@ const Title = styled.h3`
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--c-black);
-
-  html.hc & {
-    color: var(--c-white);
-  }
 `;
 const Options = styled.div`
   display: flex;
@@ -202,8 +202,4 @@ const Radio = styled.input.attrs({ type: "radio" })`
 const Label = styled.span`
   font-size: 1rem;
   color: var(--c-black);
-
-  html.hc & {
-    color: var(--c-white);
-  }
 `;
