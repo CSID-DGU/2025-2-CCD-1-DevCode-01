@@ -14,13 +14,13 @@ import {
   readFontPct,
   readReadOnFocus,
 } from "./pre/ally";
-import { useLocalTTS } from "@styles/useLocalTTS";
 
 import { useFocusTTS } from "src/hooks/useFocusTTS";
 import { Container, Grid, SrLive, Wrap } from "./pre/styles";
 import DocPane from "src/components/lecture/pre/DocPane";
 import SummaryPane from "src/components/lecture/pre/SummaryPane";
 import BottomToolbar from "src/components/lecture/pre/BottomToolBar";
+import { useLocalTTS } from "src/hooks/useLocalTTS";
 
 type RouteParams = { docId?: string; courseId?: string };
 type NavState = { navTitle?: string; totalPages?: number };
