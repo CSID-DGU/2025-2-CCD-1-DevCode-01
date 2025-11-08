@@ -5,8 +5,18 @@ import { ThemeProvider } from "styled-components";
 import { theme } from "@styles/theme";
 import { Toaster } from "react-hot-toast";
 import { TTSProvider } from "@shared/tts/TTSProvider";
+import { useEffect } from "react";
+import {
+  applyA11yFromStorage,
+  migrateA11yKeysOnce,
+} from "@shared/a11y/initA11y";
 
 function App() {
+  useEffect(() => {
+    migrateA11yKeysOnce();
+    applyA11yFromStorage();
+  }, []);
+
   return (
     <ThemeProvider theme={theme}>
       <TTSProvider>

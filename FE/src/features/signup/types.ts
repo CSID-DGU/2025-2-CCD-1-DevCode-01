@@ -1,6 +1,6 @@
 export type Role = "student" | "assistant";
-export type Access = { font: number; high_contrast: boolean };
-export type TTS = { voice: string; rate: number };
+export type Access = { font: string; high_contrast: boolean };
+export type TTS = { voice: string; rate: string };
 export type Info = { username: string; password: string };
 
 export type SignupCtx = {
