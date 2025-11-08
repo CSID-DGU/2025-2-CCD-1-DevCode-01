@@ -10,11 +10,33 @@ import {
   applyA11yFromStorage,
   migrateA11yKeysOnce,
 } from "@shared/a11y/initA11y";
+import { initTTS } from "./hooks/useLocalTTS";
 
 function App() {
   useEffect(() => {
     migrateA11yKeysOnce();
     applyA11yFromStorage();
+  }, []);
+
+  useEffect(() => {
+    const click = () => {
+      initTTS();
+      window.removeEventListener("click", click);
+      window.removeEventListener("keydown", keydown);
+    };
+    const keydown = (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        initTTS();
+        window.removeEventListener("click", click);
+        window.removeEventListener("keydown", keydown);
+      }
+    };
+    window.addEventListener("click", click, { once: false });
+    window.addEventListener("keydown", keydown, { once: false });
+    return () => {
+      window.removeEventListener("click", click);
+      window.removeEventListener("keydown", keydown);
+    };
   }, []);
 
   return (

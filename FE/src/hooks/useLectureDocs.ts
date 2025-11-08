@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  fetchLectureDocs,
+  getLectureDocs,
   uploadLectureDoc,
   deleteLectureDoc,
   updateLectureDoc,
@@ -16,7 +16,7 @@ export function useLectureDocs(lectureId: number | null) {
     if (!lectureId) return;
     setBusy(true);
     try {
-      const list = await fetchLectureDocs(lectureId);
+      const list = await getLectureDocs(lectureId);
       setDocs(list);
     } catch {
       toast.error("교안 목록을 불러오지 못했어요.");

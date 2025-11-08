@@ -61,18 +61,16 @@ const router = createBrowserRouter([
             handle: { nav: { variant: "folder" } as NavMeta },
           },
           {
-            path: "/class/:courseId/doc",
+            path: "/lecture/:courseId/doc",
             element: <LectureDocs />,
             handle: {
               nav: {
                 variant: "folder",
-                title: ({ courseId }: { courseId?: string }) =>
-                  `강의 ${courseId ?? ""}`,
               },
             },
           },
           {
-            path: "/class/:courseId/pre",
+            path: "/lecture/doc/:courseId",
             element: <PreClass />,
             handle: {
               nav: {
@@ -82,7 +80,7 @@ const router = createBrowserRouter([
             },
           },
           {
-            path: "/class/:courseId/live",
+            path: "/lecture/:courseId/live",
             element: <LiveClass />,
             handle: {
               nav: {
@@ -92,7 +90,7 @@ const router = createBrowserRouter([
             },
           },
           {
-            path: "/class/:courseId/post",
+            path: "/lecture/:courseId/post",
             element: <PostClass />,
             handle: {
               nav: {
