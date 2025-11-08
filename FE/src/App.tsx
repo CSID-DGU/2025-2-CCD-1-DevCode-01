@@ -10,11 +10,21 @@ import {
   applyA11yFromStorage,
   migrateA11yKeysOnce,
 } from "@shared/a11y/initA11y";
+import { initTTS } from "@styles/useLocalTTS";
 
 function App() {
   useEffect(() => {
     migrateA11yKeysOnce();
     applyA11yFromStorage();
+  }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      initTTS();
+      window.removeEventListener("click", handler);
+    };
+    window.addEventListener("click", handler);
+    return () => window.removeEventListener("click", handler);
   }, []);
 
   return (

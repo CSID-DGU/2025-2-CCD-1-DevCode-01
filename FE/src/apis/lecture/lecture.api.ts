@@ -1,10 +1,9 @@
 import { getResponse } from "@apis/instance";
 
-/** 문서 한 페이지 응답 매핑 */
 export type DocPage = {
   docId: number;
   pageNumber: number;
-  pageId: number; // 서버가 pagId로 주는 케이스도 있어 합쳐서 처리
+  pageId: number;
   image: string;
   ocr: string;
   sum?: string;
@@ -16,7 +15,7 @@ export async function fetchDocPage(docId: number, page: number) {
     docId: number;
     pageNumber: number;
     pageId?: number;
-    pagId?: number; // 백엔드 오타 대비
+    pagId?: number;
     image: string;
     ocr: string;
     sum?: string;
