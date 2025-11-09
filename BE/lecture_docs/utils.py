@@ -1,6 +1,8 @@
 import base64
+from io import BytesIO
 import os
 import fitz
+import requests
 from openai import OpenAI
 from django.core.files.base import ContentFile
 from classes.utils import text_to_speech
@@ -8,15 +10,20 @@ from lecture_docs.models import Doc, Page
 from dotenv import load_dotenv
 from vertexai import generative_models
 from users.models import User
+from django.conf import settings
+from botocore.exceptions import NoCredentialsError
+import boto3
 
 def pdf_to_image(page, title, page_num):
-
     pix = page.get_pixmap(dpi=150)
     img_bytes = pix.tobytes("png")
-    image_file = ContentFile(img_bytes, name=f"{title}_page{page_num}.png")
-    return image_file
 
-load_dotenv() 
+    image_bytesio = BytesIO(img_bytes)
+    image_bytesio.seek(0)
+    return image_bytesio
+
+
+load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 PROMPT_TEMPLATE = """
@@ -31,32 +38,54 @@ PROMPT_TEMPLATE = """
 4. 📊 표가 있다면: 표 내용을 구조적으로 텍스트로 재구성, 본문과 연관지어서 설명
 """
 
-def image_to_base64(image_path):
-    with open(image_path, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
+def pdf_to_image(page, title, page_num):
+    pix = page.get_pixmap(dpi=150)
+    img_bytes = pix.tobytes("png")
+    image_bytesio = BytesIO(img_bytes)
+    image_bytesio.seek(0)
+    return image_bytesio
 
-def page_ocr(page: Page):
-    image_b64 = image_to_base64(page.image.path)
 
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": PROMPT_TEMPLATE},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "이 이미지를 분석해줘."},
-                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}}
-                ]
-            },
-        ],
-        temperature=0.3,
-    )
 
-    result = response.choices[0].message.content.strip()
-    page.ocr = result
-    page.save(update_fields=["ocr"])
-    return result
+def page_ocr(page: Page, image_bytes: BytesIO, s3_key: str):
+    try:
+        # (1) GPT Vision 입력용 base64 인코딩
+        image_b64 = base64.b64encode(image_bytes.getvalue()).decode("utf-8")
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": PROMPT_TEMPLATE},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "이 이미지를 분석해줘."},
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}}
+                    ]
+                },
+            ],
+            temperature=0.3,
+        )
+
+        result = response.choices[0].message.content.strip()
+
+        # (2) OCR 결과를 DB에 저장
+        page.ocr = result
+        page.save(update_fields=["ocr"])
+
+    except Exception as e:
+        raise RuntimeError(f"OCR 변환 실패: {e}")
+
+    # (3) 같은 이미지 BytesIO를 다시 S3로 업로드
+    try:
+        upload_copy = BytesIO(image_bytes.getvalue())
+        s3_url = upload_s3(upload_copy, s3_key, content_type="image/png")
+        page.image = s3_url
+        page.save(update_fields=["image"])
+        return result
+
+    except Exception as e:
+        raise RuntimeError(f"S3 업로드 실패: {e}")
 
 def summarize_stt(doc_id: int, user: User) -> tuple[str, str]:
     """
@@ -160,3 +189,26 @@ def summarize(prompt: str) -> str:
 
     return summary_text
 
+
+
+def upload_s3(file_obj, file_name, folder=None, content_type=None):
+    try:
+        s3 = boto3.client(
+            "s3",
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_REGION,
+        )
+
+        key = f"{folder}/{file_name}" if folder else file_name
+
+        extra_args = {"ContentType": content_type or "application/octet-stream"}
+        s3.upload_fileobj(file_obj, settings.AWS_BUCKET_NAME, key, ExtraArgs=extra_args)
+
+        url = f"{settings.AWS_S3_BASE_URL}/{key}"
+        return url
+
+    except NoCredentialsError:
+        raise Exception("AWS 자격 증명이 없습니다. 환경변수를 확인하세요.")
+    except Exception as e:
+        raise Exception(f"S3 업로드 실패: {e}")
