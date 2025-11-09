@@ -41,7 +41,7 @@ class DocSync(AsyncJsonWebsocketConsumer):
             await self.channel_layer.group_send(
                 self.group_name,
                 {
-                    "type": "group.page_change",
+                    "type": "page_change",
                     "page": page,
                 },
             )
@@ -52,7 +52,7 @@ class DocSync(AsyncJsonWebsocketConsumer):
             await self.channel_layer.group_send(
                 self.group_name,
                 {
-                    "type": "group.board_event",
+                    "type": "board_event",
                     "event": event,
                     "data": data,
                 },
