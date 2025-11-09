@@ -27,7 +27,7 @@ type Props = {
   board: {
     docId: number;
     page: number;
-    pageId: number;
+    pageId?: number | null;
     canUpload: boolean;
   };
 };
@@ -116,11 +116,17 @@ export default function RightTabs({
         aria-labelledby={tabIds.board}
         hidden={tab !== "board"}
       >
-        <BoardBox
-          pageId={board.pageId}
-          canUpload={board.canUpload}
-          assetBase={import.meta.env.VITE_BASE_URL}
-        />
+        {typeof board.pageId === "number" && board.pageId > 0 ? (
+          <BoardBox
+            pageId={board.pageId} // ✅ 이제 number 보장
+            canUpload={board.canUpload}
+            assetBase={import.meta.env.VITE_BASE_URL}
+          />
+        ) : (
+          <EmptyState role="status" aria-live="polite">
+            이 페이지는 아직 판서를 사용할 수 없어요. 조금만 기다려주세요.
+          </EmptyState>
+        )}
       </Panel>
 
       <Panel
