@@ -1,3 +1,4 @@
+// src/components/lecture/live/BoardBox.tsx
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import {
@@ -7,13 +8,33 @@ import {
   deleteBoard,
   type BoardItem,
 } from "@apis/lecture/board.api";
-import MarkdownText from "./MarkdownText";
+
 import { PANEL_FIXED_H_LIVE } from "@pages/class/pre/styles";
 import { fonts } from "@styles/fonts";
+import {
+  useDocLiveSync,
+  type BoardEventCreatedOrUpdated,
+  type BoardEventDataBase,
+} from "src/hooks/useDocLiveSync";
+import MarkdownText from "./MarkdownText";
 
-type Props = { pageId: number; canUpload: boolean; assetBase?: string };
+type Props = {
+  docId: number; // WS 채널 키
+  pageId: number; // API 호출 키
+  canUpload: boolean;
+  assetBase?: string; // 정적 파일 prefix (ex. VITE_BASE_URL)
+  token?: string | null; // access token (없으면 localStorage)
+  wsBase?: string; // ws(s)://HOST[:PORT] (없으면 VITE_BASE_URL → ws 변환)
+};
 
-export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
+export default function BoardBox({
+  docId,
+  pageId,
+  canUpload,
+  assetBase = "",
+  token,
+  wsBase,
+}: Props) {
   const [list, setList] = useState<BoardItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -26,6 +47,12 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
   const toUrl = (p: string | null) =>
     !p ? "" : p.startsWith("http") ? p : `${assetBase}${p}`;
 
+  const accessToken = token ?? localStorage.getItem("access") ?? null;
+  const wsServer =
+    wsBase ??
+    (import.meta.env.VITE_BASE_URL as string).replace(/^http(s?)/, "ws$1");
+
+  // 초기 로드
   const load = async () => {
     setLoading(true);
     setError(null);
@@ -35,9 +62,37 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
     setLoading(false);
   };
   useEffect(() => {
-    load(); /* eslint-disable-line */
+    load(); /* eslint-disable-line react-hooks/exhaustive-deps */
   }, [pageId]);
 
+  // 실시간: 수신 처리
+  const { sendBoardEvent } = useDocLiveSync({
+    serverBase: wsServer,
+    docId,
+    token: accessToken,
+    onBoardCreated: (data: BoardEventCreatedOrUpdated) => {
+      setList((prev) =>
+        prev.some((b) => b.boardId === data.boardId)
+          ? prev
+          : [{ ...data }, ...prev]
+      );
+    },
+    onBoardUpdated: (data: BoardEventCreatedOrUpdated) => {
+      setList((prev) =>
+        prev.map((b) =>
+          b.boardId === data.boardId
+            ? { ...b, text: data.text, image: data.image }
+            : b
+        )
+      );
+    },
+    onBoardDeleted: (data: BoardEventDataBase) => {
+      setList((prev) => prev.filter((b) => b.boardId !== data.boardId));
+      if (editingId === data.boardId) setEditingId(null);
+    },
+  });
+
+  // 업로드
   const handleFiles = async (file?: File) => {
     if (!file) return;
     try {
@@ -45,6 +100,13 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
       setError(null);
       const created = await uploadBoardImage(pageId, file);
       setList((prev) => [created, ...prev]);
+
+      // 서버로도 created 전송 (선택)
+      sendBoardEvent("created", {
+        boardId: created.boardId,
+        image: created.image,
+        text: created.text,
+      });
     } catch (e) {
       console.error(e);
       setError("업로드에 실패했습니다. 다시 시도해 주세요.");
@@ -61,7 +123,7 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
     handleFiles(file);
   };
 
-  /* ==== 수정 저장 ==== */
+  // 수정 저장
   const saveText = async (boardId: number, nextText: string) => {
     try {
       setSavingId(boardId);
@@ -70,6 +132,13 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
         prev.map((b) => (b.boardId === boardId ? { ...b, ...updated } : b))
       );
       setEditingId(null);
+
+      // 서버로도 updated 전송
+      sendBoardEvent("updated", {
+        boardId,
+        image: updated.image ?? null,
+        text: updated.text ?? null,
+      });
     } catch (e) {
       console.error(e);
       setError("설명 저장에 실패했습니다.");
@@ -78,7 +147,7 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
     }
   };
 
-  /* ==== 삭제 ==== */
+  // 삭제
   const remove = async (boardId: number) => {
     if (!confirm("이 판서를 삭제할까요?")) return;
     try {
@@ -86,6 +155,9 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
       await deleteBoard(boardId);
       setList((prev) => prev.filter((b) => b.boardId !== boardId));
       if (editingId === boardId) setEditingId(null);
+
+      // 서버로도 deleted 전송
+      sendBoardEvent("deleted", { boardId });
     } catch (e) {
       console.error(e);
       setError("삭제에 실패했습니다.");
@@ -105,7 +177,7 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
           onDrop={onDrop}
           aria-label="사진 업로드 또는 드래그 앤 드롭"
         >
-          <span>{uploading ? "업로드 중" : "사진 업로드"}</span>
+          <span>{uploading ? "업로드 중…" : "사진 업로드"}</span>
           <input
             ref={fileRef}
             type="file"
@@ -116,7 +188,7 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
         </Uploader>
       )}
 
-      {loading && <Hint>불러오는 중</Hint>}
+      {loading && <Hint>불러오는 중…</Hint>}
       {error && <Error role="alert">{error}</Error>}
 
       <List role="list" aria-busy={loading || uploading}>
@@ -145,7 +217,7 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
                             saveText(b.boardId, textarea.value.trim());
                         }}
                       >
-                        {isSaving ? "저장 중" : "저장"}
+                        {isSaving ? "저장중…" : "저장"}
                       </Button>
                       <Button
                         type="button"
@@ -177,7 +249,6 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
                 </Actions>
               </Row>
 
-              {/* 내용 */}
               {isEditing ? (
                 <EditArea
                   id={`edit-${b.boardId}`}
@@ -201,7 +272,7 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
   );
 }
 
-/* ---------------- styles ---------------- */
+/* styles */
 const Wrap = styled.section`
   display: flex;
   flex-direction: column;
@@ -254,7 +325,6 @@ const Row = styled.div`
   align-items: center;
   margin-bottom: 8px;
 `;
-
 const Actions = styled.div`
   display: inline-flex;
   gap: 8px;

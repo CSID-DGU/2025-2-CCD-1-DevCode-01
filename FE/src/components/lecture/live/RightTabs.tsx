@@ -118,13 +118,15 @@ export default function RightTabs({
       >
         {typeof board.pageId === "number" && board.pageId > 0 ? (
           <BoardBox
+            docId={board.docId}
             pageId={board.pageId}
             canUpload={board.canUpload}
             assetBase={import.meta.env.VITE_BASE_URL}
+            token={localStorage.getItem("access")}
           />
         ) : (
           <EmptyState role="status" aria-live="polite">
-            이 페이지는 아직 판서를 사용할 수 없어요. 조금만 기다려주세요.
+            이 페이지는 아직 판서를 사용할 수 없어요.
           </EmptyState>
         )}
       </Panel>
