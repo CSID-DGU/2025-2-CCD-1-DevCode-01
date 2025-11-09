@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 import { fetchDocPage, fetchPageSummary } from "@apis/lecture/lecture.api";
 import { formatOcr } from "@shared/formatOcr";
 
-import DocPane from "src/components/lecture/pre/DocPane"; // 재사용
+import DocPane from "src/components/lecture/pre/DocPane";
 import RightTabs from "src/components/lecture/live/RightTabs";
 import BottomToolbar from "src/components/lecture/pre/BottomToolBar";
 
@@ -23,7 +23,6 @@ type RouteParams = { courseId?: string; docId?: string };
 type NavState = { navTitle?: string; totalPages?: number; docId?: number };
 
 export default function LiveClass() {
-  // ------- 라우팅/상태 -------
   const params = useParams<RouteParams>();
   const { state } = useLocation() as { state?: NavState };
 
@@ -31,13 +30,11 @@ export default function LiveClass() {
     | "assistant"
     | "student";
 
-  // docId 계산: state 우선, 없으면 URL 파라미터
   const parsedParamId = Number(params.docId);
   const docId =
     state?.docId ?? (Number.isFinite(parsedParamId) ? parsedParamId : NaN);
   const totalPages = state?.totalPages ?? null;
 
-  // 페이지/로딩/데이터
   const [page, setPage] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -49,12 +46,10 @@ export default function LiveClass() {
     ReturnType<typeof fetchPageSummary>
   > | null>(null);
 
-  // 접근성 옵션
   const [fontPct, setFontPct] = useState<number>(readFontPct());
   const [readOnFocus, setReadOnFocus] = useState<boolean>(readReadOnFocus());
   const stackByFont = fontPct >= 175;
 
-  // 보기 모드(초기값: 도우미=이미지, 학우=OCR)
   const [mode, setMode] = useState<"ocr" | "image">(
     role === "assistant" ? "image" : "ocr"
   );
@@ -101,11 +96,6 @@ export default function LiveClass() {
 
   // ------- 데이터 로딩 -------
   useEffect(() => {
-    if (!Number.isFinite(docId)) {
-      toast.error("문서 식별자가 유효하지 않습니다.");
-      return;
-    }
-
     let cancelled = false;
 
     (async () => {
@@ -131,7 +121,6 @@ export default function LiveClass() {
           setSummary(null);
         }
 
-        // 페이지마다 모드 기본값 리셋 + 안내
         const nextDefaultMode: "ocr" | "image" =
           role === "assistant" ? "image" : "ocr";
         setMode(nextDefaultMode);
@@ -214,7 +203,7 @@ export default function LiveClass() {
       return next;
     });
 
-  // ------- 렌더 -------
+  // ------- 렌더링 -------
   return (
     <Wrap aria-busy={loading} aria-describedby="live-status">
       <SrLive
@@ -247,7 +236,8 @@ export default function LiveClass() {
             }}
             memo={{
               docId: Number.isFinite(docId) ? (docId as number) : 0,
-              page,
+              pageId: docPage?.pageId ?? null,
+              pageNumber: page,
             }}
             board={{
               docId: Number.isFinite(docId) ? (docId as number) : 0,

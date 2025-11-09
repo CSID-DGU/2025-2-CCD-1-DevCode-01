@@ -76,10 +76,11 @@ export function useAudioRecorder() {
       mediaRecorderRef.current = mr;
       setState("recording");
       startTimer();
-    } catch (e: any) {
-      setError(e?.message ?? "마이크 권한 오류");
+    } catch (e) {
+      // setError(e?.message ?? "마이크 권한 오류");
       setState("idle");
       clearTimer();
+      console.log(e);
     }
   }, []);
 
