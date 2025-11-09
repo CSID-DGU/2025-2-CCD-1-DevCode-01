@@ -2,6 +2,8 @@ import React, { useId, useState } from "react";
 import styled from "styled-components";
 import MemoBox from "./Memo";
 import { fonts } from "@styles/fonts";
+import SummaryPane from "../pre/SummaryPane";
+import { PANEL_FIXED_H_LIVE } from "@pages/class/pre/styles";
 
 type Role = "student" | "assistant";
 type TabKey = "memo" | "board" | "summary";
@@ -30,6 +32,7 @@ export default function RightTabs({
   // role,
   memo,
   board,
+  summary,
 }: Props) {
   const [tab, setTab] = useState<TabKey>(activeInitial);
 
@@ -119,7 +122,16 @@ export default function RightTabs({
         role="tabpanel"
         aria-labelledby={tabIds.summary}
         hidden={tab !== "summary"}
-      ></Panel>
+      >
+        <SummaryPane
+          summaryText={summary.text ?? null}
+          summaryTtsUrl={summary.ttsUrl ?? null}
+          sumAudioRef={summary.sumAudioRef}
+          sidePaneRef={summary.sidePaneRef}
+          stack={stack}
+          panelHeight={PANEL_FIXED_H_LIVE}
+        />
+      </Panel>
     </Aside>
   );
 }
@@ -193,6 +205,10 @@ const Tab = styled.button`
 const Panel = styled.section`
   display: grid;
   gap: 10px;
+
+  &[hidden] {
+    display: none !important;
+  }
 `;
 
 const EmptyState = styled.p`
