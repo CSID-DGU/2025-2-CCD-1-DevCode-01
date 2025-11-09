@@ -3,25 +3,26 @@ import styled from "styled-components";
 import {
   fetchBoards,
   uploadBoardImage,
+  patchBoardText,
+  deleteBoard,
   type BoardItem,
 } from "@apis/lecture/board.api";
-// import { fonts } from "@styles/fonts";
 import MarkdownText from "./MarkdownText";
+import { PANEL_FIXED_H_LIVE } from "@pages/class/pre/styles";
+import { fonts } from "@styles/fonts";
 
-type Props = {
-  pageId: number;
-  canUpload: boolean;
-  /** 이미지 정적 경로가 '/boards/...' 형태면, 서버 절대경로 prefix가 필요하면 넣어줘요. (없으면 그대로 사용) */
-  assetBase?: string; // 예: import.meta.env.VITE_BASE_URL
-};
+type Props = { pageId: number; canUpload: boolean; assetBase?: string };
 
 export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
   const [list, setList] = useState<BoardItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const toUrl = (p: string | null) =>
     !p ? "" : p.startsWith("http") ? p : `${assetBase}${p}`;
 
@@ -33,10 +34,8 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
     setList(res?.boards ?? []);
     setLoading(false);
   };
-
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    load(); /* eslint-disable-line */
   }, [pageId]);
 
   const handleFiles = async (file?: File) => {
@@ -45,7 +44,6 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
       setUploading(true);
       setError(null);
       const created = await uploadBoardImage(pageId, file);
-      // 맨 위에 추가
       setList((prev) => [created, ...prev]);
     } catch (e) {
       console.error(e);
@@ -63,6 +61,39 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
     handleFiles(file);
   };
 
+  /* ==== 수정 저장 ==== */
+  const saveText = async (boardId: number, nextText: string) => {
+    try {
+      setSavingId(boardId);
+      const updated = await patchBoardText(boardId, nextText);
+      setList((prev) =>
+        prev.map((b) => (b.boardId === boardId ? { ...b, ...updated } : b))
+      );
+      setEditingId(null);
+    } catch (e) {
+      console.error(e);
+      setError("설명 저장에 실패했습니다.");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  /* ==== 삭제 ==== */
+  const remove = async (boardId: number) => {
+    if (!confirm("이 판서를 삭제할까요?")) return;
+    try {
+      setDeletingId(boardId);
+      await deleteBoard(boardId);
+      setList((prev) => prev.filter((b) => b.boardId !== boardId));
+      if (editingId === boardId) setEditingId(null);
+    } catch (e) {
+      console.error(e);
+      setError("삭제에 실패했습니다.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <Wrap>
       {canUpload && (
@@ -74,7 +105,7 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
           onDrop={onDrop}
           aria-label="사진 업로드 또는 드래그 앤 드롭"
         >
-          <span>{uploading ? "업로드 중…" : "사진 업로드"}</span>
+          <span>{uploading ? "업로드 중" : "사진 업로드"}</span>
           <input
             ref={fileRef}
             type="file"
@@ -85,16 +116,83 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
         </Uploader>
       )}
 
-      {loading && <Hint>불러오는 중…</Hint>}
+      {loading && <Hint>불러오는 중</Hint>}
       {error && <Error role="alert">{error}</Error>}
 
       <List role="list" aria-busy={loading || uploading}>
-        {list.map((b) => (
-          <Item key={b.boardId} role="listitem">
-            {b.image && <Thumb src={toUrl(b.image)} alt="판서 이미지" />}
-            <Meta>{b.text && <MarkdownText>{b.text}</MarkdownText>}</Meta>
-          </Item>
-        ))}
+        {list.map((b) => {
+          const isEditing = editingId === b.boardId;
+          const isSaving = savingId === b.boardId;
+          const isDeleting = deletingId === b.boardId;
+
+          return (
+            <Item key={b.boardId} role="listitem">
+              {b.image && <Thumb src={toUrl(b.image)} alt="판서 이미지" />}
+
+              <Row>
+                <Actions>
+                  {isEditing ? (
+                    <>
+                      <Button
+                        type="button"
+                        aria-label="설명 저장"
+                        disabled={isSaving}
+                        onClick={() => {
+                          const textarea = document.getElementById(
+                            `edit-${b.boardId}`
+                          ) as HTMLTextAreaElement | null;
+                          if (textarea)
+                            saveText(b.boardId, textarea.value.trim());
+                        }}
+                      >
+                        {isSaving ? "저장 중" : "저장"}
+                      </Button>
+                      <Button
+                        type="button"
+                        aria-label="편집 취소"
+                        onClick={() => setEditingId(null)}
+                        $variant="ghost"
+                      >
+                        취소
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        onClick={() => setEditingId(b.boardId)}
+                      >
+                        수정
+                      </Button>
+                      <DangerBtn
+                        type="button"
+                        onClick={() => remove(b.boardId)}
+                        disabled={isDeleting}
+                        aria-label="판서 삭제"
+                      >
+                        {isDeleting ? "삭제중…" : "삭제"}
+                      </DangerBtn>
+                    </>
+                  )}
+                </Actions>
+              </Row>
+
+              {/* 내용 */}
+              {isEditing ? (
+                <EditArea
+                  id={`edit-${b.boardId}`}
+                  defaultValue={b.text ?? ""}
+                  placeholder="이미지에 대한 설명이나 텍스트를 입력하세요"
+                />
+              ) : b.text ? (
+                <MarkdownText>{b.text}</MarkdownText>
+              ) : (
+                <EmptyLine>설명이 없습니다.</EmptyLine>
+              )}
+            </Item>
+          );
+        })}
+
         {!loading && list.length === 0 && (
           <Empty>아직 업로드된 판서가 없어요.</Empty>
         )}
@@ -104,13 +202,12 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
 }
 
 /* ---------------- styles ---------------- */
-
 const Wrap = styled.section`
   display: flex;
   flex-direction: column;
   gap: 12px;
+  height: ${PANEL_FIXED_H_LIVE};
 `;
-
 const Uploader = styled.div`
   border: 2px dashed #d1d5db;
   border-radius: 12px;
@@ -119,35 +216,30 @@ const Uploader = styled.div`
   cursor: pointer;
   user-select: none;
   &:hover {
-    background: #f8fafc;
+    background: var(--c-white);
   }
 `;
-
 const Hint = styled.p`
   margin: 0;
   color: #6b7280;
   font-size: 0.875rem;
 `;
-
 const Error = styled.p`
   margin: 0;
   color: #b91c1c;
   font-size: 0.875rem;
 `;
-
 const List = styled.div`
   display: grid;
   gap: 12px;
   overflow: auto;
 `;
-
 const Item = styled.article`
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   padding: 10px;
 `;
-
 const Thumb = styled.img`
   display: block;
   width: 100%;
@@ -156,17 +248,50 @@ const Thumb = styled.img`
   border-radius: 8px;
   margin-bottom: 8px;
 `;
-
-const Meta = styled.div`
-  display: grid;
-  gap: 4px;
+const Row = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: 8px;
 `;
 
-// const Text = styled.p`
-//   ${fonts.medium24};
-//   margin: 0;
-//   color: #111827;
-// `;
+const Actions = styled.div`
+  display: inline-flex;
+  gap: 8px;
+`;
+const Button = styled.button<{ $variant?: "ghost" }>`
+  border: 2px solid #2563eb;
+  color: #2563eb;
+  background: #fff;
+  border-radius: 999px;
+  ${fonts.regular20};
+  padding: 4px 10px;
+  cursor: pointer;
+  ${({ $variant }) =>
+    $variant === "ghost" && `border-color:#e5e7eb;color:#374151;`}
+`;
+const DangerBtn = styled(Button)`
+  border-color: #ef4444;
+  color: #ef4444;
+`;
+const EditArea = styled.textarea`
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px;
+  ${fonts.regular17};
+  &:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  }
+`;
+const EmptyLine = styled.p`
+  margin: 0;
+  color: #6b7280;
+`;
 const Empty = styled.p`
   margin: 0;
   color: #6b7280;

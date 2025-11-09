@@ -118,7 +118,7 @@ export default function RightTabs({
       >
         {typeof board.pageId === "number" && board.pageId > 0 ? (
           <BoardBox
-            pageId={board.pageId} // ✅ 이제 number 보장
+            pageId={board.pageId}
             canUpload={board.canUpload}
             assetBase={import.meta.env.VITE_BASE_URL}
           />
