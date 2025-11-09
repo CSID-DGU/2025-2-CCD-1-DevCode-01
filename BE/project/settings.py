@@ -50,7 +50,9 @@ INSTALLED_APPS = [
     'lecture_docs',
 
     'rest_framework',
-    'rest_framework_simplejwt',    
+    'rest_framework_simplejwt', 
+    'channels',   
+    'storages'
 ]
 
 MIDDLEWARE = [
@@ -123,8 +125,6 @@ AWS_S3_BASE_URL = os.getenv(
     f"https://{AWS_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com"
 )
 
-# Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
