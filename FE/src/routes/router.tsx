@@ -75,17 +75,15 @@ const router = createBrowserRouter([
             handle: {
               nav: {
                 variant: "pre",
-                title: ({ courseId }) => `${courseId} - 수업 전`,
               } as NavMeta,
             },
           },
           {
-            path: "/lecture/:courseId/live",
+            path: "/lecture/doc/:courseId/live",
             element: <LiveClass />,
             handle: {
               nav: {
                 variant: "live",
-                title: ({ courseId }) => `${courseId} - 수업 중`,
               } as NavMeta,
             },
           },
