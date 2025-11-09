@@ -1,21 +1,38 @@
+// src/components/lecture/shared/BottomToolbar.tsx
 import { TOOLBAR_GAP, TOOLBAR_H } from "@pages/class/pre/styles";
 import { fonts } from "@styles/fonts";
 import styled from "styled-components";
 import { useEffect, useRef, useState } from "react";
 
-type Props = {
+type Mode = "ocr" | "image";
+
+type CommonProps = {
   canPrev: boolean;
   canNext: boolean;
   page: number;
   totalPages?: number;
-  mode: "ocr" | "image";
+  mode: Mode;
   onPrev: () => void;
   onNext: () => void;
   onToggleMode: () => void;
-  onStart: () => void;
   onGoTo: (page: number) => void;
+  /** 선택: 화면읽기 보조 음성 */
   speak?: (msg: string) => void;
 };
+
+type PreOnly = {
+  /** 강의 전에서만 사용 */
+  onStart?: () => void;
+};
+
+type LiveOnly = {
+  /** 강의 중에서만 사용 */
+  onPause?: () => void;
+  onBookmark?: () => void;
+  onEnd?: () => void;
+};
+
+type Props = CommonProps & PreOnly & LiveOnly;
 
 export default function BottomToolbar({
   canPrev,
@@ -26,9 +43,12 @@ export default function BottomToolbar({
   onPrev,
   onNext,
   onToggleMode,
-  onStart,
   onGoTo,
   speak,
+  onStart, // 있으면 "강의 시작" 버튼 노출
+  onPause, // 있으면 "일시 정지" 노출
+  onBookmark, // 있으면 "북마크" 노출
+  onEnd, // 있으면 "강의 종료" 노출
 }: Props) {
   const [draft, setDraft] = useState<string>(String(page));
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -76,7 +96,8 @@ export default function BottomToolbar({
   };
 
   return (
-    <Bar role="toolbar" aria-label="페이지 조작">
+    <Bar role="toolbar" aria-label="페이지 및 강의 조작">
+      {/* ← → + 현재/전체 + 입력 이동 */}
       <Group>
         <Btn
           onClick={() => {
@@ -128,6 +149,7 @@ export default function BottomToolbar({
 
       <Divider role="separator" aria-orientation="vertical" />
 
+      {/* 보기 전환 */}
       <Group>
         <Btn
           onClick={() => {
@@ -142,20 +164,69 @@ export default function BottomToolbar({
         </Btn>
       </Group>
 
-      <Divider role="separator" aria-orientation="vertical" />
+      {/* 라이브 전용 버튼(핸들러가 있을 때만 노출) */}
+      {(onPause || onBookmark || onEnd) && (
+        <>
+          <Divider role="separator" aria-orientation="vertical" />
+          <Group>
+            {onPause && (
+              <Btn
+                type="button"
+                onClick={() => {
+                  onPause();
+                  speak?.("일시 정지");
+                }}
+                onFocus={() => speak?.("일시 정지 버튼")}
+              >
+                일시 정지
+              </Btn>
+            )}
+            {onBookmark && (
+              <Btn
+                type="button"
+                onClick={() => {
+                  onBookmark();
+                  speak?.("북마크 추가");
+                }}
+                onFocus={() => speak?.("북마크 버튼")}
+              >
+                북마크
+              </Btn>
+            )}
+            {onEnd && (
+              <Primary
+                type="button"
+                onClick={() => {
+                  onEnd();
+                  speak?.("강의 종료");
+                }}
+                onFocus={() => speak?.("강의 종료 버튼")}
+              >
+                ■ 강의종료
+              </Primary>
+            )}
+          </Group>
+        </>
+      )}
 
-      <Group>
-        <Primary
-          type="button"
-          onClick={() => {
-            onStart();
-            speak?.("강의가 시작되었습니다.");
-          }}
-          onFocus={() => speak?.("강의 시작 버튼")}
-        >
-          ▶ 강의시작
-        </Primary>
-      </Group>
+      {/* 강의 전 전용 버튼(있을 때만 노출) */}
+      {onStart && (
+        <>
+          <Divider role="separator" aria-orientation="vertical" />
+          <Group>
+            <Primary
+              type="button"
+              onClick={() => {
+                onStart();
+                speak?.("강의가 시작되었습니다.");
+              }}
+              onFocus={() => speak?.("강의 시작 버튼")}
+            >
+              ▶ 강의시작
+            </Primary>
+          </Group>
+        </>
+      )}
     </Bar>
   );
 }
@@ -243,7 +314,6 @@ const PageInput = styled.input`
   color: var(--c-white);
   ${fonts.medium26};
 
-  /* 모바일에서 스크롤로 값 바뀌는 것 방지 */
   &::-webkit-outer-spin-button,
   &::-webkit-inner-spin-button {
     -webkit-appearance: none;

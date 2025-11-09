@@ -1,3 +1,4 @@
+
 """
 Django settings for project project.
 
@@ -35,13 +36,13 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
-    'daphne',    
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    "corsheaders",
 
     'users',
     'lectures',
@@ -49,11 +50,11 @@ INSTALLED_APPS = [
     'lecture_docs',
 
     'rest_framework',
-    'rest_framework_simplejwt', 
-    'channels',   
+    'rest_framework_simplejwt',    
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware", 
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -172,17 +173,13 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME' : timedelta(days=1),
+    'ACCESS_TOKEN_LIFETIME' : timedelta(hours=1),
     'REFRESH_TOKEN_LIFETIME' : timedelta(days=30),
 }
 
 AUTH_USER_MODEL = 'users.User'
 
-ASGI_APPLICATION = "project.asgi.application"
-
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {"hosts": [("127.0.0.1", 6379)]},
-    },
-}
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
