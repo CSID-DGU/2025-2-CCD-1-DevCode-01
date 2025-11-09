@@ -5,7 +5,8 @@ import {
   uploadBoardImage,
   type BoardItem,
 } from "@apis/lecture/board.api";
-import { fonts } from "@styles/fonts";
+// import { fonts } from "@styles/fonts";
+import MarkdownText from "./MarkdownText";
 
 type Props = {
   pageId: number;
@@ -91,10 +92,7 @@ export default function BoardBox({ pageId, canUpload, assetBase = "" }: Props) {
         {list.map((b) => (
           <Item key={b.boardId} role="listitem">
             {b.image && <Thumb src={toUrl(b.image)} alt="판서 이미지" />}
-            <Meta>
-              <Id>#{b.boardId}</Id>
-              {b.text && <Text>{b.text}</Text>}
-            </Meta>
+            <Meta>{b.text && <MarkdownText>{b.text}</MarkdownText>}</Meta>
           </Item>
         ))}
         {!loading && list.length === 0 && (
@@ -163,15 +161,12 @@ const Meta = styled.div`
   display: grid;
   gap: 4px;
 `;
-const Id = styled.span`
-  font-size: 12px;
-  color: #6b7280;
-`;
-const Text = styled.p`
-  ${fonts.medium24};
-  margin: 0;
-  color: #111827;
-`;
+
+// const Text = styled.p`
+//   ${fonts.medium24};
+//   margin: 0;
+//   color: #111827;
+// `;
 const Empty = styled.p`
   margin: 0;
   color: #6b7280;
