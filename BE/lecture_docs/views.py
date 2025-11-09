@@ -1,3 +1,7 @@
+import os
+from pathlib import Path
+import subprocess
+import tempfile
 from django.shortcuts import get_object_or_404
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -13,7 +17,7 @@ from classes.utils import text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
 from .utils import  page_ocr, pdf_to_image, summarize_doc, summarize_stt
-
+from campusmate_ai.ocr_light.cli.pipeline import run_pipeline
 
 class DocUploadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -187,33 +191,41 @@ class BoardView(APIView):
         if not image:
             return Response({"error": "판서 이미지가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
 
-        image_path = default_storage.save(f"boards/{image.name}", ContentFile(image.read()))
+        if not image:
+            return Response({"error": "판서 이미지가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
 
-        board = Board.objects.create(
-            page=page,
-            image=image_path,
-            text=None,  
-        )
+        image_path = default_storage.save(f"boards/{image.name}", ContentFile(image.read()))
+        abs_image_path = default_storage.path(image_path)
+
+        # OCR 파이프라인 실행
+        try:
+            tmp_out = os.path.join(tempfile.mkdtemp(), "result.md")
+            ocr_text = run_pipeline(abs_image_path, tmp_out)
+        except Exception as e:
+            ocr_text = f"[OCR 오류] {e}"
+
+        # Board 생성
+        board = Board.objects.create(page=page, image=image_path, text=ocr_text)
 
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             f"doc_{page.doc.id}",
             {
-                "type": "board.event",
+                "type": "board_event",
                 "event": "created",
-                "data": { 
+                "data": {
                     "boardId": board.id,
                     "image": default_storage.url(image_path),
                     "text": board.text,
-                }
+                },
             },
         )
 
         return Response(
             {
                 "boardId": board.id,
-                "text": board.text,  
-                "image": default_storage.url(image_path)
+                "text": board.text,
+                "image": default_storage.url(image_path),
             },
             status=status.HTTP_201_CREATED,
         )
