@@ -28,7 +28,6 @@ type Props = {
     docId: number;
     page: number;
     pageId?: number | null;
-    canUpload: boolean;
   };
 };
 
@@ -120,7 +119,6 @@ export default function RightTabs({
           <BoardBox
             docId={board.docId}
             pageId={board.pageId}
-            canUpload={board.canUpload}
             assetBase={import.meta.env.VITE_BASE_URL}
             token={localStorage.getItem("access")}
           />

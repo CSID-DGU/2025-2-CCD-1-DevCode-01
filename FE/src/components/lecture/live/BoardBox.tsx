@@ -21,7 +21,6 @@ import MarkdownText from "./MarkdownText";
 type Props = {
   docId: number; // WS 채널 키
   pageId: number; // API 호출 키
-  canUpload: boolean;
   assetBase?: string; // 정적 파일 prefix (ex. VITE_BASE_URL)
   token?: string | null; // access token (없으면 localStorage)
   wsBase?: string; // ws(s)://HOST[:PORT] (없으면 VITE_BASE_URL → ws 변환)
@@ -30,7 +29,6 @@ type Props = {
 export default function BoardBox({
   docId,
   pageId,
-  canUpload,
   assetBase = "",
   token,
   wsBase,
@@ -118,7 +116,6 @@ export default function BoardBox({
 
   const onDrop: React.DragEventHandler<HTMLDivElement> = (e) => {
     e.preventDefault();
-    if (!canUpload) return;
     const file = e.dataTransfer.files?.[0];
     handleFiles(file);
   };
@@ -168,25 +165,23 @@ export default function BoardBox({
 
   return (
     <Wrap>
-      {canUpload && (
-        <Uploader
-          role="button"
-          tabIndex={0}
-          onClick={() => fileRef.current?.click()}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={onDrop}
-          aria-label="사진 업로드 또는 드래그 앤 드롭"
-        >
-          <span>{uploading ? "업로드 중…" : "사진 업로드"}</span>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            onChange={(e) => handleFiles(e.target.files?.[0] ?? undefined)}
-            hidden
-          />
-        </Uploader>
-      )}
+      <Uploader
+        role="button"
+        tabIndex={0}
+        onClick={() => fileRef.current?.click()}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={onDrop}
+        aria-label="사진 업로드 또는 드래그 앤 드롭"
+      >
+        <span>{uploading ? "업로드 중" : "사진 업로드"}</span>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          onChange={(e) => handleFiles(e.target.files?.[0] ?? undefined)}
+          hidden
+        />
+      </Uploader>
 
       {loading && <Hint>불러오는 중…</Hint>}
       {error && <Error role="alert">{error}</Error>}
