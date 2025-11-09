@@ -1,5 +1,6 @@
+// src/pages/class/Pre/PreClass.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useParams, useNavigate } from "react-router-dom"; // ✅ 추가
 import toast from "react-hot-toast";
 import {
   fetchPageSummary,
@@ -28,6 +29,7 @@ type NavState = { navTitle?: string; totalPages?: number };
 export default function PreClass() {
   const params = useParams<RouteParams>();
   const { state } = useLocation() as { state?: NavState };
+  const navigate = useNavigate(); // ✅ 추가
 
   const docIdNum = useMemo(() => {
     const raw = params.docId ?? params.courseId;
@@ -42,7 +44,6 @@ export default function PreClass() {
 
   const [fontPct, setFontPct] = useState<number>(readFontPct());
   const stackByFont = fontPct >= 175;
-
   const [readOnFocus, setReadOnFocus] = useState<boolean>(readReadOnFocus());
 
   const totalPages = state?.totalPages;
@@ -51,7 +52,7 @@ export default function PreClass() {
   const [mode, setMode] = useState<"ocr" | "image">("ocr");
 
   const liveRef = useRef<HTMLDivElement | null>(null);
-  const announce = makeAnnouncer(liveRef.current);
+  const announce = useMemo(() => makeAnnouncer(liveRef), []); // ✅ ref 친화형
   const mainRegionRef = useRef<HTMLDivElement | null>(null);
   const docBodyRef = useRef<HTMLDivElement | null>(null);
   const sidePaneRef = useRef<HTMLDivElement | null>(null);
@@ -95,7 +96,7 @@ export default function PreClass() {
     };
   }, []);
 
-  /* 데이터 로드 */
+  // 데이터 로드
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -135,7 +136,8 @@ export default function PreClass() {
     return () => {
       cancelled = true;
     };
-  }, [docIdNum, page]); // eslint-disable-line react-hooks/exhaustive-deps
+    // announce는 useMemo로 안정화되어 의존성에 넣어도 재실행 없음
+  }, [docIdNum, page, totalPages, announce]);
 
   useEffect(() => {
     const t = `${state?.navTitle ?? "수업 전"} - p.${page}`;
@@ -155,6 +157,7 @@ export default function PreClass() {
 
   const canPrev = page > 1;
   const canNext = totalPages ? page < totalPages : true;
+
   const toggleMode = () => {
     setMode((m) => {
       const next = m === "ocr" ? "image" : "ocr";
@@ -165,6 +168,26 @@ export default function PreClass() {
       );
       setTimeout(() => mainRegionRef.current?.focus(), 0);
       return next;
+    });
+  };
+
+  // ✅ 강의 시작 → 라이브 페이지로 이동
+  const onStartClass = () => {
+    if (!docIdNum) {
+      toast.error("문서가 없어 강의를 시작할 수 없어요.");
+      announce("문서가 없어 강의를 시작할 수 없습니다.");
+      return;
+    }
+    announce("강의가 시작되었습니다. 라이브 화면으로 이동합니다.");
+    // LiveClass는 state의 docId/totalPages를 우선 사용하므로 같이 전달
+    // 라우트가 /class/live/:docId 라면 아래처럼 사용
+    navigate(`/lecture/doc/${docIdNum}/live/`, {
+      state: {
+        docId: docIdNum,
+        totalPages: totalPages ?? null,
+        navTitle: state?.navTitle ?? "라이브",
+      },
+      replace: false,
     });
   };
 
@@ -200,7 +223,7 @@ export default function PreClass() {
         onPrev={() => setPage((p) => Math.max(1, p - 1))}
         onNext={() => setPage((p) => p + 1)}
         onToggleMode={toggleMode}
-        onStart={() => announce("강의가 시작되었습니다.")}
+        onStart={onStartClass}
         speak={speak}
         onGoTo={(n) => setPage(n)}
       />
