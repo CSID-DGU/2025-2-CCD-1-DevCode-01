@@ -18,6 +18,7 @@ import {
   readReadOnFocus,
 } from "./pre/ally";
 import { Container, Grid, SrLive, Wrap } from "./pre/styles";
+import { postBookmarkClock, toHHMMSS } from "@apis/lecture/bookmark.api";
 
 type RouteParams = { courseId?: string; docId?: string };
 type NavState = { navTitle?: string; totalPages?: number; docId?: number };
@@ -191,6 +192,30 @@ export default function LiveClass() {
     announce(`페이지 ${next}로 이동합니다.`);
   };
 
+  const getCurrentClock = (): string => {
+    const t1 = ocrAudioRef.current?.currentTime ?? 0;
+    const t2 = sumAudioRef.current?.currentTime ?? 0;
+    const sec = Math.max(t1, t2);
+    return toHHMMSS(sec);
+  };
+
+  const onBookmark = async () => {
+    const pageId = docPage?.pageId;
+    if (!pageId) {
+      toast.error("이 페이지는 북마크를 저장할 수 없어요.");
+      return;
+    }
+    const hhmmss = getCurrentClock(); // "HH:MM:SS"
+
+    const ok = await postBookmarkClock(pageId, hhmmss);
+    if (ok) {
+      toast.success(`북마크 저장됨 (${hhmmss})`);
+      announce(`현재 시각 ${hhmmss}에 북마크가 추가되었습니다.`);
+    } else {
+      toast.error("북마크 저장에 실패했어요. 네트워크를 확인해 주세요.");
+      announce("북마크 저장에 실패했습니다.");
+    }
+  };
   // ------- 네비게이션/모드 -------
   const canPrev = page > 1;
   const canNext = totalPages ? page < totalPages : true;
@@ -258,7 +283,7 @@ export default function LiveClass() {
         onNext={() => goToPage(page + 1)}
         onToggleMode={toggleMode}
         onPause={() => announce("일시 정지")}
-        onBookmark={() => announce("현재 페이지 북마크됨")}
+        onBookmark={onBookmark}
         onEnd={() => announce("강의 종료")}
         onGoTo={(n) => goToPage(n)}
       />
