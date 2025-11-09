@@ -242,6 +242,7 @@ export default function LiveClass() {
             board={{
               docId: Number.isFinite(docId) ? (docId as number) : 0,
               page,
+              pageId: docPage?.pageId ?? null,
               canUpload: role === "assistant",
             }}
           />

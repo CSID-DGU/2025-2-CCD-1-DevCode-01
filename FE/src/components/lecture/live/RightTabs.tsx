@@ -4,6 +4,7 @@ import MemoBox from "./Memo";
 import { fonts } from "@styles/fonts";
 import SummaryPane from "../pre/SummaryPane";
 import { PANEL_FIXED_H_LIVE } from "@pages/class/pre/styles";
+import BoardBox from "./BoardBox";
 
 type Role = "student" | "assistant";
 type TabKey = "memo" | "board" | "summary";
@@ -23,7 +24,12 @@ type Props = {
     pageId?: number | null;
     pageNumber: number;
   };
-  board: { docId: number; page: number; canUpload: boolean };
+  board: {
+    docId: number;
+    page: number;
+    pageId: number;
+    canUpload: boolean;
+  };
 };
 
 export default function RightTabs({
@@ -111,9 +117,9 @@ export default function RightTabs({
         hidden={tab !== "board"}
       >
         <BoardBox
-          docId={board.docId}
-          page={board.page}
+          pageId={board.pageId}
           canUpload={board.canUpload}
+          assetBase={import.meta.env.VITE_BASE_URL}
         />
       </Panel>
 
@@ -216,25 +222,3 @@ const EmptyState = styled.p`
   color: var(--c-gray9, #666);
   font-size: 0.875rem;
 `;
-
-/* --- 더미 컴포넌트(후에 API 연결) --- */
-function BoardBox({
-  docId,
-  page,
-  canUpload,
-}: {
-  docId: number;
-  page: number;
-  canUpload: boolean;
-}) {
-  return (
-    <section
-      data-doc-id={docId}
-      data-page={page}
-      aria-label={`판서 패널 (문서 ${docId}, 페이지 ${page})`}
-    >
-      {canUpload && <button type="button">사진 업로드</button>}
-      <div aria-label="판서 목록" />
-    </section>
-  );
-}
