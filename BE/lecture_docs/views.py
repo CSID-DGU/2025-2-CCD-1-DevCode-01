@@ -1,3 +1,4 @@
+from io import BytesIO
 import os
 from pathlib import Path
 import subprocess
@@ -10,13 +11,12 @@ from rest_framework.views import APIView
 from rest_framework import status,permissions
 from rest_framework.response import Response
 from django.core.files.base import ContentFile
-from django.core.files.storage import default_storage
 from classes.models import Bookmark, Note, Speech
 from classes.models import Bookmark, Note, Speech
 from classes.utils import text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
-from .utils import  page_ocr, pdf_to_image, summarize_doc, summarize_stt
+from .utils import  *
 from campusmate_ai.ocr_light.cli.pipeline import run_pipeline
 
 class DocUploadView(APIView):
@@ -51,19 +51,18 @@ class DocUploadView(APIView):
         file.seek(0)
 
         for page_num, page in enumerate(pdf, start=1):
-        
-            page_image_file = pdf_to_image(page, doc.title, page_num)
 
             # Page 객체 생성
             page_obj = Page.objects.create(
                 doc=doc,
-                page_number=page_num,
-                image=page_image_file,
+                page_number=page_num
             )
+            image_bytes = pdf_to_image(page, doc.title, page_num)
+            s3_key = f"docs/{doc.id}/pages/page_{page_num}.png"
 
             # OCR 수행 
             try:
-                page_ocr(page_obj)
+                page_ocr(page_obj, image_bytes, s3_key)
             except Exception as e:
                 print(f"[오류] {page_num}페이지 OCR 실패:", e)
                 page_obj.ocr = "OCR 변환 실패"
@@ -161,7 +160,7 @@ class PageDetailView(APIView):
                 "pageNumber": page.page_number,
                 "totalPage" : doc.pages.count(),
                 "pagId": page.id,
-                "image": page.image.url if page.image else None,
+                "image": page.image if page.image else None,
                 "ocr": page.ocr if page.ocr else None,
                 "tts": page.page_tts,   
             }, status=status.HTTP_200_OK)
@@ -177,7 +176,7 @@ class BoardView(APIView):
         data = [
             {
                 "boardId": b.id,
-                "image": b.image.url if b.image else None,
+                "image": b.image if b.image else None,
                 "text": b.text or None
             }
             for b in boards
@@ -191,21 +190,26 @@ class BoardView(APIView):
         if not image:
             return Response({"error": "판서 이미지가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not image:
-            return Response({"error": "판서 이미지가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+        image_bytes = image.read()
+        image_stream_for_s3 = BytesIO(image_bytes)
+        image_stream_for_ocr = BytesIO(image_bytes)
 
-        image_path = default_storage.save(f"boards/{image.name}", ContentFile(image.read()))
-        abs_image_path = default_storage.path(image_path)
+        s3_key = f"boards/{page.id}_{image.name}"
+        s3_url = upload_s3(image_stream_for_s3, s3_key, content_type=image.content_type)
 
-        # OCR 파이프라인 실행
         try:
-            tmp_out = os.path.join(tempfile.mkdtemp(), "result.md")
-            ocr_text = run_pipeline(abs_image_path, tmp_out)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_in:
+                tmp_in.write(image_stream_for_ocr.read())
+                tmp_in.flush()
+
+                tmp_out = os.path.join(tempfile.mkdtemp(), "result.md")
+                ocr_text = run_pipeline(tmp_in.name, tmp_out)
         except Exception as e:
             ocr_text = f"[OCR 오류] {e}"
 
+
         # Board 생성
-        board = Board.objects.create(page=page, image=image_path, text=ocr_text)
+        board = Board.objects.create(page=page, image=s3_url, text=ocr_text)
 
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
@@ -215,7 +219,7 @@ class BoardView(APIView):
                 "event": "created",
                 "data": {
                     "boardId": board.id,
-                    "image": default_storage.url(image_path),
+                    "image": board.image,
                     "text": board.text,
                 },
             },
@@ -225,7 +229,7 @@ class BoardView(APIView):
             {
                 "boardId": board.id,
                 "text": board.text,
-                "image": default_storage.url(image_path),
+                "image": board.image,
             },
             status=status.HTTP_201_CREATED,
         )
