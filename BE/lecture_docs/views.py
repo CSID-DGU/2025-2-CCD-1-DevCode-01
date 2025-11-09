@@ -155,6 +155,7 @@ class PageDetailView(APIView):
         return Response({
                 "docId": doc.id,
                 "pageNumber": page.page_number,
+                "totalPage" : doc.pages.count(),
                 "pagId": page.id,
                 "image": page.image.url if page.image else None,
                 "ocr": page.ocr if page.ocr else None,
