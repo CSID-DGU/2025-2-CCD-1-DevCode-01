@@ -5,18 +5,13 @@ export type LiveMessage =
   | { type: "PING" };
 
 export interface UseDocLiveSyncOptions {
-  /** ex) ws://localhost:8000 또는 wss://api.campusmate.ai */
   serverBase: string;
-  /** 문서 ID (필수) */
   docId: number;
-  /** 액세스 토큰 (필수) */
   token: string | null | undefined;
-  /** 원격에서 페이지 변경이 들어왔을 때 호출 */
   onRemotePage: (page: number) => void;
-  /** 페이지 범위(선택): 1~totalPages로 클램프 */
   totalPages?: number | null;
-  /** 스크린리더 알림(선택) */
   announce?: (msg: string) => void;
+  debug?: boolean;
 }
 
 export function useDocLiveSync({
@@ -26,11 +21,30 @@ export function useDocLiveSync({
   onRemotePage,
   totalPages,
   announce,
+  debug = import.meta.env?.DEV ?? false,
 }: UseDocLiveSyncOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef({ tries: 0, closedByUser: false });
   const pingTimer = useRef<number | null>(null);
   const onRemotePageRef = useRef(onRemotePage);
+
+  // 안전 로그 출력기 (토큰 마스킹)
+  const maskUrl = (u: string) => u.replace(/([?&]token=)[^&]+/i, "$1***");
+  const log = (...args: unknown[]) => {
+    if (!debug) return;
+
+    console.log("[WS]", ...args);
+  };
+  const warn = (...args: unknown[]) => {
+    if (!debug) return;
+    // eslint-disable-next-line no-console
+    console.warn("[WS]", ...args);
+  };
+  const error = (...args: unknown[]) => {
+    if (!debug) return;
+    // eslint-disable-next-line no-console
+    console.error("[WS]", ...args);
+  };
 
   // 최신 콜백 고정
   useEffect(() => {
@@ -57,12 +71,15 @@ export function useDocLiveSync({
 
   const send = useCallback((msg: LiveMessage): boolean => {
     const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      console.warn("[WS] 소켓이 아직 열리지 않음", msg);
+      return false;
+    }
     ws.send(JSON.stringify(msg));
+    console.log("[WS] 보냄:", msg);
     return true;
   }, []);
 
-  /** 로컬에서 페이지 바꿀 때 서버에도 통지 */
   const notifyLocalPage = useCallback(
     (page: number) => {
       const next = clamp(page);
@@ -79,46 +96,62 @@ export function useDocLiveSync({
     reconnectRef.current.closedByUser = false;
 
     const connect = () => {
+      log("connecting to", maskUrl(url));
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => {
         reconnectRef.current.tries = 0;
+        log("connected", maskUrl(url));
         announce?.("실시간 연결이 활성화되었습니다.");
+
         // keepalive
-        pingTimer.current = window.setInterval(
-          () => send({ type: "PING" }),
-          25_000
-        );
+        pingTimer.current = window.setInterval(() => {
+          log("↻ ping");
+          send({ type: "PING" });
+        }, 25_000);
       };
 
       ws.onmessage = (event) => {
         try {
           const parsed: unknown = JSON.parse(event.data);
+          log("← received raw", parsed);
+
           if (isLiveMessage(parsed)) {
             if (parsed.type === "PAGE_CHANGE") {
               const next = clamp(parsed.page);
+              log("PAGE_CHANGE →", next);
               onRemotePageRef.current(next);
               announce?.(`상대방이 페이지 ${next}로 이동했습니다.`);
             }
+          } else {
+            log("ignored (not LiveMessage)");
           }
-        } catch {
-          // JSON이 아니면 무시
+        } catch (e) {
+          // JSON이 아니면 무시 (서버에서 텍스트/빈 메시지일 수 있음)
+          warn("non-JSON message ignored", event.data);
+          console.log(e);
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (ev: CloseEvent) => {
         if (pingTimer.current) {
           clearInterval(pingTimer.current);
           pingTimer.current = null;
         }
-        if (reconnectRef.current.closedByUser) return;
+        if (reconnectRef.current.closedByUser) {
+          log("closed by user", ev.code, ev.reason || "");
+          return;
+        }
+        warn("closed", ev.code, ev.reason || "");
         const delay = Math.min(10_000, 500 * 2 ** reconnectRef.current.tries);
         reconnectRef.current.tries += 1;
+        log(`reconnecting in ${delay}ms (try #${reconnectRef.current.tries})`);
         setTimeout(connect, delay);
       };
 
-      ws.onerror = () => {
+      ws.onerror = (ev: Event) => {
+        error("socket error", ev);
         // 보통 onclose로 이어짐
       };
     };
@@ -127,6 +160,7 @@ export function useDocLiveSync({
 
     return () => {
       reconnectRef.current.closedByUser = true;
+      log("cleanup: closing socket");
       wsRef.current?.close();
       wsRef.current = null;
       if (pingTimer.current) {
@@ -134,7 +168,7 @@ export function useDocLiveSync({
         pingTimer.current = null;
       }
     };
-  }, [url, clamp, announce, send]);
+  }, [url, clamp, announce, send, log, warn, error]);
 
   return { notifyLocalPage };
 }
