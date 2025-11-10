@@ -24,12 +24,15 @@ import { useLocalTTS } from "src/hooks/useLocalTTS";
 
 type RouteParams = { docId?: string; courseId?: string };
 type NavState = { navTitle?: string; totalPage?: number };
+type UserRole = "assistant" | "student";
 
 export default function PreClass() {
   const params = useParams<RouteParams>();
   const { state } = useLocation() as { state?: NavState };
   const navigate = useNavigate();
   const [totalPage, setTotalPage] = useState<number>();
+  const role: UserRole =
+    (localStorage.getItem("role") as UserRole) || "student";
 
   const docIdNum = useMemo(() => {
     const raw = params.docId ?? params.courseId;
@@ -48,7 +51,9 @@ export default function PreClass() {
 
   const cleanOcr = useMemo(() => formatOcr(docPage?.ocr ?? ""), [docPage?.ocr]);
 
-  const [mode, setMode] = useState<"ocr" | "image">("ocr");
+  const [mode, setMode] = useState<"ocr" | "image">(
+    role === "assistant" ? "image" : "ocr"
+  );
 
   const liveRef = useRef<HTMLDivElement | null>(null);
   const announce = useMemo(() => makeAnnouncer(liveRef), []);
@@ -119,11 +124,17 @@ export default function PreClass() {
           setSummary(await fetchPageSummary(dp.pageId));
         else setSummary(null);
 
-        setMode("ocr");
+        const nextDefault: "ocr" | "image" =
+          role === "assistant" ? "image" : "ocr";
+        setMode(nextDefault);
         announce(
           `페이지 ${dp.pageNumber}${
             totalPage ? ` / 총 ${totalPage}` : ""
-          }로 이동했습니다. 본문 보기가 활성화되었습니다.`
+          }로 이동했습니다. ${
+            (role === "assistant" ? "image" : "ocr") === "ocr"
+              ? "본문 보기가 활성화되었습니다."
+              : "원본 이미지 보기가 활성화되었습니다."
+          }`
         );
         mainRegionRef.current?.focus();
       } catch {
@@ -138,7 +149,7 @@ export default function PreClass() {
     return () => {
       cancelled = true;
     };
-  }, [docIdNum, page, announce]);
+  }, [docIdNum, page, role, announce]);
 
   useEffect(() => {
     const t = `${state?.navTitle ?? "수업 전"} - p.${page}`;
