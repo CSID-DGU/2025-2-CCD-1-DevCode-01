@@ -95,7 +95,7 @@ def speech_to_text(audio_file) -> str:
     짧은 음성(1초 미만) 또는 변환 결과가 없을 경우 예외 처리
     """
 
-    client = speech.SpeechClient()
+    client = speech.SpeechClient(transport="rest")
 
     # 1️⃣ 메모리에서 파일 내용 바로 읽기
     audio_file.seek(0)
@@ -160,7 +160,7 @@ def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     rate = (user.rate or "보통")
 
     # 1️⃣ Google TTS 클라이언트 생성
-    client = texttospeech.TextToSpeechClient()
+    client = texttospeech.TextToSpeechClient(transport="rest")
 
     synthesis_input = texttospeech.SynthesisInput(text=text)
     
@@ -226,7 +226,7 @@ def text_to_speech_local(text: str, voice: str, rate: str) -> str:
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
 
     # 1️⃣ Google TTS 클라이언트 생성
-    client = texttospeech.TextToSpeechClient()
+    client = texttospeech.TextToSpeechClient(transport="rest")
 
     synthesis_input = texttospeech.SynthesisInput(text=text)
 
