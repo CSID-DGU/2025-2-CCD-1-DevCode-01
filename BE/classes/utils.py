@@ -1,4 +1,4 @@
-from google.cloud import speech
+from google.cloud import speech, storage
 from google.cloud import texttospeech
 import boto3
 from django.conf import settings
@@ -8,6 +8,14 @@ from datetime import datetime, timedelta
 from mutagen import File
 
 from users.models import User
+
+def upload_to_gcs(file_bytes: bytes, filename: str, bucket_name: str) -> str:
+    """GCS 버킷에 파일 업로드 후 URI 반환"""
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(f"stt/{filename}")
+    blob.upload_from_string(file_bytes)
+    return f"gs://{bucket_name}/stt/{filename}"
 
 def speech_to_text(audio_file) -> str:
     """
@@ -28,26 +36,34 @@ def speech_to_text(audio_file) -> str:
     filename = audio_file.name.lower()
     if filename.endswith(".mp3"):
         encoding = speech.RecognitionConfig.AudioEncoding.MP3
-        sample_rate = 16000
     elif filename.endswith(".wav"):
         encoding = speech.RecognitionConfig.AudioEncoding.LINEAR16
-        sample_rate = 16000
     else:
         raise ValueError("지원하지 않는 오디오 형식입니다. (mp3 또는 wav만 가능)")
 
-    # 3️⃣ Google STT 요청
-    audio = speech.RecognitionAudio(content=content)
+    # 오디오 길이 계산
+    duration_sec, duration = get_duration(audio_file)
 
     config = speech.RecognitionConfig(
         encoding=encoding,
-        sample_rate_hertz=sample_rate,
         language_code="ko-KR",
         model="default",
         use_enhanced=True,
         enable_automatic_punctuation=True,
     )
 
-    response = client.recognize(config=config, audio=audio)
+    if duration_sec <= 60:
+        # 3️⃣ Google STT 요청 (1분 이하)
+        audio = speech.RecognitionAudio(content=content)
+        response = client.recognize(config=config, audio=audio)
+    else:
+        # 3️⃣ Google STT 요청 (1분 초과 - 비동기 처리)
+        gcs_uri = upload_to_gcs(content, filename, settings.GCP_BUCKET_NAME)
+
+        audio = speech.RecognitionAudio(uri=gcs_uri)
+
+        operation = client.long_running_recognize(config=config, audio=audio)
+        response = operation.result(timeout=300)  # 최대 5분 대기
 
     # 4️⃣ 결과 텍스트 추출
     if not response.results:
