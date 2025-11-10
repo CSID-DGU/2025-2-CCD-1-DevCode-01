@@ -6,7 +6,7 @@ export type DocPage = {
   pageId: number;
   image: string;
   ocr: string;
-  sum?: string;
+  totalPage: number;
   tts?: string;
 };
 
@@ -18,7 +18,7 @@ export async function fetchDocPage(docId: number, page: number) {
     pagId?: number;
     image: string;
     ocr: string;
-    sum?: string;
+    totalPage: number;
     tts?: string;
   };
 
@@ -38,7 +38,7 @@ export async function fetchDocPage(docId: number, page: number) {
     pageId,
     image: fullImage,
     ocr: data.ocr,
-    sum: data.sum,
+    totalPage: data.totalPage,
     tts: data.tts,
   };
   return mapped;

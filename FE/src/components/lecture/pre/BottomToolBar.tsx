@@ -9,7 +9,7 @@ type CommonProps = {
   canPrev: boolean;
   canNext: boolean;
   page: number;
-  totalPages?: number;
+  totalPage?: number;
   mode: Mode;
   onPrev: () => void | Promise<void>;
   onNext: () => void | Promise<void>;
@@ -37,7 +37,7 @@ export default function BottomToolbar({
   canPrev,
   canNext,
   page,
-  totalPages,
+  totalPage,
   mode,
   onPrev,
   onNext,
@@ -60,7 +60,7 @@ export default function BottomToolbar({
   }, [page]);
 
   const min = 1;
-  const max = totalPages && totalPages > 0 ? totalPages : undefined;
+  const max = totalPage && totalPage > 0 ? totalPage : undefined;
 
   const normalize = (raw: string): number | null => {
     const n = Number.parseInt(raw, 10);
@@ -150,7 +150,7 @@ export default function BottomToolbar({
         </PageInputWrap>
 
         <Slash>/</Slash>
-        <span aria-label="전체 페이지">{totalPages ?? "?"}</span>
+        <span aria-label="전체 페이지">{totalPage ?? "?"}</span>
 
         <Btn
           onClick={() => {

@@ -25,7 +25,7 @@ import { useAudioRecorder } from "@shared/useAudioRecorder";
 type RouteParams = { courseId?: string; docId?: string };
 type NavState = {
   navTitle?: string;
-  totalPages?: number;
+  totalPage?: number;
   docId?: number;
   autoRecord?: boolean;
   startPage?: number;
@@ -62,6 +62,11 @@ const clearRec = (docId: number) => localStorage.removeItem(recKey(docId));
 export default function LiveClass() {
   const params = useParams<RouteParams>();
   const { state } = useLocation() as { state?: NavState };
+
+  const [totalPageNum, setTotalPageNum] = useState<number | null>(
+    typeof state?.totalPage === "number" ? state!.totalPage : null
+  );
+
   const navigate = useNavigate();
 
   const role = (localStorage.getItem("role") || "student") as
@@ -71,7 +76,7 @@ export default function LiveClass() {
   const parsedParamId = Number(params.docId);
   const docId =
     state?.docId ?? (Number.isFinite(parsedParamId) ? parsedParamId : NaN);
-  const totalPages = state?.totalPages ?? null;
+  const totalPage = state?.totalPage ?? null;
 
   const [page, setPage] = useState<number>(Number(state?.startPage) || 1);
   const [loading, setLoading] = useState<boolean>(false);
@@ -152,6 +157,14 @@ export default function LiveClass() {
 
         setDocPage(dp);
 
+        const tpFromApi =
+          typeof dp.totalPage === "string"
+            ? Number.parseInt(dp.totalPage, 10)
+            : NaN;
+        if (Number.isFinite(tpFromApi) && tpFromApi > 0) {
+          setTotalPageNum(tpFromApi);
+        }
+
         if (dp.pageId) {
           const sum = await fetchPageSummary(dp.pageId);
           if (!cancelled) setSummary(sum ?? null);
@@ -164,7 +177,7 @@ export default function LiveClass() {
         setMode(nextDefaultMode);
 
         announce(
-          `페이지 ${dp.pageNumber}${totalPages ? ` / 총 ${totalPages}` : ""}, ${
+          `페이지 ${dp.pageNumber}${totalPage ? ` / 총 ${totalPage}` : ""}, ${
             nextDefaultMode === "ocr" ? "본문" : "원본"
           } 보기`
         );
@@ -185,7 +198,7 @@ export default function LiveClass() {
     return () => {
       cancelled = true;
     };
-  }, [docId, page, role, totalPages, announce]);
+  }, [docId, page, role, totalPage, announce, totalPageNum]);
 
   /* ------------------ 포커스-자동읽기 (TTS) ------------------ */
   useFocusTTS({
@@ -204,8 +217,8 @@ export default function LiveClass() {
   const serverBase = import.meta.env.VITE_WS_BASE as string;
 
   const clampPage = (n: number) => {
-    if (!totalPages) return Math.max(1, n);
-    return Math.min(Math.max(1, n), totalPages);
+    if (!totalPage) return Math.max(1, n);
+    return Math.min(Math.max(1, n), totalPage);
   };
 
   const applyRemotePage = (p: number) => {
@@ -217,7 +230,7 @@ export default function LiveClass() {
     docId: Number(docId),
     token,
     onRemotePage: applyRemotePage,
-    totalPages: totalPages ?? null,
+    totalPage: totalPageNum ?? null,
     announce,
   });
 
@@ -468,7 +481,7 @@ export default function LiveClass() {
       announce("강의 종료");
       navigate(`/lecture/doc/${docId}/post`, {
         replace: true,
-        state: { docId: dId, totalPages },
+        state: { docId: dId, totalPage },
       });
     } catch (e) {
       console.error(e);
@@ -492,7 +505,7 @@ export default function LiveClass() {
 
   /* ------------------ 렌더링 ------------------ */
   const canPrev = page > 1;
-  const canNext = totalPages ? page < totalPages : true;
+  const canNext = totalPage ? page < totalPage : true;
 
   const toggleMode = () =>
     setMode((prev) => {
@@ -550,7 +563,7 @@ export default function LiveClass() {
         canPrev={canPrev}
         canNext={canNext}
         page={page}
-        totalPages={totalPages ?? undefined}
+        totalPage={totalPage ?? undefined}
         mode={mode}
         onPrev={() => void goToPage(page - 1)}
         onNext={() => void goToPage(page + 1)}

@@ -1,6 +1,5 @@
-// src/pages/class/Pre/PreClass.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useParams, useNavigate } from "react-router-dom"; // ✅ 추가
+import { useLocation, useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   fetchPageSummary,
@@ -24,12 +23,16 @@ import BottomToolbar from "src/components/lecture/pre/BottomToolBar";
 import { useLocalTTS } from "src/hooks/useLocalTTS";
 
 type RouteParams = { docId?: string; courseId?: string };
-type NavState = { navTitle?: string; totalPages?: number };
+type NavState = { navTitle?: string; totalPage?: number };
+type UserRole = "assistant" | "student";
 
 export default function PreClass() {
   const params = useParams<RouteParams>();
   const { state } = useLocation() as { state?: NavState };
-  const navigate = useNavigate(); // ✅ 추가
+  const navigate = useNavigate();
+  const [totalPage, setTotalPage] = useState<number>();
+  const role: UserRole =
+    (localStorage.getItem("role") as UserRole) || "student";
 
   const docIdNum = useMemo(() => {
     const raw = params.docId ?? params.courseId;
@@ -46,13 +49,14 @@ export default function PreClass() {
   const stackByFont = fontPct >= 175;
   const [readOnFocus, setReadOnFocus] = useState<boolean>(readReadOnFocus());
 
-  const totalPages = state?.totalPages;
   const cleanOcr = useMemo(() => formatOcr(docPage?.ocr ?? ""), [docPage?.ocr]);
 
-  const [mode, setMode] = useState<"ocr" | "image">("ocr");
+  const [mode, setMode] = useState<"ocr" | "image">(
+    role === "assistant" ? "image" : "ocr"
+  );
 
   const liveRef = useRef<HTMLDivElement | null>(null);
-  const announce = useMemo(() => makeAnnouncer(liveRef), []); // ✅ ref 친화형
+  const announce = useMemo(() => makeAnnouncer(liveRef), []);
   const mainRegionRef = useRef<HTMLDivElement | null>(null);
   const docBodyRef = useRef<HTMLDivElement | null>(null);
   const sidePaneRef = useRef<HTMLDivElement | null>(null);
@@ -113,15 +117,24 @@ export default function PreClass() {
           return;
         }
         setDocPage(dp);
+
+        if (dp.totalPage != null) setTotalPage(dp.totalPage);
+
         if (dp.pageId && dp.pageId > 0)
           setSummary(await fetchPageSummary(dp.pageId));
         else setSummary(null);
 
-        setMode("ocr");
+        const nextDefault: "ocr" | "image" =
+          role === "assistant" ? "image" : "ocr";
+        setMode(nextDefault);
         announce(
           `페이지 ${dp.pageNumber}${
-            totalPages ? ` / 총 ${totalPages}` : ""
-          }로 이동했습니다. 본문 보기가 활성화되었습니다.`
+            totalPage ? ` / 총 ${totalPage}` : ""
+          }로 이동했습니다. ${
+            (role === "assistant" ? "image" : "ocr") === "ocr"
+              ? "본문 보기가 활성화되었습니다."
+              : "원본 이미지 보기가 활성화되었습니다."
+          }`
         );
         mainRegionRef.current?.focus();
       } catch {
@@ -136,8 +149,7 @@ export default function PreClass() {
     return () => {
       cancelled = true;
     };
-    // announce는 useMemo로 안정화되어 의존성에 넣어도 재실행 없음
-  }, [docIdNum, page, totalPages, announce]);
+  }, [docIdNum, page, role, announce]);
 
   useEffect(() => {
     const t = `${state?.navTitle ?? "수업 전"} - p.${page}`;
@@ -156,7 +168,7 @@ export default function PreClass() {
   });
 
   const canPrev = page > 1;
-  const canNext = totalPages ? page < totalPages : true;
+  const canNext = totalPage ? page < totalPage : true;
 
   const toggleMode = () => {
     setMode((m) => {
@@ -182,7 +194,7 @@ export default function PreClass() {
     navigate(`/lecture/doc/${docIdNum}/live/`, {
       state: {
         docId: docIdNum,
-        totalPages: totalPages ?? null,
+        totalPage: totalPage ?? null,
         navTitle: state?.navTitle ?? "라이브",
         autoRecord: true,
       },
@@ -217,7 +229,7 @@ export default function PreClass() {
         canPrev={canPrev}
         canNext={canNext}
         page={page}
-        totalPages={totalPages}
+        totalPage={totalPage}
         mode={mode}
         onPrev={() => setPage((p) => Math.max(1, p - 1))}
         onNext={() => setPage((p) => p + 1)}

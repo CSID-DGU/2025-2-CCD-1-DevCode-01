@@ -10,6 +10,15 @@ import React, {
 type VoicePref = "female" | "male" | "auto";
 type TriggerMode = "focus" | "none";
 
+export type RateLabel = "느림" | "보통" | "빠름";
+export type VoiceLabel = "여성" | "남성";
+
+const rateLabelToNumber = (label: RateLabel): number =>
+  label === "느림" ? 0.85 : label === "빠름" ? 1.15 : 1.0;
+
+const voiceLabelToPref = (label: VoiceLabel): Exclude<VoicePref, "auto"> =>
+  label === "여성" ? "female" : "male";
+
 export type TTSSettings = {
   enabled: boolean;
   rate: number;
@@ -29,6 +38,13 @@ type TTSContextValue = {
   ) => void;
   cancel: () => void;
   getPreferredVoice: () => SpeechSynthesisVoice | null;
+
+  applyOptions: (arg: {
+    rate?: number;
+    voiceId?: Exclude<VoicePref, "auto">;
+  }) => void;
+
+  applyLabels: (arg: { rate?: RateLabel; voice?: VoiceLabel }) => void;
 };
 
 export const TTSContext = createContext<TTSContextValue | null>(null);
@@ -91,6 +107,26 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const applyOptions = useCallback(
+    (arg: { rate?: number; voiceId?: Exclude<VoicePref, "auto"> }) => {
+      const next: Partial<TTSSettings> = {};
+      if (typeof arg.rate === "number") next.rate = arg.rate;
+      if (arg.voiceId) next.voicePref = arg.voiceId; // "female" | "male"
+      if (Object.keys(next).length) setSettings(next);
+    },
+    [setSettings]
+  );
+
+  const applyLabels = useCallback(
+    (arg: { rate?: RateLabel; voice?: VoiceLabel }) => {
+      const next: Partial<TTSSettings> = {};
+      if (arg.rate) next.rate = rateLabelToNumber(arg.rate);
+      if (arg.voice) next.voicePref = voiceLabelToPref(arg.voice);
+      if (Object.keys(next).length) setSettings(next);
+    },
+    [setSettings]
+  );
+
   const getPreferredVoice = useCallback((): SpeechSynthesisVoice | null => {
     const voices = voicesRef.current;
     if (!voices.length) return null;
@@ -131,7 +167,6 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       if (typeof window === "undefined" || !("speechSynthesis" in window))
         return;
 
-      // 이전 발화 취소 (덮어쓰기)
       window.speechSynthesis.cancel();
 
       const u = new SpeechSynthesisUtterance(text);
@@ -163,8 +198,18 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       speak,
       cancel,
       getPreferredVoice,
+      applyOptions,
+      applyLabels,
     }),
-    [settings, setSettings, speak, cancel, getPreferredVoice]
+    [
+      settings,
+      setSettings,
+      speak,
+      cancel,
+      getPreferredVoice,
+      applyOptions,
+      applyLabels,
+    ]
   );
 
   return <TTSContext.Provider value={value}>{children}</TTSContext.Provider>;
