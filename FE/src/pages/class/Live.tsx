@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useReducer } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import { fetchDocPage, fetchPageSummary } from "@apis/lecture/lecture.api";
@@ -19,10 +19,7 @@ import {
 } from "./pre/ally";
 import { Container, Grid, SrLive, Wrap } from "./pre/styles";
 import { postBookmarkClock, toHHMMSS } from "@apis/lecture/bookmark.api";
-import {
-  // uploadSpeech,
-  uploadSpeechFireAndForget,
-} from "@apis/lecture/speech.api";
+import { uploadSpeechQueued } from "@apis/lecture/speech.api";
 import { useAudioRecorder } from "@shared/useAudioRecorder";
 
 type RouteParams = { courseId?: string; docId?: string };
@@ -64,6 +61,18 @@ const clearRec = (docId: number) => localStorage.removeItem(recKey(docId));
 export default function LiveClass() {
   const params = useParams<RouteParams>();
   const { state } = useLocation() as { state?: NavState };
+  const navigate = useNavigate();
+  // const MIN_CHUNK_MS = 350; // 최소 조각 길이 보장 (권장: 300~500ms)
+  // const DRAIN_WAIT_MS = 140; // stop 전에 버퍼 드레인 대기
+  // const END_MIN_MS = 250; // 종료 직전 최소 채움 시간
+  // const END_DRAIN_MS = 120;
+
+  // useEffect(() => {
+  //   // 앱 진입 시: 오프라인 보관분 재전송
+  //   void drainSpeechQueue();
+  //   // 종료/탭이동 대비: 비콘 등록
+  //   registerSpeechBeacon();
+  // }, []);
 
   const role = (localStorage.getItem("role") || "student") as
     | "assistant"
@@ -234,7 +243,6 @@ export default function LiveClass() {
     const dId = Number(docId);
     const persisted = loadRec(dId);
 
-    // 최초 진입: autoRecord 또는 recording 상태면 재시작
     if (!startedRef.current) {
       if (state?.autoRecord || persisted.status === "recording") {
         start()
@@ -262,7 +270,6 @@ export default function LiveClass() {
         rerender();
       }
     }
-    // 언마운트 시 stop은 하지 않음(리프레시/이동에도 시간 보존)
   }, [docId, state?.autoRecord, start, announce, rerender]);
 
   /* ------------------ 중지(토글) ------------------ */
@@ -272,7 +279,6 @@ export default function LiveClass() {
     const p = loadRec(dId);
 
     if (p.status === "recording" && p.startedAt) {
-      // ▶️ recording -> ⏸ paused
       const now = Date.now();
       const acc = p.accumulated + Math.floor((now - p.startedAt) / 1000);
       try {
@@ -284,7 +290,6 @@ export default function LiveClass() {
         /* ignore */
       }
     } else if (p.status === "paused") {
-      // ⏸ paused -> ▶️ recording
       try {
         resume();
         saveRec(dId, {
@@ -298,7 +303,6 @@ export default function LiveClass() {
         /* ignore */
       }
     } else if (p.status === "idle") {
-      // idle에서 버튼 누르면 시작
       start()
         .then(() => {
           saveRec(dId, {
@@ -359,70 +363,73 @@ export default function LiveClass() {
     }
   };
 
-  /* ------------------ 업로드 도우미(페이지 전환용) ------------------ */
+  /* ------------------ 페이지 전환 업로드: Blob + 끝시각만 ------------------ */
   const cuttingRef = useRef(false);
 
-  const getAccumulatedSec = (dId: number): number => {
-    const p = loadRec(dId);
-    if (p.status === "recording" && p.startedAt) {
-      return p.accumulated + Math.floor((Date.now() - p.startedAt) / 1000);
-    }
-    return p.accumulated ?? 0;
-  };
+  // const getEndSec = (dId: number): number => {
+  //   const p = loadRec(dId);
+  //   if (p.status === "recording" && p.startedAt) {
+  //     return p.accumulated + Math.floor((Date.now() - p.startedAt) / 1000);
+  //   }
+  //   return p.accumulated ?? 0;
+  // };
 
-  /** 업로드는 응답 기다리지 않고 전송만 */
-  const cutAndUploadCurrentPageAsync = (prevPageId: number | null) => {
+  const cutAndUploadCurrentPageAsync = async (prevPageId: number | null) => {
     if (!Number.isFinite(docId) || !prevPageId) return;
     const dId = Number(docId);
-
-    // 이미 같은 틱에서 컷 처리했다면 무시
     if (cuttingRef.current) return;
     cuttingRef.current = true;
-    setTimeout(() => (cuttingRef.current = false), 120);
+    setTimeout(() => (cuttingRef.current = false), 160);
 
     const p = loadRec(dId);
-
-    // 녹음 중이 아니면 업로드 없음
     if (p.status !== "recording" || !p.startedAt) return;
 
-    // 1) 업로드용 누적 타임스탬프 계산
-    const finalSec = getAccumulatedSec(dId);
-    const hhmmss = toHHMMSS(finalSec);
+    // 끝시각 계산
+    const endSec =
+      p.accumulated + Math.floor((Date.now() - p.startedAt) / 1000);
+    const endHHMMSS = toHHMMSS(endSec);
 
-    // 2) stop()으로 현재 구간 Blob 만들기
-    const blobPromise: Promise<Blob> = stop();
+    // stop()으로 Blob 확보 (빈 Blob이면 스킵)
+    const blob: Blob = await stop();
+    console.log("%c[Recorder.stop#cut]", "color:lightgreen;font-weight:bold", {
+      type: blob.type,
+      size: blob.size,
+      endHHMMSS,
+    });
+    if (!blob || blob.size === 0) {
+      // 누적만 반영 후 재시작
+      saveRec(dId, {
+        status: "paused",
+        accumulated: endSec,
+        startedAt: undefined,
+      });
+      await start().catch(() => {});
+      saveRec(dId, {
+        status: "recording",
+        accumulated: endSec,
+        startedAt: Date.now(),
+      });
+      return;
+    }
 
-    // 3) 로컬 상태는 즉시 "재시작" 기준으로 갱신 → 사용자는 지연 없이 다음 페이지에서 계속 녹음
+    // ✅ 업로드는 큐에 넣고 바로 반환(응답 기다리지 않음)
+    uploadSpeechQueued(prevPageId, blob, endHHMMSS);
+
+    // 누적 반영 후 재시작
     saveRec(dId, {
       status: "paused",
-      accumulated: finalSec,
+      accumulated: endSec,
       startedAt: undefined,
     });
-
-    // 4) 다음 구간 즉시 시작 (대기하지 않음)
-    void start()
-      .then(() => {
-        saveRec(dId, {
-          status: "recording",
-          accumulated: finalSec,
-          startedAt: Date.now(),
-        });
-      })
-      .catch(() => {
-        // 시작 실패 시 상태만 'paused'로 남음
-      });
-
-    // 5) Blob이 준비되면 응답 대기 없이 업로드 전송
-    void blobPromise
-      .then((blob) => {
-        uploadSpeechFireAndForget(prevPageId, blob, hhmmss);
-      })
-      .catch((e) => {
-        console.warn("[speech] blob create failed:", e);
-      });
+    await start().catch(() => {});
+    saveRec(dId, {
+      status: "recording",
+      accumulated: endSec,
+      startedAt: Date.now(),
+    });
   };
 
-  /* ---- 강의 종료: 마지막 조각만 업로드하고 즉시 이동 ---- */
+  // 강의 종료
   const onEndLecture = async () => {
     try {
       if (!Number.isFinite(docId)) throw new Error("잘못된 문서 ID");
@@ -430,22 +437,38 @@ export default function LiveClass() {
       const pageId = docPage?.pageId;
       if (!pageId) throw new Error("pageId 없음");
 
-      // 최종 누적 초 계산
-      const p = loadRec(dId);
-      let finalSec = p.accumulated;
+      // 상태 확인 후 안전하게 마지막 조각 확보(빈 Blob이면 스킵)
+      let p = loadRec(dId);
+      let blob: Blob | null = null;
+
       if (p.status === "recording" && p.startedAt) {
-        const now = Date.now();
-        finalSec = p.accumulated + Math.floor((now - p.startedAt) / 1000);
+        await new Promise((r) => setTimeout(r, 120));
+        blob = await stop();
+      } else if (p.status === "paused") {
+        await start().catch(() => {});
+        saveRec(dId, {
+          status: "recording",
+          accumulated: p.accumulated,
+          startedAt: Date.now(),
+        });
+        await new Promise((r) => setTimeout(r, 250));
+        blob = await stop();
       }
-      const hhmmss = toHHMMSS(finalSec);
 
-      // ▶ 마지막 조각만 잘라서 Blob 확보
-      const blob: Blob = await stop();
+      p = loadRec(dId);
+      const endSec =
+        p.status === "recording" && p.startedAt
+          ? p.accumulated + Math.floor((Date.now() - p.startedAt) / 1000)
+          : p.accumulated;
+      const endHHMMSS = toHHMMSS(endSec);
 
-      // 🚀 응답 기다리지 않고 전송
-      uploadSpeechFireAndForget(pageId, blob, hhmmss);
+      if (blob && blob.size > 0) {
+        // ✅ 종료 업로드도 큐에 넣고 즉시 이동
+        uploadSpeechQueued(pageId, blob, endHHMMSS);
+      } else {
+        console.warn("[end] empty blob → skip upload");
+      }
 
-      // 로컬 상태 정리 후 즉시 이동
       clearRec(dId);
       toast.success("강의를 종료합니다.");
       announce("강의 종료");
@@ -456,19 +479,17 @@ export default function LiveClass() {
       announce("강의 종료 처리 중 오류가 발생했습니다.");
     }
   };
-
-  /* ------------------ 페이지 이동(goToPage): 업로드 → 이동 ------------------ */
+  /* ------------------ 페이지 이동: 즉시 전환 + 비동기 업로드 ------------------ */
   const goToPage = (n: number) => {
     const next = clampPage(n);
     if (next === page) return;
 
-    // 이동 직전 pageId 캡쳐
     const prevPageId = docPage?.pageId ?? null;
 
-    // ✅ 업로드는 백그라운드로 날리고,
+    // 이전 페이지 조각 업로드(비동기)
     cutAndUploadCurrentPageAsync(prevPageId);
 
-    // ✅ 페이지 전환/동기화는 **즉시**
+    // 페이지 전환/동기화는 즉시
     setPage(next);
     notifyLocalPage(next);
     announce(`페이지 ${next}로 이동합니다.`);
@@ -477,7 +498,6 @@ export default function LiveClass() {
   /* ------------------ 렌더링 ------------------ */
   const canPrev = page > 1;
   const canNext = totalPages ? page < totalPages : true;
-  const navigate = useNavigate();
 
   const toggleMode = () =>
     setMode((prev) => {
