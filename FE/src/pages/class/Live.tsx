@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useReducer } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import { fetchDocPage, fetchPageSummary } from "@apis/lecture/lecture.api";
@@ -19,7 +19,10 @@ import {
 } from "./pre/ally";
 import { Container, Grid, SrLive, Wrap } from "./pre/styles";
 import { postBookmarkClock, toHHMMSS } from "@apis/lecture/bookmark.api";
-import { uploadSpeech } from "@apis/lecture/speech.api";
+import {
+  // uploadSpeech,
+  uploadSpeechFireAndForget,
+} from "@apis/lecture/speech.api";
 import { useAudioRecorder } from "@shared/useAudioRecorder";
 
 type RouteParams = { courseId?: string; docId?: string };
@@ -357,7 +360,7 @@ export default function LiveClass() {
   };
 
   /* ------------------ 업로드 도우미(페이지 전환용) ------------------ */
-  const uploadingRef = useRef(false);
+  const cuttingRef = useRef(false);
 
   const getAccumulatedSec = (dId: number): number => {
     const p = loadRec(dId);
@@ -367,64 +370,59 @@ export default function LiveClass() {
     return p.accumulated ?? 0;
   };
 
-  const uploadCurrentSegmentForPage = async (prevPageId: number | null) => {
-    if (!Number.isFinite(docId)) return;
+  /** 업로드는 응답 기다리지 않고 전송만 */
+  const cutAndUploadCurrentPageAsync = (prevPageId: number | null) => {
+    if (!Number.isFinite(docId) || !prevPageId) return;
     const dId = Number(docId);
+
+    // 이미 같은 틱에서 컷 처리했다면 무시
+    if (cuttingRef.current) return;
+    cuttingRef.current = true;
+    setTimeout(() => (cuttingRef.current = false), 120);
+
     const p = loadRec(dId);
 
-    if (uploadingRef.current) return;
-    uploadingRef.current = true;
+    // 녹음 중이 아니면 업로드 없음
+    if (p.status !== "recording" || !p.startedAt) return;
 
-    try {
-      if (p.status !== "recording" || !p.startedAt || !prevPageId) return;
+    // 1) 업로드용 누적 타임스탬프 계산
+    const finalSec = getAccumulatedSec(dId);
+    const hhmmss = toHHMMSS(finalSec);
 
-      // 1) 누적 시간(HH:MM:SS)
-      const finalSec = getAccumulatedSec(dId);
-      const hhmmss = toHHMMSS(finalSec);
+    // 2) stop()으로 현재 구간 Blob 만들기
+    const blobPromise: Promise<Blob> = stop();
 
-      // 2) 현재 구간 종료 → Blob
-      const blob: Blob = await stop();
+    // 3) 로컬 상태는 즉시 "재시작" 기준으로 갱신 → 사용자는 지연 없이 다음 페이지에서 계속 녹음
+    saveRec(dId, {
+      status: "paused",
+      accumulated: finalSec,
+      startedAt: undefined,
+    });
 
-      // 3) 업로드 (넘어가기 직전 페이지의 pageId로 업로드)
-      await uploadSpeech(prevPageId, blob, hhmmss);
-
-      // 4) 상태 반영 (누적 업데이트 후 잠시 정지)
-      saveRec(dId, {
-        status: "paused",
-        accumulated: finalSec,
-        startedAt: undefined,
+    // 4) 다음 구간 즉시 시작 (대기하지 않음)
+    void start()
+      .then(() => {
+        saveRec(dId, {
+          status: "recording",
+          accumulated: finalSec,
+          startedAt: Date.now(),
+        });
+      })
+      .catch(() => {
+        // 시작 실패 시 상태만 'paused'로 남음
       });
 
-      // 5) 다음 구간 즉시 재시작
-      await start();
-      saveRec(dId, {
-        status: "recording",
-        accumulated: finalSec,
-        startedAt: Date.now(),
+    // 5) Blob이 준비되면 응답 대기 없이 업로드 전송
+    void blobPromise
+      .then((blob) => {
+        uploadSpeechFireAndForget(prevPageId, blob, hhmmss);
+      })
+      .catch((e) => {
+        console.warn("[speech] blob create failed:", e);
       });
-    } catch (e) {
-      console.error(e);
-      // 실패해도 녹음 이어가도록 복구
-      try {
-        if (p.status === "recording") {
-          await start();
-          saveRec(Number(docId), {
-            status: "recording",
-            accumulated: getAccumulatedSec(Number(docId)),
-            startedAt: Date.now(),
-          });
-        }
-      } catch {
-        console.log("err");
-      }
-      toast.error("페이지 전환 중 녹음 업로드에 실패했어요.");
-      announce("녹음 업로드 실패");
-    } finally {
-      uploadingRef.current = false;
-    }
   };
 
-  /* ------------------ 강의 종료: 정지 + 업로드 ------------------ */
+  /* ---- 강의 종료: 마지막 조각만 업로드하고 즉시 이동 ---- */
   const onEndLecture = async () => {
     try {
       if (!Number.isFinite(docId)) throw new Error("잘못된 문서 ID");
@@ -441,17 +439,17 @@ export default function LiveClass() {
       }
       const hhmmss = toHHMMSS(finalSec);
 
-      // 실제 녹음 정지 + Blob 확보
+      // ▶ 마지막 조각만 잘라서 Blob 확보
       const blob: Blob = await stop();
 
-      // 서버 업로드
-      await uploadSpeech(pageId, blob, hhmmss);
+      // 🚀 응답 기다리지 않고 전송
+      uploadSpeechFireAndForget(pageId, blob, hhmmss);
 
-      // 상태 초기화
+      // 로컬 상태 정리 후 즉시 이동
       clearRec(dId);
-      toast.success("강의가 종료되었습니다.");
+      toast.success("강의를 종료합니다.");
       announce("강의 종료");
-      rerender();
+      navigate(`/lecture/doc/${docId}/post`, { replace: true });
     } catch (e) {
       console.error(e);
       toast.error("강의 종료 처리 중 오류가 발생했어요.");
@@ -460,19 +458,17 @@ export default function LiveClass() {
   };
 
   /* ------------------ 페이지 이동(goToPage): 업로드 → 이동 ------------------ */
-  const goToPage = async (n: number) => {
-    if (uploadingRef.current) return; // 업로드 중복 방지
-
+  const goToPage = (n: number) => {
     const next = clampPage(n);
     if (next === page) return;
 
-    // 이동 직전의 pageId를 캡쳐
+    // 이동 직전 pageId 캡쳐
     const prevPageId = docPage?.pageId ?? null;
 
-    // 현재 페이지 구간 업로드(녹음 중일 때만 동작)
-    await uploadCurrentSegmentForPage(prevPageId);
+    // ✅ 업로드는 백그라운드로 날리고,
+    cutAndUploadCurrentPageAsync(prevPageId);
 
-    // 실제 페이지 이동 + 동기화 + 알림
+    // ✅ 페이지 전환/동기화는 **즉시**
     setPage(next);
     notifyLocalPage(next);
     announce(`페이지 ${next}로 이동합니다.`);
@@ -481,6 +477,7 @@ export default function LiveClass() {
   /* ------------------ 렌더링 ------------------ */
   const canPrev = page > 1;
   const canNext = totalPages ? page < totalPages : true;
+  const navigate = useNavigate();
 
   const toggleMode = () =>
     setMode((prev) => {
@@ -543,11 +540,11 @@ export default function LiveClass() {
         onPrev={() => void goToPage(page - 1)}
         onNext={() => void goToPage(page + 1)}
         onToggleMode={toggleMode}
-        onPause={handlePauseToggle} // ⏸/▶️ 토글
+        onPause={handlePauseToggle}
         onBookmark={onBookmark}
-        onEnd={onEndLecture} // ⛔ 강의 종료: stop + 업로드
+        onEnd={onEndLecture}
         onGoTo={(n) => void goToPage(n)}
-        pauseLabel={pauseLabel} // "중지" ↔ "녹음 다시 시작"
+        pauseLabel={pauseLabel}
       />
     </Wrap>
   );
