@@ -28,6 +28,7 @@ type NavState = {
   totalPages?: number;
   docId?: number;
   autoRecord?: boolean;
+  startPage?: number;
 };
 
 /* ------------------ 녹음 세션 영속 저장 ------------------ */
@@ -62,17 +63,6 @@ export default function LiveClass() {
   const params = useParams<RouteParams>();
   const { state } = useLocation() as { state?: NavState };
   const navigate = useNavigate();
-  // const MIN_CHUNK_MS = 350; // 최소 조각 길이 보장 (권장: 300~500ms)
-  // const DRAIN_WAIT_MS = 140; // stop 전에 버퍼 드레인 대기
-  // const END_MIN_MS = 250; // 종료 직전 최소 채움 시간
-  // const END_DRAIN_MS = 120;
-
-  // useEffect(() => {
-  //   // 앱 진입 시: 오프라인 보관분 재전송
-  //   void drainSpeechQueue();
-  //   // 종료/탭이동 대비: 비콘 등록
-  //   registerSpeechBeacon();
-  // }, []);
 
   const role = (localStorage.getItem("role") || "student") as
     | "assistant"
@@ -83,7 +73,7 @@ export default function LiveClass() {
     state?.docId ?? (Number.isFinite(parsedParamId) ? parsedParamId : NaN);
   const totalPages = state?.totalPages ?? null;
 
-  const [page, setPage] = useState<number>(1);
+  const [page, setPage] = useState<number>(Number(state?.startPage) || 1);
   const [loading, setLoading] = useState<boolean>(false);
 
   const [docPage, setDocPage] = useState<Awaited<
@@ -230,6 +220,15 @@ export default function LiveClass() {
     totalPages: totalPages ?? null,
     announce,
   });
+
+  useEffect(() => {
+    const sp = Number(state?.startPage);
+    if (Number.isFinite(sp) && sp > 0 && sp !== page) {
+      const target = clampPage(sp);
+      setPage(target);
+      notifyLocalPage(target);
+    }
+  }, [state?.startPage, notifyLocalPage]);
 
   /* ------------------ 녹음 훅 ------------------ */
   const { start, stop, pause, resume } = useAudioRecorder();
@@ -389,7 +388,6 @@ export default function LiveClass() {
       p.accumulated + Math.floor((Date.now() - p.startedAt) / 1000);
     const endHHMMSS = toHHMMSS(endSec);
 
-    // stop()으로 Blob 확보 (빈 Blob이면 스킵)
     const blob: Blob = await stop();
     console.log("%c[Recorder.stop#cut]", "color:lightgreen;font-weight:bold", {
       type: blob.type,
@@ -397,7 +395,6 @@ export default function LiveClass() {
       endHHMMSS,
     });
     if (!blob || blob.size === 0) {
-      // 누적만 반영 후 재시작
       saveRec(dId, {
         status: "paused",
         accumulated: endSec,
@@ -412,10 +409,8 @@ export default function LiveClass() {
       return;
     }
 
-    // ✅ 업로드는 큐에 넣고 바로 반환(응답 기다리지 않음)
     uploadSpeechQueued(prevPageId, blob, endHHMMSS);
 
-    // 누적 반영 후 재시작
     saveRec(dId, {
       status: "paused",
       accumulated: endSec,
@@ -463,7 +458,6 @@ export default function LiveClass() {
       const endHHMMSS = toHHMMSS(endSec);
 
       if (blob && blob.size > 0) {
-        // ✅ 종료 업로드도 큐에 넣고 즉시 이동
         uploadSpeechQueued(pageId, blob, endHHMMSS);
       } else {
         console.warn("[end] empty blob → skip upload");
@@ -472,7 +466,10 @@ export default function LiveClass() {
       clearRec(dId);
       toast.success("강의를 종료합니다.");
       announce("강의 종료");
-      navigate(`/lecture/doc/${docId}/post`, { replace: true });
+      navigate(`/lecture/doc/${docId}/post`, {
+        replace: true,
+        state: { docId: dId, totalPages },
+      });
     } catch (e) {
       console.error(e);
       toast.error("강의 종료 처리 중 오류가 발생했어요.");
@@ -486,10 +483,8 @@ export default function LiveClass() {
 
     const prevPageId = docPage?.pageId ?? null;
 
-    // 이전 페이지 조각 업로드(비동기)
     cutAndUploadCurrentPageAsync(prevPageId);
 
-    // 페이지 전환/동기화는 즉시
     setPage(next);
     notifyLocalPage(next);
     announce(`페이지 ${next}로 이동합니다.`);
