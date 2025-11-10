@@ -105,20 +105,17 @@ def speech_to_text(audio_file) -> str:
     if len(content) < 10000:  # 대략 1초 이하 (10KB 미만)
         raise ValueError("음성 파일이 너무 짧습니다. 1초 이상 길이의 파일을 업로드해주세요.")
 
+
     # 2️⃣ 확장자에 따라 인코딩 설정
     filename = audio_file.name.lower()
-    # if filename.endswith(".mp3"):
-    #     format_type = "mp3"
-    #     encoding = speech.RecognitionConfig.AudioEncoding.MP3
     if filename.endswith(".wav"):
         format_type = "wav"
         encoding = speech.RecognitionConfig.AudioEncoding.LINEAR16
     else:
         raise ValueError("지원하지 않는 오디오 형식입니다. (wav만 가능)")
-
-    # 무음 기준 분리
+    
     chunks, rate = split_audio_on_silence(content)
-        
+
     config = speech.RecognitionConfig(
         encoding=encoding,
         language_code="ko-KR",
@@ -149,7 +146,6 @@ def speech_to_text(audio_file) -> str:
             transcript += text + " "
 
         os.remove(chunk)
-
     if not transcript or transcript.strip() == "":
         raise ValueError("인식된 텍스트가 비어 있습니다.")
 

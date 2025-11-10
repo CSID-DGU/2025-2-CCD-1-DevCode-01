@@ -216,7 +216,7 @@ class NoteDetailView(APIView):
 
         content = request.data.get("content")
         note.content = content.strip()
-
+        
         if not content or content.strip() == "":
             note.note_tts = None
         else:

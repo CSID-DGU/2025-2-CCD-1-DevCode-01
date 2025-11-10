@@ -1,4 +1,3 @@
-// src/components/lecture/shared/BottomToolbar.tsx
 import { TOOLBAR_GAP, TOOLBAR_H } from "@pages/class/pre/styles";
 import { fonts } from "@styles/fonts";
 import styled from "styled-components";
@@ -12,24 +11,24 @@ type CommonProps = {
   page: number;
   totalPages?: number;
   mode: Mode;
-  onPrev: () => void;
-  onNext: () => void;
+  onPrev: () => void | Promise<void>;
+  onNext: () => void | Promise<void>;
   onToggleMode: () => void;
-  onGoTo: (page: number) => void;
-  /** 선택: 화면읽기 보조 음성 */
+  onGoTo: (page: number) => void | Promise<void>;
   speak?: (msg: string) => void;
 };
 
 type PreOnly = {
-  /** 강의 전에서만 사용 */
-  onStart?: () => void;
+  onStart?: () => void | Promise<void>;
+  startPageId?: number | null;
+  onStartLive?: (pageId: number) => void | Promise<void>;
 };
 
 type LiveOnly = {
-  /** 강의 중에서만 사용 */
-  onPause?: () => void;
-  onBookmark?: () => void;
-  onEnd?: () => void;
+  onPause?: () => void | Promise<void>;
+  onBookmark?: () => void | Promise<void>;
+  onEnd?: () => void | Promise<void>;
+  pauseLabel?: string;
 };
 
 type Props = CommonProps & PreOnly & LiveOnly;
@@ -45,10 +44,13 @@ export default function BottomToolbar({
   onToggleMode,
   onGoTo,
   speak,
-  onStart, // 있으면 "강의 시작" 버튼 노출
-  onPause, // 있으면 "일시 정지" 노출
-  onBookmark, // 있으면 "북마크" 노출
-  onEnd, // 있으면 "강의 종료" 노출
+  onStart,
+  onStartLive,
+  startPageId,
+  onPause,
+  onBookmark,
+  onEnd,
+  pauseLabel = "일시 정지",
 }: Props) {
   const [draft, setDraft] = useState<string>(String(page));
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -80,7 +82,7 @@ export default function BottomToolbar({
       speak?.(`이미 ${n}페이지입니다.`);
       return;
     }
-    onGoTo(n);
+    void onGoTo(n);
     speak?.(`${n}페이지로 이동`);
   };
 
@@ -95,13 +97,29 @@ export default function BottomToolbar({
     speak?.("페이지 번호 입력");
   };
 
+  /* -------- 강의 시작(우선순위: onStartLive → onStart) -------- */
+  const handleStart = () => {
+    if (onStartLive && typeof startPageId === "number" && startPageId > 0) {
+      void onStartLive(startPageId);
+      speak?.(`현재 페이지로 강의를 시작합니다. 페이지 ID ${startPageId}`);
+      return;
+    }
+    if (onStart) {
+      void onStart();
+      speak?.("강의가 시작되었습니다.");
+      return;
+    }
+  };
+
+  const startDisabled =
+    !!onStartLive && !(typeof startPageId === "number" && startPageId > 0);
+
   return (
     <Bar role="toolbar" aria-label="페이지 및 강의 조작">
-      {/* ← → + 현재/전체 + 입력 이동 */}
       <Group>
         <Btn
           onClick={() => {
-            onPrev();
+            void onPrev();
             speak?.("이전 페이지로 이동");
           }}
           onFocus={() => speak?.("이전 페이지 버튼")}
@@ -136,7 +154,7 @@ export default function BottomToolbar({
 
         <Btn
           onClick={() => {
-            onNext();
+            void onNext();
             speak?.("다음 페이지로 이동");
           }}
           onFocus={() => speak?.("다음 페이지 버튼")}
@@ -164,7 +182,6 @@ export default function BottomToolbar({
         </Btn>
       </Group>
 
-      {/* 라이브 전용 버튼(핸들러가 있을 때만 노출) */}
       {(onPause || onBookmark || onEnd) && (
         <>
           <Divider role="separator" aria-orientation="vertical" />
@@ -173,19 +190,19 @@ export default function BottomToolbar({
               <Btn
                 type="button"
                 onClick={() => {
-                  onPause();
-                  speak?.("일시 정지");
+                  void onPause();
+                  speak?.(pauseLabel);
                 }}
-                onFocus={() => speak?.("일시 정지 버튼")}
+                onFocus={() => speak?.(`${pauseLabel} 버튼`)}
               >
-                일시 정지
+                {pauseLabel}
               </Btn>
             )}
             {onBookmark && (
               <Btn
                 type="button"
                 onClick={() => {
-                  onBookmark();
+                  void onBookmark();
                   speak?.("북마크 추가");
                 }}
                 onFocus={() => speak?.("북마크 버튼")}
@@ -197,7 +214,7 @@ export default function BottomToolbar({
               <Primary
                 type="button"
                 onClick={() => {
-                  onEnd();
+                  void onEnd();
                   speak?.("강의 종료");
                 }}
                 onFocus={() => speak?.("강의 종료 버튼")}
@@ -209,18 +226,24 @@ export default function BottomToolbar({
         </>
       )}
 
-      {/* 강의 전 전용 버튼(있을 때만 노출) */}
-      {onStart && (
+      {/* 강의 시작(사전) */}
+      {(onStart || onStartLive) && (
         <>
           <Divider role="separator" aria-orientation="vertical" />
           <Group>
             <Primary
               type="button"
-              onClick={() => {
-                onStart();
-                speak?.("강의가 시작되었습니다.");
-              }}
+              onClick={handleStart}
               onFocus={() => speak?.("강의 시작 버튼")}
+              aria-label={
+                onStartLive
+                  ? startDisabled
+                    ? "페이지 ID가 없어 강의 시작을 할 수 없습니다."
+                    : `현재 페이지로 강의를 시작합니다.`
+                  : "강의 시작"
+              }
+              disabled={startDisabled}
+              title={onStartLive && startDisabled ? "페이지 오류" : undefined}
             >
               ▶ 강의시작
             </Primary>
@@ -242,13 +265,12 @@ const Bar = styled.div`
   justify-content: center;
   gap: 0.75rem;
   height: ${TOOLBAR_H}px;
-  padding: 2rem;
+  padding: 0.75rem 1rem;
   background: var(--c-blue);
   color: var(--c-white);
   border-radius: 0.5rem;
   box-shadow: 0 6px 10px rgba(0, 0, 0, 0.12);
   z-index: 999;
-  max-width: min(92vw, 820px);
   width: max-content;
 `;
 const Group = styled.div`
@@ -282,7 +304,6 @@ const Btn = styled.button`
     outline-offset: 2px;
   }
 `;
-
 const Slash = styled.span`
   ${fonts.medium26};
 `;
@@ -294,8 +315,11 @@ const Primary = styled.button`
   border: 2px solid var(--c-white);
   ${fonts.medium26};
   cursor: pointer;
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
 `;
-
 const PageInputWrap = styled.div`
   display: inline-flex;
   align-items: center;
@@ -304,7 +328,6 @@ const PageInputWrap = styled.div`
   padding: 0.1rem 0.4rem;
   background: #ffffff22;
 `;
-
 const PageInput = styled.input`
   width: 3.2ch;
   text-align: center;
