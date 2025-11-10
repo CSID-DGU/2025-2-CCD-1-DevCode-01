@@ -215,10 +215,14 @@ class NoteDetailView(APIView):
                             status=status.HTTP_403_FORBIDDEN)
 
         content = request.data.get("content")
-        note_tts = text_to_speech(content, user, "tts/note/")
-
         note.content = content.strip()
-        note.note_tts = note_tts
+        
+        if not content or content.strip() == "":
+            note.note_tts = None
+        else:
+            note_tts = text_to_speech(content, user, "tts/note/")
+            note.note_tts = note_tts
+
         note.save()
 
         return Response({
