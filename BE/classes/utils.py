@@ -1,3 +1,4 @@
+import wave
 from google.cloud import speech, storage
 from google.cloud import texttospeech
 import boto3
@@ -211,12 +212,30 @@ def time_to_seconds(hhmmss: str) -> float:
     
 def get_duration(audio):
     audio.seek(0)
-    audio_obj = File(audio)
+    filename = getattr(audio, "name", "").lower()
 
-    if not audio_obj or not hasattr(audio_obj, "info") or not hasattr(audio_obj.info, "length"):
-        raise ValueError("오디오 파일의 길이를 계산할 수 없습니다.")
+    # ✅ WAV 파일은 wave 모듈로 직접 계산
+    if filename.endswith(".wav"):
+        try:
+            audio.seek(0)
+            with wave.open(audio, "rb") as wav_file:
+                frames = wav_file.getnframes()
+                rate = wav_file.getframerate()
+                duration_sec = round(frames / float(rate), 2)
+                duration = str(timedelta(seconds=int(duration_sec)))
+                return duration_sec, duration
+        except Exception as e:
+            raise ValueError(f"WAV 길이 계산 실패: {e}")
 
-    duration_sec = round(audio_obj.info.length, 2)
-    duration = str(timedelta(seconds=int(duration_sec)))
-
-    return duration_sec, duration
+    # ✅ MP3 파일
+    try:
+        audio.seek(0)
+        audio_obj = File(audio)
+        if audio_obj and hasattr(audio_obj, "info") and hasattr(audio_obj.info, "length"):
+            duration_sec = round(audio_obj.info.length, 2)
+            duration = str(timedelta(seconds=int(duration_sec)))
+            return duration_sec, duration
+        else:
+            raise ValueError("오디오 파일의 길이를 계산할 수 없습니다.")
+    except Exception as e:
+        raise ValueError(f"오디오 길이 계산 실패: {e}")
