@@ -33,7 +33,9 @@ class LoginView(TokenObtainPairView):
             "username": user.username,
             "role": user.role,
             "font": user.font,
-            "high_contrast": user.high_contrast,            
+            "high_contrast": user.high_contrast,   
+            "voice": user.voice,
+            "rate": user.rate,            
             "access": tokens.get("access"),
             "refresh": tokens.get("refresh"),
         }, status=status.HTTP_200_OK)
@@ -56,3 +58,22 @@ class AccessibilityView(generics.UpdateAPIView):
                 "font": user.font,
                 "high_contrast": user.high_contrast,
         }, status=status.HTTP_200_OK)    
+    
+
+class SoundOptionView(generics.UpdateAPIView):
+    serializer_class = SoundOptionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+
+    def update(self, request, *args, **kwargs):
+        user = self.get_object()
+        serializer = self.get_serializer(user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response({
+                "rate": user.rate,
+                "voice": user.voice,
+        }, status=status.HTTP_200_OK)   

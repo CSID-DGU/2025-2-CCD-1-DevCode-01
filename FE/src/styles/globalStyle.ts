@@ -13,11 +13,22 @@ const GlobalStyle = createGlobalStyle`
 
   :root {
     ${baseVar}
+    --ui-scale: 1;
   }
   // 고대비 모드
   html.hc {
     ${hcVar}
   }
+
+  .app-zoom {
+  position: fixed;
+  inset: 0;                 
+  transform-origin: top left;
+  transform: scale(var(--ui-scale));
+  width: calc(100vw / var(--ui-scale));
+  height: calc(100vh / var(--ui-scale));
+  overflow: auto;           
+}
 
 
 *{box-sizing:border-box}
@@ -26,7 +37,7 @@ body, button, input, select, table, textarea {font-size:12px;border:none;font-fa
 h1, h2, h3, h4, h5, h6 {font-size:inherit;line-height:inherit}
 textarea {-webkit-backface-visibility:hidden;backface-visibility:hidden;background-color:transparent;border:0;word-break:keep-all;word-wrap:break-word;outline:none;}
 button, input {-webkit-border-radius:0;border-radius:0;border:none;outline: none;}
-button {background-color:transparent;border:none;outline: none;}
+button {background-color:transparent;outline: none;}
 fieldset, img {border:0}
 img {vertical-align:top}
 ol, ul {list-style:none}
@@ -36,6 +47,7 @@ iframe {overflow:hidden;margin:0;border:0;padding:0;vertical-align:top}
 mark {background-color:transparent}
 i {font-style:normal}
 
+/* html, body, #root { height: 100%; } */
 #root {
 	display: flex;
 	flex-direction: column;
@@ -48,9 +60,9 @@ i {font-style:normal}
 // 초기 html 설정
 html {
 	background-color: var(--c-white);
-	display: flex;
 	justify-content: center;
 	align-items: center;
+  min-height: 100vh;
 
 	-webkit-touch-callout: none;
     -webkit-tap-highlight-color:rgb(0 0 0 / 0%);
@@ -62,6 +74,7 @@ html {
 body {
 	width: 100vw;
 	max-width: 100%;
+  min-height: 100vh;
 	background-color: var(--c-white);
 	color: var(--c-black);
   font-synthesis: none;
@@ -84,24 +97,17 @@ body {
   scrollbar-width: none; /* 파이어폭스 */
 }
 
-&:focus {
-    outline: none;
+ .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
-
-  button {
-  background-color: transparent;
-  border: none;
-  outline: none;
-  box-shadow: none;
-}
-
-button:focus,
-button:active {
-  outline: none;
-  border: none;
-  box-shadow: none;
-}
-
 
 `;
 

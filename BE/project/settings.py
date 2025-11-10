@@ -1,3 +1,4 @@
+
 """
 Django settings for project project.
 
@@ -41,16 +42,21 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
-    'app',
+    "corsheaders",
+
     'users',
     'lectures',
+    'classes',
+    'lecture_docs',
 
     'rest_framework',
-    'rest_framework_simplejwt',    
+    'rest_framework_simplejwt', 
+    'channels',   
+    'storages'
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware", 
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -104,11 +110,22 @@ DATABASES = {
 #     }
 # }
 
+# Google Cloud Key 환경변수 등록
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+GCP_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
 
+# AWS S3 환경변수 등록
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME")
+AWS_REGION = os.getenv("AWS_REGION")
 
+# URL 형태 통일
+AWS_S3_BASE_URL = os.getenv(
+    'AWS_S3_BASE_URL',
+    f"https://{AWS_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com"
+)
 
-# Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -135,7 +152,7 @@ TIME_ZONE = 'Asia/Seoul'
 
 USE_I18N = True
 
-USE_TZ = True
+USE_TZ = False
 
 
 
@@ -162,3 +179,8 @@ SIMPLE_JWT = {
 }
 
 AUTH_USER_MODEL = 'users.User'
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]

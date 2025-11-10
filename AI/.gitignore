@@ -1,0 +1,98 @@
+# ================================
+# 🧠 Python / Virtual Env
+# ================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+.venv/
+venv/
+ENV/
+env/
+*.log
+*.tmp
+.DS_Store
+
+# ================================
+# 📦 Dependency / Cache
+# ================================
+*.bak
+*.swp
+*.swo
+.cache/
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+*.pyproj
+.pytest_cache/
+.mypy_cache/
+.pyre/
+__pypackages__/
+
+# ================================
+# 📁 Output / OCR Result Files
+# ================================
+out/
+outputs/
+results/
+*.pages.json
+*.txt
+*.md
+*.pdf
+*.png
+*.jpg
+*.jpeg
+
+# ================================
+# 📄 Config / Secrets
+# ================================
+*.env
+.env.local
+.env.development
+.env.production
+config.yaml
+configs/
+secrets/
+token.json
+
+# ================================
+# 🤖 Ollama / Model / Checkpoints
+# ================================
+*.bin
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.h5
+*.tflite
+*.npz
+*.npy
+ollama/
+ollama_models/
+models/
+checkpoints/
+
+# ================================
+# 💻 IDE / OS Files
+# ================================
+.vscode/
+.idea/
+*.iml
+*.code-workspace
+.DS_Store
+Thumbs.db
+
+# ================================
+# 🧪 Test / Samples
+# ================================
+tests/samples/
+test_imgs/
+test_outputs/
+tmp/
+
+.venv_bak/

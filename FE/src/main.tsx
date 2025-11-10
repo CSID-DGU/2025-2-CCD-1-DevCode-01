@@ -8,6 +8,8 @@ initMode();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <div id="zoom-root">
+      <App />
+    </div>
   </StrictMode>
 );

@@ -11,15 +11,17 @@ class SignupSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['username', 'password', 'role', 'font', 'high_contrast']
+        fields = ['username', 'password', 'role', 'font', 'high_contrast', 'rate', 'voice']
 
     def create(self, validated_data):
         user = User.objects.create_user(
             username=validated_data['username'],
             password=validated_data['password'],
             role=validated_data['role'],
-            font=validated_data.get('font', 125),
-            high_contrast=validated_data.get('high_contrast', False)
+            font=validated_data.get('font'),
+            high_contrast=validated_data.get('high_contrast', False),
+            rate = validated_data.get('rate'),
+            voice = validated_data.get('voice')
         )
         return user
 
@@ -31,6 +33,8 @@ class LoginSerializer(TokenObtainPairSerializer):
         token['role'] = user.role
         token['font'] = user.font
         token['high_contrast'] = user.high_contrast
+        token['rate'] = user.rate
+        token['voice'] = user.voice
 
         return token
 
@@ -46,3 +50,14 @@ class AccessibilitySerializer(serializers.ModelSerializer):
         return instance
     
 
+
+class SoundOptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['rate', 'voice']
+
+    def update(self, instance, validated_data):
+        instance.rate = validated_data.get('rate', instance.rate)
+        instance.voice = validated_data.get('voice', instance.voice)
+        instance.save()
+        return instance

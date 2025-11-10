@@ -112,6 +112,8 @@ web_modules/
 .env.production.local
 .env.local
 
+google_key.json
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
@@ -218,3 +220,45 @@ db.sqlite3
 # DB
 BE/.env
 BE/db.sqlite3
+BE/docs
+BE/embedded
+BE/boards
+
+# ---- Python 기본 ----
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.tmp
+.DS_Store
+
+# ---- 가상환경 ----
+.venv/
+.env/
+env/
+venv/
+
+# ---- 모델 및 대형 파일 ----
+*.pth
+*.pt
+*.bin
+*.onnx
+*.ckpt
+*.h5
+
+# ---- 프로젝트 내 폴더 ----
+models/
+outputs/
+sample/
+runs/
+logs/
+
+# ---- 기타 ----
+.ipynb_checkpoints/
+.vscode/
+.idea/
+*.swp
+
+# 로컬 TTS 파일
+BE/tts_local/

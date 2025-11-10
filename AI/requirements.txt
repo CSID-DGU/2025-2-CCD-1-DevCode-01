@@ -1,0 +1,3 @@
+paddleocr==2.6.1.3
+# macOS ARM용 paddlepaddle:
+# pip install paddlepaddle==2.6.1 -f https://www.paddlepaddle.org.cn/whl/macos.html
