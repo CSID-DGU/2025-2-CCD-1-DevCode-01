@@ -472,7 +472,10 @@ export default function LiveClass() {
       clearRec(dId);
       toast.success("강의를 종료합니다.");
       announce("강의 종료");
-      navigate(`/lecture/doc/${docId}/post`, { replace: true });
+      navigate(`/lecture/doc/${docId}/post`, {
+        replace: true,
+        state: { docId: dId, totalPages },
+      });
     } catch (e) {
       console.error(e);
       toast.error("강의 종료 처리 중 오류가 발생했어요.");
