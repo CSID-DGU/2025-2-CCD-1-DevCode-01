@@ -1,6 +1,5 @@
-// src/pages/class/PostClass.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import { fetchDocPage, fetchPageSummary } from "@apis/lecture/lecture.api";
@@ -51,8 +50,8 @@ export default function PostClass() {
   const [mode, setMode] = useState<"ocr" | "image">(
     role === "assistant" ? "image" : "ocr"
   );
+  const navigate = useNavigate();
 
-  // --- refs / a11y
   const liveRef = useRef<HTMLDivElement | null>(null);
   const mainRegionRef = useRef<HTMLDivElement | null>(null);
   const docBodyRef = useRef<HTMLDivElement | null>(null);
@@ -63,7 +62,6 @@ export default function PostClass() {
 
   const cleanOcr = useMemo(() => formatOcr(docPage?.ocr ?? ""), [docPage?.ocr]);
 
-  // 접근성 설정 이벤트
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === A11Y_STORAGE_KEYS.font) setFontPct(readFontPct());
@@ -74,7 +72,6 @@ export default function PostClass() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // 데이터 로딩
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -93,7 +90,6 @@ export default function PostClass() {
 
         setDocPage(dp);
 
-        // summary
         if (dp.pageId) {
           const [sum, rev] = await Promise.all([
             fetchPageSummary(dp.pageId),
@@ -135,7 +131,6 @@ export default function PostClass() {
     };
   }, [docId, page, role, totalPages, announce]);
 
-  // 포커스-자동읽기
   useFocusTTS({
     enabled: readOnFocus,
     mode,
@@ -210,7 +205,6 @@ export default function PostClass() {
         </Grid>
       </Container>
 
-      {/* 하단 툴바: 이동/보기 토글만 사용 */}
       <BottomToolbar
         canPrev={canPrev}
         canNext={canNext}
@@ -220,12 +214,19 @@ export default function PostClass() {
         onPrev={() => void goToPage(page - 1)}
         onNext={() => void goToPage(page + 1)}
         onToggleMode={toggleMode}
-        /* Post 화면이므로 아래는 no-op */
-        onPause={() => {}}
-        onBookmark={() => {}}
-        onEnd={() => {}}
         onGoTo={(n) => void goToPage(n)}
-        pauseLabel=""
+        startPageId={docPage?.pageId ?? null}
+        onStartLive={(pageId) => {
+          navigate(`/lecture/doc/${docId}/live`, {
+            state: {
+              docId,
+              totalPages,
+              startPage: page,
+              pageId,
+              autoRecord: true,
+            },
+          });
+        }}
       />
     </Wrap>
   );

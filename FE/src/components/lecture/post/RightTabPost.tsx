@@ -157,7 +157,7 @@ const Tab = styled.button`
   ${fonts.regular20};
   &[aria-selected="true"] {
     background: var(--c-blue, #2563eb);
-
+    color: #fff;
     border-color: var(--c-blue, #2563eb);
   }
 `;

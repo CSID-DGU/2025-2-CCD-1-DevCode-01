@@ -15,12 +15,13 @@ type CommonProps = {
   onNext: () => void | Promise<void>;
   onToggleMode: () => void;
   onGoTo: (page: number) => void | Promise<void>;
-  /** 선택: 화면읽기 보조 음성 */
   speak?: (msg: string) => void;
 };
 
 type PreOnly = {
   onStart?: () => void | Promise<void>;
+  startPageId?: number | null;
+  onStartLive?: (pageId: number) => void | Promise<void>;
 };
 
 type LiveOnly = {
@@ -44,6 +45,8 @@ export default function BottomToolbar({
   onGoTo,
   speak,
   onStart,
+  onStartLive,
+  startPageId,
   onPause,
   onBookmark,
   onEnd,
@@ -94,9 +97,25 @@ export default function BottomToolbar({
     speak?.("페이지 번호 입력");
   };
 
+  /* -------- 강의 시작(우선순위: onStartLive → onStart) -------- */
+  const handleStart = () => {
+    if (onStartLive && typeof startPageId === "number" && startPageId > 0) {
+      void onStartLive(startPageId);
+      speak?.(`현재 페이지로 강의를 시작합니다. 페이지 ID ${startPageId}`);
+      return;
+    }
+    if (onStart) {
+      void onStart();
+      speak?.("강의가 시작되었습니다.");
+      return;
+    }
+  };
+
+  const startDisabled =
+    !!onStartLive && !(typeof startPageId === "number" && startPageId > 0);
+
   return (
     <Bar role="toolbar" aria-label="페이지 및 강의 조작">
-      {/* ← → + 현재/전체 + 입력 이동 */}
       <Group>
         <Btn
           onClick={() => {
@@ -163,7 +182,6 @@ export default function BottomToolbar({
         </Btn>
       </Group>
 
-      {/* 라이브 전용 버튼(핸들러가 있을 때만 노출) */}
       {(onPause || onBookmark || onEnd) && (
         <>
           <Divider role="separator" aria-orientation="vertical" />
@@ -208,18 +226,24 @@ export default function BottomToolbar({
         </>
       )}
 
-      {/* 강의 전 전용 버튼(있을 때만 노출) */}
-      {onStart && (
+      {/* 강의 시작(사전) */}
+      {(onStart || onStartLive) && (
         <>
           <Divider role="separator" aria-orientation="vertical" />
           <Group>
             <Primary
               type="button"
-              onClick={() => {
-                void onStart();
-                speak?.("강의가 시작되었습니다.");
-              }}
+              onClick={handleStart}
               onFocus={() => speak?.("강의 시작 버튼")}
+              aria-label={
+                onStartLive
+                  ? startDisabled
+                    ? "페이지 ID가 없어 강의 시작을 할 수 없습니다."
+                    : `현재 페이지로 강의를 시작합니다.`
+                  : "강의 시작"
+              }
+              disabled={startDisabled}
+              title={onStartLive && startDisabled ? "페이지 오류" : undefined}
             >
               ▶ 강의시작
             </Primary>
@@ -241,7 +265,7 @@ const Bar = styled.div`
   justify-content: center;
   gap: 0.75rem;
   height: ${TOOLBAR_H}px;
-  padding: 2rem;
+  padding: 0.75rem 1rem;
   background: var(--c-blue);
   color: var(--c-white);
   border-radius: 0.5rem;
@@ -280,7 +304,6 @@ const Btn = styled.button`
     outline-offset: 2px;
   }
 `;
-
 const Slash = styled.span`
   ${fonts.medium26};
 `;
@@ -292,8 +315,11 @@ const Primary = styled.button`
   border: 2px solid var(--c-white);
   ${fonts.medium26};
   cursor: pointer;
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
 `;
-
 const PageInputWrap = styled.div`
   display: inline-flex;
   align-items: center;
@@ -302,7 +328,6 @@ const PageInputWrap = styled.div`
   padding: 0.1rem 0.4rem;
   background: #ffffff22;
 `;
-
 const PageInput = styled.input`
   width: 3.2ch;
   text-align: center;
