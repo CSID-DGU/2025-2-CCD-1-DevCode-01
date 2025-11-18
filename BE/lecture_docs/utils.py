@@ -177,7 +177,6 @@ def summarize(prompt: str) -> str:
         vertexai.init(
             project=settings.GCP_PROJECT_ID,
             location=settings.GCP_REGION,
-            transport="rest"  # 🚀 DNS 차단 환경에서도 작동하도록 REST 모드 지정
         )
         model = generative_models.GenerativeModel("gemini-2.5-flash")
         response = model.generate_content(prompt)
