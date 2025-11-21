@@ -33,7 +33,8 @@ class DocUploadView(APIView):
                 {
                     "docId": d.id,
                     "title": d.title,
-                    "review": True if d.stt_summary else False,                    
+                    "review": True if d.stt_summary else False,
+                    "timestamp": d.end_time if d.end_time else None,                 
                     "createdAt": d.created_at.strftime("%Y-%m-%d %H:%M")
                 }
                 for d in docs
@@ -311,19 +312,23 @@ class DocSttSummaryView(APIView):
         if not doc:
             return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
+        timestamp = request.data.get("timestamp") # 수업 종료 시점
+        
         # ✅ 요약 + TTS 생성
         summary, tts_url = summarize_stt(doc.id, user=request.user)
 
         # ✅ 결과 DB 반영
         doc.stt_summary = summary
         doc.stt_summary_tts = tts_url
+        doc.end_time = timestamp
         doc.save()
 
         return Response({
             "message": "STT 요약문 및 음성 파일이 성공적으로 생성되었습니다.",
             "doc_id": doc.id,
             "stt_summary": doc.stt_summary,
-            "stt_summary_tts": doc.stt_summary_tts
+            "stt_summary_tts": doc.stt_summary_tts,
+            "timestamp": doc.end_time
         }, status=status.HTTP_200_OK)
 
     def patch(self, request, docId):
