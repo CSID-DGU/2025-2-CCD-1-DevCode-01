@@ -49,6 +49,10 @@ class LectureDetailView(APIView):
         lecture = self.get_object(lectureId)
         if not lecture:
             return Response({"error": "해당 강의를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+        
+        if request.user != lecture.student and request.user != lecture.assistant:
+            return Response({"error": "본인이 속한 강의만 조회할 수 있습니다."},
+                            status=status.HTTP_403_FORBIDDEN)
 
         serializer = LectureSerializer(lecture)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -74,17 +78,25 @@ class LectureDetailView(APIView):
         }, status=status.HTTP_200_OK)
     
     def delete(self, request, lectureId):
-        """강의 삭제"""
+        """강의 삭제: 사용자만 제거"""
         lecture = self.get_object(lectureId)
         if not lecture:
             return Response({"error": "해당 강의를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
         user = request.user
-        if lecture.student != user and lecture.assistant != user:
-            return Response({"error": "본인이 만든 강의만 삭제할 수 있습니다."},
-                            status=status.HTTP_403_FORBIDDEN)
 
-        lecture.delete()
+        if lecture.student == user:
+            lecture.student = None
+        elif lecture.assistant == user:
+            lecture.assistant = None
+        else:
+            return Response({"error": "본인의 강의만 삭제할 수 있습니다."},
+                            status=status.HTTP_403_FORBIDDEN)
+        
+        # 강의에 연결된 학생과 도우미가 모두 없으면 강의 삭제
+        if lecture.student is None and lecture.assistant is None:
+            lecture.delete()
+
         return Response({"message": "강의 폴더가 삭제되었습니다."}, status=status.HTTP_204_NO_CONTENT)
     
 class LectureJoinView(APIView):
