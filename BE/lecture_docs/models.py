@@ -1,3 +1,4 @@
+from typing import Dict, List
 from django.db import models
 from users.models import *
 from lectures.models import *
@@ -39,3 +40,4 @@ class Board(models.Model):
     board_tts =  models.URLField(blank=True, null=True) 
     image = models.URLField(blank=True, null=True) #판서이미지
     created_at = models.DateTimeField(auto_now_add=True)
+

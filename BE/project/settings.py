@@ -1,4 +1,3 @@
-
 """
 Django settings for project project.
 
@@ -30,12 +29,13 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',    
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -52,7 +52,6 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt', 
     'channels',   
-    'storages'
 ]
 
 MIDDLEWARE = [
@@ -112,7 +111,7 @@ DATABASES = {
 
 # Google Cloud Key 환경변수 등록
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-GCP_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
+
 # AWS S3 환경변수 등록
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
@@ -125,6 +124,8 @@ AWS_S3_BASE_URL = os.getenv(
     f"https://{AWS_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com"
 )
 
+# Password validation
+# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -173,13 +174,31 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME' : timedelta(hours=1),
+    'ACCESS_TOKEN_LIFETIME' : timedelta(days=1),
     'REFRESH_TOKEN_LIFETIME' : timedelta(days=30),
 }
 
 AUTH_USER_MODEL = 'users.User'
 
+ASGI_APPLICATION = "project.asgi.application"
+
+CHANNEL_LAYERS = {
+    # "default": {
+    #     # "BACKEND": "channels_redis.core.RedisChannelLayer",
+    #     "CONFIG": {"hosts": [("127.0.0.1", 6379)]},
+    # },
+    "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
+}
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
+    "http://localhost:5174",
     "http://127.0.0.1:5173",
 ]
+
+#celery
+CELERY_BROKER_URL = "redis://localhost:6379/0"
+CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'Asia/Seoul'
