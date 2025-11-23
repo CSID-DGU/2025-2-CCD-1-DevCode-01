@@ -2,7 +2,7 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from classes.serializers import SpeechCreateSerializer
 from classes.models import Bookmark, Note, Speech
-from classes.utils import get_duration, speech_to_text, text_to_speech, text_to_speech_local, time_to_seconds
+from classes.utils import extract_text, get_duration, speech_to_text, text_to_speech, text_to_speech_local, time_to_seconds
 from lecture_docs.models import Page
 from rest_framework.response import Response
 from rest_framework import status, generics, permissions
@@ -37,7 +37,7 @@ class SpeechView(generics.CreateAPIView):
             end_time_sec = time_to_seconds(end_time)
                 
             # 1️⃣ STT 변환
-            stt_text = speech_to_text(audio)
+            stt_text, stt_words = speech_to_text(audio)
             if not stt_text or stt_text.strip() == "":
                 return JsonResponse({"error": "변환된 텍스트가 비어 있습니다."}, status=400)
 
@@ -45,6 +45,16 @@ class SpeechView(generics.CreateAPIView):
             s3_url = text_to_speech(stt_text, user, s3_folder="tts/speech/")
 
             duration_sec, duration = get_duration(audio)
+
+            bookmarks = Bookmark.objects.filter(page=page)
+
+            start_time_sec = end_time_sec - duration_sec
+            
+            for b in bookmarks:
+                if start_time_sec <= b.timestamp_sec <= end_time_sec:
+                    b.relative_time = round(b.timestamp_sec - start_time_sec)
+                    b.text = extract_text(stt_words, b.relative_time, user)
+                    b.save(update_fields=['relative_time', 'text'])
 
             # 3️⃣ DB 저장
             speech = Speech.objects.create(
@@ -138,25 +148,22 @@ class BookmarkDetailView(APIView):
         except Bookmark.DoesNotExist:
             return JsonResponse({"error": "해당 북마크를 찾을 수 없습니다."}, status=404)
         
-        speeches = Speech.objects.filter(page__doc=bookmark.page.doc)
-
+        # 해당 북마크와 매칭되는 Speech 찾기
+        speeches = Speech.objects.filter(page=bookmark.page)
         matched_speech = next(
             (
                 s for s in speeches
-                if(s.end_time_sec - s.duration_sec) <= bookmark.timestamp_sec <= s.end_time_sec
-            ), None
+                if (s.end_time_sec - s.duration_sec) <= bookmark.timestamp_sec <= s.end_time_sec
+            ),
+            None
         )
 
-        if not matched_speech:
-            return JsonResponse({"error": "해당 북마크에 매칭되는 음성 파일이 없습니다."}, status=404)
-        
+        stt_tts = matched_speech.stt_tts if matched_speech else None
 
-        start_time_sec = matched_speech.end_time_sec - matched_speech.duration_sec
-        relative_time = round(bookmark.timestamp_sec - start_time_sec, 2)
-        
         return JsonResponse({
-            "stt_tts": matched_speech.stt_tts,
-            "relative_time": relative_time
+            "stt_tts": stt_tts,
+            "relative_time": bookmark.relative_time,
+            "text": bookmark.text,
         }, status=200)
     
     def delete(self, request, bookmarkId):
@@ -166,7 +173,7 @@ class BookmarkDetailView(APIView):
             return JsonResponse({"error": "해당 북마크를 찾을 수 없습니다."}, status=404)
         
         bookmark.delete()
-        return JsonResponse({"message": "북마크가 삭제되었습니다."}, status=204)
+        return JsonResponse({"message": "북마크가 삭제되었습니다."}, status=200)
     
 class NoteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
