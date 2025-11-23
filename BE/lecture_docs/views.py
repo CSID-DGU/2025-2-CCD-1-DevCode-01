@@ -439,7 +439,7 @@ class ExamTTSView(APIView):
             return Response({"error": "text 파라미터 필요"}, status=400)
 
         decoded_text = unquote(text)
-        audio_bytes = exam_tts_bytes(decoded_text, request.user)
+        audio_bytes = exam_tts(decoded_text, request.user)
 
         response = HttpResponse(audio_bytes, content_type="audio/mp3")
         response["Content-Disposition"] = 'inline; filename="tts.mp3"'
@@ -451,7 +451,8 @@ class ExamOCRView(APIView):
     def post(self, request):
         if 'image' not in request.FILES:
             return Response({"error": "이미지를 업로드하세요."}, status=400)
-
+        
+        #임시 데이터
         ocr_text = "ocr text"  
         question_number = 1  
 

@@ -141,7 +141,7 @@ def upload_s3(file_obj, file_name, folder=None, content_type=None):
     except Exception as e:
         raise Exception(f"S3 업로드 실패: {e}")
 
-def exam_tts_bytes(text: str, user: User):
+def exam_tts(text: str, user: User):
     client = texttospeech.TextToSpeechClient(transport="rest")
 
     synthesis_input = texttospeech.SynthesisInput(text=text)
