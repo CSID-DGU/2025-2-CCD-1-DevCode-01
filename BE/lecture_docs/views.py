@@ -22,7 +22,7 @@ from campusmate_ai.ocr_light.cli.pipeline import run_pipeline
 #교안 업로드/조회
 class DocUploadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    #교안 리스트 조회
+    #교안 조회
     def get(self, request, lectureId):
         lecture = Lecture.objects.get(id=lectureId)
 
@@ -33,8 +33,8 @@ class DocUploadView(APIView):
         return Response({
             "lectureId": lecture.id,
             "doc": serializer.data
-        }, status=status.HTTP_200_OK)   
-    #교안 업로드
+        }, status=status.HTTP_200_OK)
+    #교안 업로드 
     def post(self, request, lectureId):
         lecture = get_object_or_404(Lecture, id=lectureId)
         file = request.FILES.get("file")
@@ -45,37 +45,15 @@ class DocUploadView(APIView):
 
         doc = Doc.objects.create(lecture=lecture, title=file.name)
 
-        pdf = fitz.open(stream=file.read(), filetype="pdf")
-        file.seek(0)
+        pdf_bytes = file.read()  
 
-        for page_num, page in enumerate(pdf, start=1):
+        run_pdf_processing.delay(doc.id, pdf_bytes)
 
-            page_obj = Page.objects.create(
-                doc=doc,
-                page_number=page_num
-            )
+        return Response({
+            "docId": doc.id,
+            "title": doc.title
+        }, status=201)
 
-            image_bytes = pdf_to_image(page, doc.title, page_num)
-            raw_bytes = image_bytes.getvalue()
-            s3_key = f"docs/{doc.id}/pages/page_{page_num}.png"
-
-            # 비동기 OCR 실행
-            run_page_ocr.delay(
-                page_id=page_obj.id,
-                raw_bytes=raw_bytes,
-                s3_key=s3_key
-            )
-
-        pdf.close()
-
-        serializer = DocSerializer(doc)
-        return Response(
-            {
-                "doc": serializer.data,
-                "status": "processing"
-            },
-            status=status.HTTP_201_CREATED
-        )
     
 #교안 TTS
 class PageTTSView(APIView):
@@ -177,25 +155,25 @@ class PageDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, docId, pageNumber):
-        
+
         try:
             doc = Doc.objects.get(id=docId)
         except Doc.DoesNotExist:
-            return Response({"detail": "문서를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
-
+            return Response({"detail": "문서를 찾을 수 없습니다."},
+                            status=status.HTTP_404_NOT_FOUND)
         try:
             page = doc.pages.get(page_number=pageNumber)
         except Page.DoesNotExist:
-            return Response({"detail": "페이지를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "페이지를 찾을 수 없습니다."},
+                            status=status.HTTP_404_NOT_FOUND)
 
-        return Response({
-                "docId": doc.id,
-                "pageNumber": page.page_number,
-                "totalPage" : doc.pages.count(),
-                "pagId": page.id,
-                "image": page.image if page.image else None,
-                "ocr": page.ocr if page.ocr else None,   
-            }, status=status.HTTP_200_OK)
+        data = PageSerializer(page).data
+
+        if not page.ocr:
+            return Response(data, status=status.HTTP_202_ACCEPTED)
+
+        return Response(data, status=status.HTTP_200_OK)
+
     
 #판서   
 class BoardView(APIView):

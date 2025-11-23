@@ -23,3 +23,28 @@ class DocUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Doc
         fields = ["docId", "title"]
+
+
+class PageSerializer(serializers.ModelSerializer):
+    docId = serializers.IntegerField(source="doc.id")
+    pagId = serializers.IntegerField(source="id")
+    totalPage = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Page
+        fields = [
+            "docId",
+            "page_number",
+            "totalPage",
+            "pagId",
+            "image",
+            "ocr",
+            "status",
+        ]
+
+    def get_totalPage(self, obj):
+        return obj.doc.pages.count()
+
+    def get_status(self, obj):
+        return "done" if obj.ocr else "processing"
