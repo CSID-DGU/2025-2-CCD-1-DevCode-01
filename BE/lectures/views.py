@@ -87,8 +87,10 @@ class LectureDetailView(APIView):
 
         if lecture.student == user:
             lecture.student = None
+            lecture.save(update_fields=['student'])
         elif lecture.assistant == user:
             lecture.assistant = None
+            lecture.save(update_fields=['assistant'])
         else:
             return Response({"error": "본인의 강의만 삭제할 수 있습니다."},
                             status=status.HTTP_403_FORBIDDEN)
