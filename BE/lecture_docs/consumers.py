@@ -24,49 +24,57 @@ async def user_from_token(token):
 
 
 class DocSync(AsyncJsonWebsocketConsumer):
-    #웹소켓 on/off
+
     async def connect(self):
         query = parse_qs(self.scope["query_string"].decode())
         token = query.get("token", [None])[0]
 
         self.user = await user_from_token(token)
 
+        if not self.user:
+            await self.close()
+            return
+
         self.doc_id = self.scope["url_route"]["kwargs"]["doc_id"]
         self.group_name = f"doc_{self.doc_id}"
+
+        self.sync_enabled = False
 
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
 
-        if self.user.role == "student":
-            await self.send_json({
-                "type": "FORCE_MOVE_REQUEST"
-            })
-
-
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
-
 
     async def receive_json(self, content):
         msg_type = content.get("type")
 
-        if msg_type == "FORCE_MOVE":
-            page = content.get("page")
-            await self.channel_layer.group_send(
-                self.group_name,
-                {
-                    "type": "force_move",
-                    "page": page,
-                },
-            )
+        #소켓 on/off
+        if msg_type == "TOGGLE_SYNC":
+            enabled = bool(content.get("enabled", True))
+            self.sync_enabled = enabled
+
+            await self.send_json({
+                "type": "SYNC_STATUS",
+                "enabled": self.sync_enabled,
+            })
+
+            if self.user.role == "student" and self.sync_enabled:
+                await self.send_json({
+                    "type": "FORCE_MOVE_REQUEST"
+                })
+
             return
 
+        #페이지 이동
         if msg_type == "PAGE_CHANGE":
+            page = content.get("page")
+            if page is None:
+                return
 
             if self.user.role != "assistant":
                 return
-
-            page = content.get("page")
+            
             await self.channel_layer.group_send(
                 self.group_name,
                 {
@@ -75,7 +83,8 @@ class DocSync(AsyncJsonWebsocketConsumer):
                 },
             )
             return
-
+        
+        #판서
         if msg_type == "BOARD_EVENT":
             await self.channel_layer.group_send(
                 self.group_name,
@@ -85,18 +94,19 @@ class DocSync(AsyncJsonWebsocketConsumer):
                     "data": content.get("data", {}),
                 },
             )
-
+            return
+        
     async def page_change(self, event):
+        page = event["page"]
+
+        if self.user.role == "student" and not self.sync_enabled:
+            return
+
         await self.send_json({
             "type": "PAGE_CHANGE",
-            "page": event["page"],
+            "page": page,
         })
 
-    async def force_move(self, event):
-        await self.send_json({
-            "type": "FORCE_MOVE",
-            "page": event["page"],
-        })
 
     async def board_event(self, event):
         await self.send_json({
