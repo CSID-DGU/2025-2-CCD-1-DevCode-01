@@ -1,3 +1,4 @@
+from typing import Dict, List
 from django.db import models
 from users.models import *
 from lectures.models import *
@@ -21,7 +22,7 @@ class Doc(models.Model):
 class Page(models.Model):
     doc = models.ForeignKey(Doc, on_delete=models.CASCADE, related_name='pages', null=True, blank=True)
     page_number = models.IntegerField()
-    image = models.URLField(blank=True, null=True) #판서이미지 # 변환된 이미지 경로 (S3에 업로드)
+    image = models.URLField(blank=True, null=True)
     ocr = models.TextField(blank=True, null=True)  # OCR 결과 텍스트
     page_tts =  models.URLField(blank=True, null=True) 
     summary = models.TextField(blank=True, null=True) 
@@ -40,3 +41,4 @@ class Board(models.Model):
     board_tts =  models.URLField(blank=True, null=True) 
     image = models.URLField(blank=True, null=True) #판서이미지
     created_at = models.DateTimeField(auto_now_add=True)
+

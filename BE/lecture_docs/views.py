@@ -1,171 +1,181 @@
 from io import BytesIO
 import os
-from pathlib import Path
-import subprocess
 import tempfile
 from django.shortcuts import get_object_or_404
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import fitz
+from .serializers import *
+from .ocr import pdf_to_image
 from rest_framework.views import APIView
 from rest_framework import status,permissions
 from rest_framework.response import Response
-from django.core.files.base import ContentFile
 from classes.models import Bookmark, Note, Speech
 from classes.models import Bookmark, Note, Speech
 from classes.utils import text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
 from .utils import  *
+from .ocr import *
 from campusmate_ai.ocr_light.cli.pipeline import run_pipeline
 
+#교안 업로드/조회
 class DocUploadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    #파일목록조회
+    #교안 조회
     def get(self, request, lectureId):
         lecture = Lecture.objects.get(id=lectureId)
-        
+
         docs = Doc.objects.filter(lecture=lecture).exclude(users=request.user)
 
-        data = {
+        serializer = DocSerializer(docs, many=True)
+
+        return Response({
             "lectureId": lecture.id,
-            "doc": [
-                {
-                    "docId": d.id,
-                    "title": d.title,
-                    "review": True if d.stt_summary else False,
-                    "timestamp": d.end_time if d.end_time else None,                 
-                    "createdAt": d.created_at.strftime("%Y-%m-%d %H:%M")
-                }
-                for d in docs
-            ]
-        }
-        return Response(data, status=status.HTTP_200_OK)
-    
-    #파일업로드
+            "doc": serializer.data
+        }, status=status.HTTP_200_OK)
+    #교안 업로드 
     def post(self, request, lectureId):
-        lecture = Lecture.objects.get(id=lectureId)
+        lecture = get_object_or_404(Lecture, id=lectureId)
         file = request.FILES.get("file")
 
+        if not file:
+            return Response({"error": "file 필드가 비어 있습니다."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
         doc = Doc.objects.create(lecture=lecture, title=file.name)
-        pdf = fitz.open(stream=file.read(), filetype="pdf")
-        file.seek(0)
 
-        for page_num, page in enumerate(pdf, start=1):
+        pdf_bytes = file.read()  
 
-            # Page 객체 생성
-            page_obj = Page.objects.create(
-                doc=doc,
-                page_number=page_num
-            )
-            image_bytes = pdf_to_image(page, doc.title, page_num)
-            s3_key = f"docs/{doc.id}/pages/page_{page_num}.png"
-
-            # OCR 수행 
-            try:
-                page_ocr(page_obj, image_bytes, s3_key)
-            except Exception as e:
-                print(f"[오류] {page_num}페이지 OCR 실패:", e)
-                page_obj.ocr = "OCR 변환 실패"
-                page_obj.save(update_fields=["ocr"])
-                continue  
-            
-            text = page_obj.ocr
-
-            # OCR TTS
-            try:
-                tts_url = text_to_speech(
-                    text,
-                    user=request.user,
-                    s3_folder="tts/page_ocr/"  
-                )
-            except Exception as e:
-                return Response({"error": f"TTS 변환 중 오류 발생: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-            page_obj.page_tts = tts_url
-            page_obj.save(update_fields=["page_tts"]) 
-            
-            # 요약+요약tts
-            summary, summary_tts = None, None
-            if text and text.strip():
-                try:
-                    summary = summarize_doc(doc.id, text)
-                    summary_tts = text_to_speech(
-                        summary, 
-                        user=request.user, 
-                        s3_folder="tts/page_summary/"
-                    )
-                    page_obj.summary = summary
-                    page_obj.summary_tts = summary_tts
-                    page_obj.save(update_fields=["summary", "summary_tts"])
-
-                except Exception as e:
-                    raise ValueError(f"[{page_num}] 페이지 요약 생성 실패: {e}")
-
-        pdf.close()
+        run_pdf_processing.delay(doc.id, pdf_bytes)
 
         return Response({
             "docId": doc.id,
-            "docTitle": doc.title,
-        }, status=status.HTTP_201_CREATED)
+            "title": doc.title
+        }, status=201)
+
+    
+#교안 TTS
+class PageTTSView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, pageId):
+        page = get_object_or_404(Page, id=pageId)
+
+        if not page.ocr:
+            return Response({"error": "OCR이 완료되지 않았습니다."}, status=400)
+        
+        if page.page_tts:
+            return Response({"tts": page.page_tts}, status=200)
+        try:
+            tts_url = text_to_speech(
+                page.ocr,
+                user=request.user,
+                s3_folder="tts/page_ocr/"
+            )
+        except Exception as e:
+            return Response({"error": f"TTS 오류: {e}"}, status=500)
+
+        page.page_tts = tts_url
+        page.save(update_fields=["page_tts"])
+
+        return Response({"tts": page.page_tts}, status=201)
 
 
+#교안 ocr 요약
+class PageSummaryView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
 
+    def post(self, request, pageId):
+        page = get_object_or_404(Page, id=pageId)
+
+        if not page.ocr:
+            return Response({"error": "OCR 완료 전입니다."}, status=400)
+
+        if page.summary:
+            return Response({
+                "summary": page.summary,
+                "summary_tts": page.summary_tts
+            }, status=200)
+
+        try:
+            summary = summarize_doc(page.doc.id, page.ocr)
+        except Exception as e:
+            return Response({"error": f"요약 생성 실패: {e}"}, status=500)
+
+        try:
+            summary_tts = text_to_speech(
+                summary,
+                user=request.user,
+                s3_folder="tts/page_summary/"
+            )
+        except Exception:
+            summary_tts = None
+
+        page.summary = summary
+        page.summary_tts = summary_tts
+        page.save(update_fields=["summary", "summary_tts"])
+
+        return Response({
+            "summary": page.summary,
+            "summary_tts": page.summary_tts
+        }, status=201)
+
+
+#교안 수정 삭제
 class DocDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    def get_queryset(self):
-        return Doc.objects.all()       
-    
-        
+    def get_object(self, docId):
+        return get_object_or_404(Doc, id=docId)
+    #교안 제목 수정
     def patch(self, request, docId):
-            doc = self.get_queryset().get(id=docId)
-            new_title = request.data.get("title")
-            doc.title = new_title
-            doc.save()
-            return Response({"docId": doc.id, "title": doc.title}, status=200)
-
+        doc = self.get_object(docId)
+        serializer = DocUpdateSerializer(doc, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=200)
+        return Response(serializer.errors, status=400)
+    #교안 삭제
     def delete(self, request, docId):
-        doc = self.get_queryset().get(id=docId)
+        doc = self.get_object(docId)
 
         doc.users.add(request.user)
 
-        lecture_users = [doc.lecture.assistant, doc.lecture.student] 
+        lecture_users = [doc.lecture.assistant, doc.lecture.student]
         deleted_users = list(doc.users.all())
 
-        if all(u in deleted_users for u in lecture_users if u is not None):
+        if all(u in deleted_users for u in lecture_users if u):
             doc.delete()
             return Response({"message": "파일이 삭제되었습니다."}, status=200)
 
-
         return Response({"message": "파일이 삭제되었습니다."}, status=200)
 
-
-
+#페이지 교안조회
 class PageDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, docId, pageNumber):
-        
+
         try:
             doc = Doc.objects.get(id=docId)
         except Doc.DoesNotExist:
-            return Response({"detail": "문서를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
-
+            return Response({"detail": "문서를 찾을 수 없습니다."},
+                            status=status.HTTP_404_NOT_FOUND)
         try:
             page = doc.pages.get(page_number=pageNumber)
         except Page.DoesNotExist:
-            return Response({"detail": "페이지를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "페이지를 찾을 수 없습니다."},
+                            status=status.HTTP_404_NOT_FOUND)
 
-        return Response({
-                "docId": doc.id,
-                "pageNumber": page.page_number,
-                "totalPage" : doc.pages.count(),
-                "pagId": page.id,
-                "image": page.image if page.image else None,
-                "ocr": page.ocr if page.ocr else None,
-                "tts": page.page_tts,   
-            }, status=status.HTTP_200_OK)
+        data = PageSerializer(page).data
+
+        if not page.ocr:
+            return Response(data, status=status.HTTP_202_ACCEPTED)
+
+        return Response(data, status=status.HTTP_200_OK)
+
     
+#판서   
 class BoardView(APIView):
 
     permission_classes = [permissions.IsAuthenticated]
@@ -282,6 +292,8 @@ class BoardView(APIView):
         )
 
         return Response({"message": "판서가 삭제되었습니다."}, status=status.HTTP_200_OK)
+
+# 교수발화 요약  
 class DocSttSummaryView(APIView):
     """
     교안 STT 요약문 생성 및 수정
@@ -355,55 +367,8 @@ class DocSttSummaryView(APIView):
             "stt_summary": doc.stt_summary,
             "stt_summary_tts": doc.stt_summary_tts
         }, status=status.HTTP_200_OK)
-    
-class DocSummaryView(APIView):
-    """
-    교안 OCR 요약문 조회 및 수정
-    """
 
-    def get_object(self, pageId):
-        try:
-            return Page.objects.get(id=pageId)
-        except Page.DoesNotExist:
-            return None
-        
-    def get(self, request, pageId):
-        """교안 요약문 조회"""
-        page = self.get_object(pageId)
-        if not page:
-            return Response({"error": "해당 페이지를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
-
-        return Response({
-            "page_id": page.id,
-            "summary": page.summary or None,
-            "summary_tts": page.summary_tts or None
-        }, status=status.HTTP_200_OK)
-
-    def patch(self, request, pageId):
-        """교안 요약문 직접 수정 시 TTS 재생성"""
-        page = self.get_object(pageId)
-        if not page:
-            return Response({"error": "해당 페이지를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
-
-        new_summary = request.data.get("summary")
-        if not new_summary or not new_summary.strip():
-            return Response({"error": "수정할 summary 내용이 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # ✅ 수정된 요약 저장
-        page.summary = new_summary.strip()
-
-        # ✅ 수정된 텍스트로 새 TTS 생성
-        tts_url = text_to_speech(page.summary, user=request.user, s3_folder="tts/page_summary/")
-        page.summary_tts = tts_url
-        page.save()
-
-        return Response({
-            "message": "요약문이 성공적으로 수정되고 새 TTS가 생성되었습니다.",
-            "page_id": page.id,
-            "summary": page.summary,
-            "summary_tts": page.summary_tts
-        }, status=status.HTTP_200_OK)
-    
+#review    
 class PageView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -453,17 +418,6 @@ class PageView(APIView):
             for bookmark in bookmarks
         ]
 
-        # boards = Board.objects.filter(page=page).order_by("-created_at")
-        # board_data = [
-        #     {
-        #         "board_id": board.id,
-        #         "text": board.text or None,
-        #         "image": board.image.url if board.image else None,
-        #         "board_tts": board.board_tts or None,
-        #     }
-        #     for board in boards
-        # ]
-
         return Response({
             # "page": page_data,
             "note": note_data,
@@ -471,3 +425,4 @@ class PageView(APIView):
             "bookmarks": bookmark_data,
             # "boards": board_data,
         }, status=status.HTTP_200_OK)
+    

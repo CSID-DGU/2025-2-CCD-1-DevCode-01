@@ -32,8 +32,3 @@ class Bookmark(models.Model):
     text = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-#시험 DB저장x
-@dataclass
-class Exam:
-    title: str
-    questions: List[Dict[str, str]] = field(default_factory=list)
