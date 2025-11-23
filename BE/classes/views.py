@@ -173,7 +173,7 @@ class BookmarkDetailView(APIView):
             return JsonResponse({"error": "해당 북마크를 찾을 수 없습니다."}, status=404)
         
         bookmark.delete()
-        return JsonResponse({"message": "북마크가 삭제되었습니다."}, status=204)
+        return JsonResponse({"message": "북마크가 삭제되었습니다."}, status=200)
     
 class NoteView(APIView):
     permission_classes = [permissions.IsAuthenticated]

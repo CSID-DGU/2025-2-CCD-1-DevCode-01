@@ -99,7 +99,7 @@ class LectureDetailView(APIView):
         if lecture.student is None and lecture.assistant is None:
             lecture.delete()
 
-        return Response({"message": "강의 폴더가 삭제되었습니다."}, status=status.HTTP_204_NO_CONTENT)
+        return Response({"message": "강의 폴더가 삭제되었습니다."}, status=200)
     
 class LectureJoinView(APIView):
     permission_classes = [permissions.IsAuthenticated]
