@@ -54,11 +54,6 @@ class DocSync(AsyncJsonWebsocketConsumer):
             enabled = bool(content.get("enabled", True))
             self.sync_enabled = enabled
 
-            await self.send_json({
-                "type": "SYNC_STATUS",
-                "enabled": self.sync_enabled,
-            })
-
             if self.user.role == "student" and self.sync_enabled:
                 await self.send_json({
                     "type": "FORCE_MOVE_REQUEST"
