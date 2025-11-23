@@ -21,7 +21,7 @@ class Doc(models.Model):
 class Page(models.Model):
     doc = models.ForeignKey(Doc, on_delete=models.CASCADE, related_name='pages', null=True, blank=True)
     page_number = models.IntegerField()
-    image = models.URLField(blank=True, null=True) #판서이미지 # 변환된 이미지 경로 (S3에 업로드)
+    image = models.URLField(blank=True, null=True)
     ocr = models.TextField(blank=True, null=True)  # OCR 결과 텍스트
     page_tts =  models.URLField(blank=True, null=True) 
     summary = models.TextField(blank=True, null=True) 

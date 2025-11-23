@@ -108,18 +108,22 @@ class PageTTSView(APIView):
 class PageSummaryView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def post(self, request, docId, pageNumber):
-        page = get_object_or_404(Page, doc_id=docId, page_number=pageNumber)
+    def post(self, request, pageId):
+        page = get_object_or_404(Page, id=pageId)
 
         if not page.ocr:
             return Response({"error": "OCR 완료 전입니다."}, status=400)
 
         if page.summary:
-            return Response({"summary": page.summary, 
-                            "summary_tts": page.summary_tts},
-                            status=200)
-        
-        summary = summarize_doc(page.doc.id, page.ocr)
+            return Response({
+                "summary": page.summary,
+                "summary_tts": page.summary_tts
+            }, status=200)
+
+        try:
+            summary = summarize_doc(page.doc.id, page.ocr)
+        except Exception as e:
+            return Response({"error": f"요약 생성 실패: {e}"}, status=500)
 
         try:
             summary_tts = text_to_speech(
@@ -132,11 +136,13 @@ class PageSummaryView(APIView):
 
         page.summary = summary
         page.summary_tts = summary_tts
-        page.save()
+        page.save(update_fields=["summary", "summary_tts"])
 
-        return Response({"summary": page.summary, 
-                            "summary_tts": page.summary_tts},
-                            status=201)
+        return Response({
+            "summary": page.summary,
+            "summary_tts": page.summary_tts
+        }, status=201)
+
 
 #교안 수정 삭제
 class DocDetailView(APIView):
