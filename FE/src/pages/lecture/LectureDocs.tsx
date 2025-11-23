@@ -5,7 +5,8 @@ import UploadBar from "src/components/lecture/UploadBar";
 import { DocList, ListItem } from "src/components/lecture/DocList";
 import DocItem from "src/components/lecture/DocItem";
 import { useLectureDocs } from "src/hooks/useLectureDocs";
-import MemoCard from "src/components/lecture/MemoCard";
+import MemoListCard from "src/components/lecture/MemoCard";
+import { useLectureMemoList } from "src/hooks/useLectureMemoList";
 
 type RouteParams = { courseId?: string };
 
@@ -20,6 +21,13 @@ export default function LectureDocs() {
     hasValidId ? lectureNumericId : null
   );
 
+  const {
+    loading: memoLoading,
+    items,
+    saveAll,
+    iconOf,
+  } = useLectureMemoList(hasValidId ? lectureNumericId : null);
+
   const fmtDate = (iso: string) => {
     try {
       const d = new Date(iso);
@@ -33,7 +41,10 @@ export default function LectureDocs() {
   };
 
   return (
-    <Wrap aria-busy={busy} aria-labelledby="lecture-docs-heading">
+    <Wrap
+      aria-busy={busy || memoLoading}
+      aria-labelledby="lecture-docs-heading"
+    >
       <SrOnly as="h1" id="lecture-docs-heading">
         교안 목록
       </SrOnly>
@@ -70,12 +81,13 @@ export default function LectureDocs() {
       </Left>
 
       <Right role="complementary" aria-label="메모">
-        <MemoCard
-          initialValue={"• 다음주까지 과제 제출\n• 수업 때 명찰 꼭 가져오기"}
-          // TODO: API 연결
-          onSave={async (text) => {
-            console.log("memo saved:", { lectureId: lectureNumericId, text });
+        <MemoListCard
+          items={items}
+          onSaveAll={async (lines) => {
+            if (!hasValidId) return;
+            await saveAll(lines);
           }}
+          iconOf={iconOf}
           stickyTop="1rem"
         />
       </Right>

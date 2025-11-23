@@ -12,6 +12,7 @@ class Doc(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     stt_summary = models.TextField(blank=True, null=True)
     stt_summary_tts = models.URLField(blank=True, null=True)
+    end_time = models.CharField(max_length=10, blank=True, null=True)
     users = models.ManyToManyField("users.User", blank=True, related_name="hidden_docs")
     def __str__(self):
         return f"{self.title}"

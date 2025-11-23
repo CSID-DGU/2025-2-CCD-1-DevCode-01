@@ -13,6 +13,8 @@ export interface LoginResponse {
   high_contrast: boolean;
   username: string;
   message?: string;
+  rate: string;
+  voice: string;
 }
 
 export const loginApi = async (data: LoginRequest) => {

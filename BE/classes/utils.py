@@ -95,7 +95,7 @@ def speech_to_text(audio_file) -> str:
     짧은 음성(1초 미만) 또는 변환 결과가 없을 경우 예외 처리
     """
 
-    client = speech.SpeechClient()
+    client = speech.SpeechClient(transport="rest")
 
     # 1️⃣ 메모리에서 파일 내용 바로 읽기
     audio_file.seek(0)
@@ -123,10 +123,13 @@ def speech_to_text(audio_file) -> str:
         enable_separate_recognition_per_channel=False,
         model="latest_long",
         use_enhanced=True,
-        enable_automatic_punctuation=True
+        enable_automatic_punctuation=True,
+        enable_word_time_offsets=True # 단어 단위 구간 제공
     )
 
     transcript = ""
+    stt_words = []
+    offset = 0.0
 
     for chunk in chunks:
         with open(chunk, "rb") as f:
@@ -142,14 +145,55 @@ def speech_to_text(audio_file) -> str:
             response = operation.result(timeout=900)
 
         if response.results:
-            text = " ".join([r.alternatives[0].transcript.strip() for r in response.results])
-            transcript += text + " "
+            for result in response.results:
+                alt = result.alternatives[0]
+                transcript += alt.transcript.strip() + " "
+
+                if alt.words:
+                    for w in alt.words:
+                        start = w.start_time.total_seconds() + offset
+                        end = w.end_time.total_seconds() + offset
+
+                        stt_words.append({
+                            "word": w.word,
+                            "start": start,
+                            "end": end
+                        })
 
         os.remove(chunk)
+
     if not transcript or transcript.strip() == "":
         raise ValueError("인식된 텍스트가 비어 있습니다.")
 
-    return transcript
+    return transcript, stt_words
+
+def extract_text(stt_words, relative_time, user: User):
+    for w in stt_words:
+        if w["start"] <= relative_time <= w["end"]:
+            return find_full_text(stt_words, w, user)
+    return None
+
+def find_full_text(stt_words, target_word, user: User):
+    idx = stt_words.index(target_word)
+
+    # 오른쪽으로 wps초 구간만 추출
+    sentence_words = [target_word["word"]]
+    start_time = target_word["start"]
+
+    if user.rate == "느림":
+        wps = 4.0
+    elif user.rate == "빠름":
+        wps = 8.0
+    else:
+        wps = 6.0  # 기본값
+    
+    for w in stt_words[idx+1:]:
+        if w["end"] - start_time > wps: # 시작 단어 기준으로 wps초
+            break
+        sentence_words.append(w["word"])
+    
+    # 단어 결합 (▁ 제거하고 공백 처리)
+    return "".join([w.replace("▁", " ") for w in sentence_words]).strip()
 
 def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     
@@ -160,7 +204,7 @@ def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     rate = (user.rate or "보통")
 
     # 1️⃣ Google TTS 클라이언트 생성
-    client = texttospeech.TextToSpeechClient()
+    client = texttospeech.TextToSpeechClient(transport="rest")
 
     synthesis_input = texttospeech.SynthesisInput(text=text)
     
@@ -226,7 +270,7 @@ def text_to_speech_local(text: str, voice: str, rate: str) -> str:
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
 
     # 1️⃣ Google TTS 클라이언트 생성
-    client = texttospeech.TextToSpeechClient()
+    client = texttospeech.TextToSpeechClient(transport="rest")
 
     synthesis_input = texttospeech.SynthesisInput(text=text)
 
@@ -295,8 +339,8 @@ def get_duration(audio):
             with wave.open(audio, "rb") as wav_file:
                 frames = wav_file.getnframes()
                 rate = wav_file.getframerate()
-                duration_sec = round(frames / float(rate), 2)
-                duration = str(timedelta(seconds=int(duration_sec)))
+                duration_sec = int(frames / rate)
+                duration = str(timedelta(seconds=duration_sec))
                 return duration_sec, duration
         except Exception as e:
             raise ValueError(f"WAV 길이 계산 실패: {e}")

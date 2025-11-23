@@ -111,6 +111,15 @@ DATABASES = {
 
 # Google Cloud Key 환경변수 등록
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+<<<<<<< HEAD
+=======
+os.environ["GOOGLE_CLOUD_DISABLE_GRPC"] = "false"
+os.environ["GRPC_DNS_ENABLE_SRV_QUERY"] = "0"
+os.environ["GRPC_DNS_RESOLVER"] = "native"
+GCP_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
+GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
+GCP_REGION = os.getenv("GCP_REGION")
+>>>>>>> 30d3f92ec0fcc33aca1d71beadd396a6ead532e0
 
 # AWS S3 환경변수 등록
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")

@@ -1,5 +1,6 @@
-
-from django.core.files.base import ContentFile
+import os
+from openai import OpenAI
+import vertexai
 from classes.utils import text_to_speech
 from lecture_docs.models import *
 from dotenv import load_dotenv
@@ -98,6 +99,10 @@ def summarize(prompt: str) -> str:
 
     # Gemini 모델 호출
     try:
+        vertexai.init(
+            project=settings.GCP_PROJECT_ID,
+            location=settings.GCP_REGION,
+        )
         model = generative_models.GenerativeModel("gemini-2.5-flash")
         response = model.generate_content(prompt)
 

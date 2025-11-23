@@ -19,6 +19,8 @@ type LoginOk = {
   high_contrast: boolean;
   username: string;
   message?: string;
+  rate: string;
+  voice: string;
 };
 
 const Login = () => {
@@ -60,6 +62,8 @@ const Login = () => {
       localStorage.setItem("font", String(r.font));
       localStorage.setItem("high_contrast", String(r.high_contrast));
       localStorage.setItem("username", r.username);
+      localStorage.setItem("rate", r.rate);
+      localStorage.setItem("voice", r.voice);
 
       setA11yAndApply({
         font: normalizeFontToPct(r.font),
