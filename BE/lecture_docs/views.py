@@ -1,6 +1,8 @@
+from urllib.parse import unquote
 from io import BytesIO
 import os
 import tempfile
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -426,3 +428,44 @@ class PageView(APIView):
             # "boards": board_data,
         }, status=status.HTTP_200_OK)
     
+
+#시험 OCR
+class ExamTTSView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        text = request.query_params.get("text")
+        if not text:
+            return Response({"error": "text 파라미터 필요"}, status=400)
+
+        decoded_text = unquote(text)
+        audio_bytes = exam_tts_bytes(decoded_text, request.user)
+
+        response = HttpResponse(audio_bytes, content_type="audio/mp3")
+        response["Content-Disposition"] = 'inline; filename="tts.mp3"'
+        return response
+    
+class ExamOCRView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        if 'image' not in request.FILES:
+            return Response({"error": "이미지를 업로드하세요."}, status=400)
+
+        ocr_text = "ocr text"  
+        question_number = 1  
+
+        tts_url = f"/exam/tts/?text={ocr_text}"
+
+        response_data = {
+            "totalQuestions": 10,
+            "question": [
+                {
+                    "questionNumber": question_number,
+                    "ocrText": ocr_text,
+                    "tts": tts_url
+                }
+            ]
+        }
+        serializer = TotalExamSerializer(response_data)
+        return Response(serializer.data, status=200)

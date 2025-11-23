@@ -1,4 +1,5 @@
-import os
+import base64
+from google.cloud import texttospeech
 from openai import OpenAI
 import vertexai
 from classes.utils import text_to_speech
@@ -139,3 +140,33 @@ def upload_s3(file_obj, file_name, folder=None, content_type=None):
         raise Exception("AWS 자격 증명이 없습니다. 환경변수를 확인하세요.")
     except Exception as e:
         raise Exception(f"S3 업로드 실패: {e}")
+
+def exam_tts_bytes(text: str, user: User):
+    client = texttospeech.TextToSpeechClient(transport="rest")
+
+    synthesis_input = texttospeech.SynthesisInput(text=text)
+
+    voice_map = {
+        "여성": "ko-KR-Neural2-A",
+        "남성": "ko-KR-Neural2-C",
+    }
+    voice = voice_map.get(user.voice or "여성")
+
+    voice_config = texttospeech.VoiceSelectionParams(
+        language_code="ko-KR",
+        name=voice,
+    )
+
+    rate_map = {"느림": 0.8, "보통": 1.0, "빠름": 1.25}
+    speaking_rate = rate_map.get(user.rate or "보통")
+
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.MP3,
+        speaking_rate=speaking_rate,
+    )
+
+    response = client.synthesize_speech(
+        input=synthesis_input, voice=voice_config, audio_config=audio_config
+    )
+
+    return response.audio_content 
