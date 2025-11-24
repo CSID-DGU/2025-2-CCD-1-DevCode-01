@@ -1,7 +1,10 @@
 import os
 from openai import OpenAI
 
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+client = OpenAI(
+    base_url="https://api.groq.com/openai/v1",
+    api_key=os.environ["GROQ_API_KEY"]
+)
 
 
 def blocks_to_text(blocks):
@@ -21,11 +24,19 @@ def blocks_to_text(blocks):
             for it in items:
                 parts.append(f"- {it}")
         else:
-            # 혹시 모르는 기타 타입
             if "text" in b:
                 parts.append(b["text"])
 
     return "\n".join(p for p in parts if p.strip())
+
+def strip_think_block(text: str) -> str:
+    start = text.find("<think>")
+    end = text.find("</think>")
+
+    if start != -1 and end != -1 and end > start:
+        return text[end + len("</think>"):].lstrip()
+    return text
+
 
 
 def call_gpt_from_blocks(blocks):
@@ -40,7 +51,7 @@ def call_gpt_from_blocks(blocks):
 1) 제목 추출 (슬라이드 핵심 주제)
 2) 본문을 자연스러운 문장으로 재작성 (필요하면 문장 분리/문단 구분)
 3) bullet / 목록은 bullet 항목으로 나누기
-4) 표/그림은 시각 정보 없이 이해되도록 문장으로 설명
+4) 표/그림은 시각 정보 없이 이해되도록 문장으로 설명 (단, 표나 그림이 있었고 어떤걸 의미하는지 설명 필요)
 5) 불필요한 정보(페이지 번호, 로고 등) 제거
 6) 시각장애 학우가 들을 것을 고려해 명확하고 간단하게 작성
 
@@ -48,7 +59,7 @@ def call_gpt_from_blocks(blocks):
 
 # 제목
 
-## 본문
+## 내용
 - 문단 1
 - 문단 2
 
@@ -62,9 +73,12 @@ def call_gpt_from_blocks(blocks):
 """
 
     resp = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="openai/gpt-oss-20b",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.2,
     )
 
-    return resp.choices[0].message.content
+    raw = resp.choices[0].message.content
+    clean = strip_think_block(raw)
+    return clean
+

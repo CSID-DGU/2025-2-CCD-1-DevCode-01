@@ -13,29 +13,17 @@ def main():
     load_dotenv()
 
     parser = argparse.ArgumentParser(
-        description="RapidOCR + GPT로 강의 슬라이드 한 장을 텍스트/요약으로 변환"
+        description="RapidOCR + GPT로 사진 한 장을 텍스트/요약으로 변환"
     )
     parser.add_argument("image", type=str, help="입력 이미지 경로")
     parser.add_argument("--output", "-o", type=str, default=None)
     args = parser.parse_args()
 
-    if not os.environ.get("OPENAI_API_KEY"):
-        raise RuntimeError("OPENAI_API_KEY가 설정되지 않았습니다.")
+    if not os.environ.get("GROQ_API_KEY"):
+        raise RuntimeError("GROQ_API_KEY가 설정되지 않았습니다.")
 
-    # # 🔥 시간 측정 시작
-    # start = time.time()
 
-    # # OCR → Blocks
-    # page = process_page(args.image)
-    # blocks = page["blocks"]
-
-    # # GPT 후처리
-    # gpt_result = call_gpt_from_blocks(blocks)
-
-    # # 🔥 시간 측정 끝
-    # end = time.time()
-    # elapsed = end - start
-
+  # 걸린 시간 측정
     ocr_start = time.time()
     page = process_page(args.image)
     blocks = page["blocks"]
@@ -59,8 +47,7 @@ def main():
     else:
         print(gpt_result)
 
-    # 마지막 줄: 걸린 시간 출력
-    print(f"\n⏱️ 총 소요 시간: {elapsed:.2f}초")
+    print(f"\n총 소요 시간: {elapsed:.2f}초")
 
 
 if __name__ == "__main__":

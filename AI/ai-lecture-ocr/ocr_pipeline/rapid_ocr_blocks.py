@@ -1,13 +1,10 @@
-# ocr_pipeline/rapid_ocr_blocks.py
 import cv2
 import numpy as np
 from rapidocr_onnxruntime import RapidOCR
 import re
 import statistics
 
-# 전역 OCR 인스턴스
 ocr = RapidOCR(det_use_cuda=False, rec_use_cuda=False)
-
 
 def load_and_resize(img_path: str, max_side: int = 1600):
     img = cv2.imread(img_path)
@@ -16,7 +13,7 @@ def load_and_resize(img_path: str, max_side: int = 1600):
 
     h, w = img.shape[:2]
     scale = max_side / max(h, w)
-    if scale < 1:  # 줄이기만
+    if scale < 1:  
         new_w = int(w * scale)
         new_h = int(h * scale)
         img = cv2.resize(img, (new_w, new_h))
@@ -28,7 +25,6 @@ def run_ocr(img):
     if not out:
         return []
 
-    # 보통: (ocr_result, infer_time)
     if isinstance(out, tuple) and len(out) == 2:
         ocr_result, _ = out
     else:
@@ -40,7 +36,6 @@ def run_ocr(img):
     results = []
 
     for item in ocr_result:
-        # item 예시: [box, text, score]
         if not isinstance(item, (list, tuple)) or len(item) < 2:
             continue
 
