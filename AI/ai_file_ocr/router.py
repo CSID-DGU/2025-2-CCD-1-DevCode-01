@@ -1,9 +1,8 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, HttpUrl
 from ai_file_ocr.tasks import run_pdf_ocr
 
-app = FastAPI(title="AI OCR Server")
-
+router = APIRouter()
 
 class PdfOcrRequest(BaseModel):
     doc_id: int
@@ -15,7 +14,7 @@ class PdfOcrResponse(BaseModel):
     message: str
 
 #BE<>AI api
-@app.post("/ocr/pdf", response_model=PdfOcrResponse)
+@router.post("/ocr/pdf", response_model=PdfOcrResponse)
 def ocr_pdf(request: PdfOcrRequest):
     try:
         run_pdf_ocr.delay(request.doc_id, request.pdf_base64, str(request.callback_url))

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Doc, Page
+from .models import Doc, Page, Board
 
 
 class DocSerializer(serializers.ModelSerializer):
@@ -57,3 +57,14 @@ class ExamSerializer(serializers.Serializer):
 class TotalExamSerializer(serializers.Serializer):
     totalQuestions = serializers.IntegerField(allow_null=True)
     question = ExamSerializer(many=True)
+
+class BoardCreateSerializer(serializers.Serializer):
+    image = serializers.ImageField(required=True)
+
+
+class BoardSerializer(serializers.ModelSerializer):
+    boardId = serializers.IntegerField(source='id')
+
+    class Meta:
+        model = Board
+        fields = ["boardId", "image", "text"]

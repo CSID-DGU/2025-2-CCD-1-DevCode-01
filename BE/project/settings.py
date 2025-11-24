@@ -210,3 +210,4 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Seoul'
 
 AI_OCR_URL = os.getenv("AI_OCR_URL")
+AI_BOARD_OCR_URL = os.getenv("AI_BOARD_OCR_URL")
