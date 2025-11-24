@@ -13,7 +13,7 @@ def main():
     load_dotenv()
 
     parser = argparse.ArgumentParser(
-        description="RapidOCR + GPT로 사진 한 장을 텍스트/요약으로 변환"
+        description="RapidOCR + LLM으로 사진 한 장을 텍스트/요약으로 변환"
     )
     parser.add_argument("image", type=str, help="입력 이미지 경로")
     parser.add_argument("--output", "-o", type=str, default=None)
@@ -29,23 +29,23 @@ def main():
     blocks = page["blocks"]
     ocr_end = time.time()
 
-    gpt_start = time.time()
-    gpt_result = call_gpt_from_blocks(blocks)
-    gpt_end = time.time()
+    llm_start = time.time()
+    llm_result = call_gpt_from_blocks(blocks)
+    llm_end = time.time()
 
-    elapsed = gpt_end - ocr_start
+    elapsed = llm_end - ocr_start
 
     print(f"OCR/레이아웃: {ocr_end - ocr_start:.2f}초")
-    print(f"GPT 처리: {gpt_end - gpt_start:.2f}초")
+    print(f"LLM 처리: {llm_end - llm_start:.2f}초")
 
 
     # 출력
     if args.output:
         with open(args.output, "w", encoding="utf-8") as f:
-            f.write(gpt_result)
-        print(gpt_result)
+            f.write(llm_result)
+        print(llm_result)
     else:
-        print(gpt_result)
+        print(llm_result)
 
     print(f"\n총 소요 시간: {elapsed:.2f}초")
 
