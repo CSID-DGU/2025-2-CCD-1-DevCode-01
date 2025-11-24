@@ -2,6 +2,7 @@ from django.urls import path
 from .views import *
 
 urlpatterns = [
+    # BE <> FE
     path('lecture/<int:lectureId>/doc/', DocUploadView.as_view(), name='doc-upload'),
     path('doc/<int:docId>/', DocDetailView.as_view(), name='doc-detail'),
     path('doc/<int:docId>/<int:pageNumber>/', PageDetailView.as_view(), name='page-detail'),
@@ -16,4 +17,8 @@ urlpatterns = [
 
     path('exam/', ExamOCRView.as_view(), name='exam'),
     path("exam/tts/", ExamTTSView.as_view()),
+
+
+    ## BE <> AI
+    path("docs/<int:docId>/ocr-callback/", OcrCallbackView.as_view(), name="doc-ocr-callback"),
 ]

@@ -6,9 +6,8 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-import fitz
+import requests
 from .serializers import *
-from .ocr import pdf_to_image
 from rest_framework.views import APIView
 from rest_framework import status,permissions
 from rest_framework.response import Response
@@ -18,7 +17,6 @@ from classes.utils import text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
 from .utils import  *
-from .ocr import *
 from campusmate_ai.ocr_light.cli.pipeline import run_pipeline
 
 #교안 업로드/조회
@@ -45,17 +43,71 @@ class DocUploadView(APIView):
             return Response({"error": "file 필드가 비어 있습니다."},
                             status=status.HTTP_400_BAD_REQUEST)
 
+        # Doc 레코드 생성
         doc = Doc.objects.create(lecture=lecture, title=file.name)
 
-        pdf_bytes = file.read()  
+        # PDF bytes → base64 인코딩
+        pdf_bytes = file.read()
+        pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
 
-        run_pdf_processing.delay(doc.id, pdf_bytes)
+        # AI 서버 URL 
+        ai_ocr_url = getattr(settings, "AI_OCR_URL", "http://localhost:8001/ocr/pdf")
+
+        # AI → 백엔드 콜백 URL 구성
+        callback_url = request.build_absolute_uri(
+            f"/docs/{doc.id}/ocr-callback/"
+        )
+
+        try:
+            resp = requests.post(
+                ai_ocr_url,
+                json={
+                    "doc_id": doc.id,
+                    "pdf_base64": pdf_b64,
+                    "callback_url": callback_url,
+                },
+                timeout=10,
+            )
+            resp.raise_for_status()
+        except Exception as e:
+            # AI 서버 요청 실패 시, Doc만 생성해놓고 오류 리턴
+            return Response(
+                {"error": f"AI OCR 서버 요청 실패: {e}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
         return Response({
             "docId": doc.id,
             "title": doc.title
         }, status=201)
+#BE<>AI
+class OcrCallbackView(APIView):
 
+    def post(self, request, docId):
+        doc = get_object_or_404(Doc, id=docId)
+
+        page_number = request.data.get("page_number")
+        image_url = request.data.get("image_url")
+        ocr_text = request.data.get("ocr_text")
+
+        if not page_number or not ocr_text:
+            return Response({"error": "page_number와 ocr_text는 필수입니다."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # Page 레코드 생성/갱신
+        page_obj, _ = Page.objects.get_or_create(
+            doc=doc,
+            page_number=page_number,
+            defaults={},
+        )
+
+        if image_url:
+            page_obj.image = image_url
+
+        page_obj.ocr = ocr_text
+        page_obj.save(update_fields=["image", "ocr"])
+
+        return Response({"message": "페이지 OCR 저장 완료"}, status=status.HTTP_200_OK)
     
 #교안 TTS
 class PageTTSView(APIView):
