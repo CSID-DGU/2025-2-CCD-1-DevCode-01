@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from ocr_pipeline.rapid_ocr_blocks import process_page
-from ocr_pipeline.gpt_postprocess import call_gpt_from_blocks
+from ocr_pipeline.llm_postprocess import call_gpt_from_blocks
 
 
 def main():
