@@ -6,9 +6,8 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-import fitz
+import requests
 from .serializers import *
-from .ocr import pdf_to_image
 from rest_framework.views import APIView
 from rest_framework import status,permissions
 from rest_framework.response import Response
@@ -18,8 +17,7 @@ from classes.utils import text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
 from .utils import  *
-from .ocr import *
-from campusmate_ai.ocr_light.cli.pipeline import run_pipeline
+
 
 #교안 업로드/조회
 class DocUploadView(APIView):
@@ -45,17 +43,71 @@ class DocUploadView(APIView):
             return Response({"error": "file 필드가 비어 있습니다."},
                             status=status.HTTP_400_BAD_REQUEST)
 
+        # Doc 레코드 생성
         doc = Doc.objects.create(lecture=lecture, title=file.name)
 
-        pdf_bytes = file.read()  
+        # PDF bytes → base64 인코딩
+        pdf_bytes = file.read()
+        pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
 
-        run_pdf_processing.delay(doc.id, pdf_bytes)
+        # AI 서버 URL 
+        ai_ocr_url = settings.AI_OCR_URL  
+
+        # AI → 백엔드 콜백 URL 구성
+        callback_url = request.build_absolute_uri(
+            f"/docs/{doc.id}/ocr-callback/"
+        )
+
+        try:
+            resp = requests.post(
+                ai_ocr_url,
+                json={
+                    "doc_id": doc.id,
+                    "pdf_base64": pdf_b64,
+                    "callback_url": callback_url,
+                },
+                timeout=10,
+            )
+            resp.raise_for_status()
+        except Exception as e:
+            # AI 서버 요청 실패 시, Doc만 생성해놓고 오류 리턴
+            return Response(
+                {"error": f"AI OCR 서버 요청 실패: {e}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
         return Response({
             "docId": doc.id,
             "title": doc.title
         }, status=201)
+#BE<>AI
+class OcrCallbackView(APIView):
 
+    def post(self, request, docId):
+        doc = get_object_or_404(Doc, id=docId)
+
+        page_number = request.data.get("page_number")
+        image_url = request.data.get("image_url")
+        ocr_text = request.data.get("ocr_text")
+
+        if not page_number or not ocr_text:
+            return Response({"error": "page_number와 ocr_text는 필수입니다."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # Page 레코드 생성/갱신
+        page_obj, _ = Page.objects.get_or_create(
+            doc=doc,
+            page_number=page_number,
+            defaults={},
+        )
+
+        if image_url:
+            page_obj.image = image_url
+
+        page_obj.ocr = ocr_text
+        page_obj.save(update_fields=["image", "ocr"])
+
+        return Response({"message": "페이지 OCR 저장 완료"}, status=status.HTTP_200_OK)
     
 #교안 TTS
 class PageTTSView(APIView):
@@ -179,51 +231,59 @@ class PageDetailView(APIView):
     
 #판서   
 class BoardView(APIView):
-
     permission_classes = [permissions.IsAuthenticated]
-
+    #판서 조회
     def get(self, request, pageId):
         page = get_object_or_404(Page, id=pageId)
         boards = Board.objects.filter(page=page).order_by("-created_at")
+        serializer = BoardSerializer(boards, many=True)
 
-        data = [
+        return Response(
             {
-                "boardId": b.id,
-                "image": b.image if b.image else None,
-                "text": b.text or None
-            }
-            for b in boards
-        ]
-        return Response({"pageId": page.id, "boards": data}, status=status.HTTP_200_OK)
+                "pageId": page.id,
+                "boards": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
 
     def post(self, request, pageId):
+        serializer = BoardCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
         page = get_object_or_404(Page, id=pageId)
-        image = request.FILES.get("image")
+        image = serializer.validated_data["image"]
 
-        if not image:
-            return Response({"error": "판서 이미지가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+        img_bytes = image.read()
 
-        image_bytes = image.read()
-        image_stream_for_s3 = BytesIO(image_bytes)
-        image_stream_for_ocr = BytesIO(image_bytes)
-
+        s3_stream = BytesIO(img_bytes)
         s3_key = f"boards/{page.id}_{image.name}"
-        s3_url = upload_s3(image_stream_for_s3, s3_key, content_type=image.content_type)
+        s3_url = upload_s3(s3_stream, s3_key, content_type=image.content_type)
 
+        import base64
+        image_b64 = base64.b64encode(img_bytes).decode()
+
+        ai_url = settings.AI_BOARD_OCR_URL  
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_in:
-                tmp_in.write(image_stream_for_ocr.read())
-                tmp_in.flush()
-
-                tmp_out = os.path.join(tempfile.mkdtemp(), "result.md")
-                ocr_text = run_pipeline(tmp_in.name, tmp_out)
+            import requests
+            ai_resp = requests.post(
+                ai_url,
+                json={"image_base64": image_b64},
+                timeout=12
+            )
+            ai_resp.raise_for_status()
+            ocr_text = ai_resp.json().get("text", "")
         except Exception as e:
-            ocr_text = f"[OCR 오류] {e}"
+            return Response(
+                {"error": f"AI 서버 요청 실패: {str(e)}"},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+        board = Board.objects.create(
+            page=page,
+            image=s3_url,
+            text=ocr_text
+        )
 
-
-        # Board 생성
-        board = Board.objects.create(page=page, image=s3_url, text=ocr_text)
-
+        # 웹소켓
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             f"doc_{page.doc.id}",
@@ -234,46 +294,40 @@ class BoardView(APIView):
                     "boardId": board.id,
                     "image": board.image,
                     "text": board.text,
-                },
-            },
+                }
+            }
         )
 
-        return Response(
-            {
-                "boardId": board.id,
-                "text": board.text,
-                "image": board.image,
-            },
-            status=status.HTTP_201_CREATED,
-        )
+        # 8) 최종 응답 (serializer)
+        return Response(BoardSerializer(board).data, status=status.HTTP_201_CREATED)
 
+    #수정
     def patch(self, request, boardId):
         board = get_object_or_404(Board, id=boardId)
         new_text = request.data.get("text")
-        board.text = new_text
-        board.save()
 
+        if new_text is None:
+            return Response({"error": "text 필드가 필요합니다."}, status=400)
+
+        board.text = new_text
+        board.save(update_fields=["text"])
+
+        # 웹소켓
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             f"doc_{board.page.doc.id}",
             {
-                "type": "board.event",
+                "type": "board_event",
                 "event": "updated",
-                "data": {  
+                "data": {
                     "boardId": board.id,
                     "text": board.text,
-                }                
+                }
+            }
+        )
+        return Response(BoardSerializer(board).data, status=status.HTTP_200_OK)
 
-            },
-        )
-        
-        return Response(
-            {
-                "boardId": board.id,
-                "text": board.text
-            },
-            status=status.HTTP_200_OK,
-        )
+    #삭제
     def delete(self, request, boardId):
         board = get_object_or_404(Board, id=boardId)
         page = board.page
@@ -281,19 +335,21 @@ class BoardView(APIView):
 
         board.delete()
 
+        # 웹소켓
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             f"doc_{page.doc.id}",
             {
-                "type": "board.event",
+                "type": "board_event",
                 "event": "deleted",
                 "data": {
-                    "boardId": board_id,
-                },
-            },
+                    "boardId": board_id
+                }
+            }
         )
 
         return Response({"message": "판서가 삭제되었습니다."}, status=status.HTTP_200_OK)
+
 
 # 교수발화 요약  
 class DocSttSummaryView(APIView):
