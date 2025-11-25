@@ -132,7 +132,7 @@ export default function MemoListCard({
         aria-live="polite"
       >
         {items.map((it, idx) => (
-          <Row key={`${it.createdAt}-${idx}`}>
+          <Row key={`${it.createdAt}-${idx}`} $role={it.role}>
             <Icon aria-hidden="true">{iconOf(it.role)}</Icon>
             <Text>
               {it.text}
@@ -268,13 +268,19 @@ const List = styled.div`
   padding-right: 0.25rem;
 `;
 
-const Row = styled.div`
+const Row = styled.div<{ $role: Role }>`
   display: grid;
   grid-template-columns: 1.75rem 1fr;
   align-items: start;
   gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  background: ${({ $role, theme }) => {
+    if ($role === "assistant") return theme.colors.base.white;
+    if ($role === "student") return theme.colors.base.blueL;
+    return "#f3f4f6";
+  }};
 `;
-
 const Icon = styled.div`
   font-size: 1.1rem;
   line-height: 1.75rem;
