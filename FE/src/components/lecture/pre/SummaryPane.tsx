@@ -10,7 +10,7 @@ type Props = {
   sumAudioRef: React.RefObject<HTMLAudioElement | null>;
   stack: boolean;
   panelHeight?: string;
-  loading: boolean;
+  loading?: boolean;
 };
 
 export default function SummaryPane({

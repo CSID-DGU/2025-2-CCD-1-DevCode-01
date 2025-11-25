@@ -18,17 +18,20 @@ type Props = {
     ttsUrl?: string;
     sumAudioRef: React.RefObject<HTMLAudioElement | null>;
     sidePaneRef: React.RefObject<HTMLDivElement | null>;
+    loading?: boolean;
   };
   memo: {
     docId: number;
     pageId?: number | null;
     pageNumber: number;
   };
-  board: {
+  board?: {
     docId: number;
     page: number;
     pageId?: number | null;
   };
+  showBoard?: boolean;
+  onSummaryOpen?: () => void;
 };
 
 export default function RightTabs({
@@ -38,6 +41,8 @@ export default function RightTabs({
   memo,
   board,
   summary,
+  showBoard = true,
+  onSummaryOpen,
 }: Props) {
   const [tab, setTab] = useState<TabKey>(activeInitial);
 
@@ -51,6 +56,13 @@ export default function RightTabs({
     memo: `${baseId}-panel-memo`,
     board: `${baseId}-panel-board`,
     summary: `${baseId}-panel-summary`,
+  };
+
+  const hasBoard = showBoard && board;
+
+  const handleClickSummary = () => {
+    setTab("summary");
+    onSummaryOpen?.();
   };
 
   return (
@@ -71,29 +83,32 @@ export default function RightTabs({
           메모
         </Tab>
 
-        <Tab
-          id={tabIds.board}
-          role="tab"
-          aria-selected={tab === "board"}
-          aria-controls={panelIds.board}
-          onClick={() => setTab("board")}
-          type="button"
-        >
-          판서
-        </Tab>
+        {hasBoard && (
+          <Tab
+            id={tabIds.board}
+            role="tab"
+            aria-selected={tab === "board"}
+            aria-controls={panelIds.board}
+            onClick={() => setTab("board")}
+            type="button"
+          >
+            판서
+          </Tab>
+        )}
 
         <Tab
           id={tabIds.summary}
           role="tab"
           aria-selected={tab === "summary"}
           aria-controls={panelIds.summary}
-          onClick={() => setTab("summary")}
+          onClick={handleClickSummary}
           type="button"
         >
           요약
         </Tab>
       </Tablist>
 
+      {/* 메모 패널 */}
       <Panel
         id={panelIds.memo}
         role="tabpanel"
@@ -109,26 +124,30 @@ export default function RightTabs({
         )}
       </Panel>
 
-      <Panel
-        id={panelIds.board}
-        role="tabpanel"
-        aria-labelledby={tabIds.board}
-        hidden={tab !== "board"}
-      >
-        {typeof board.pageId === "number" && board.pageId > 0 ? (
-          <BoardBox
-            docId={board.docId}
-            pageId={board.pageId}
-            assetBase={import.meta.env.VITE_BASE_URL}
-            token={localStorage.getItem("access")}
-          />
-        ) : (
-          <EmptyState role="status" aria-live="polite">
-            이 페이지는 아직 판서를 사용할 수 없어요.
-          </EmptyState>
-        )}
-      </Panel>
+      {/* 판서 패널: pre에선 아예 렌더 X → BoardBox API도 절대 안 돈다 */}
+      {hasBoard && (
+        <Panel
+          id={panelIds.board}
+          role="tabpanel"
+          aria-labelledby={tabIds.board}
+          hidden={tab !== "board"}
+        >
+          {typeof board?.pageId === "number" && board.pageId > 0 ? (
+            <BoardBox
+              docId={board.docId}
+              pageId={board.pageId}
+              assetBase={import.meta.env.VITE_BASE_URL}
+              token={localStorage.getItem("access")}
+            />
+          ) : (
+            <EmptyState role="status" aria-live="polite">
+              이 페이지는 아직 판서를 사용할 수 없어요.
+            </EmptyState>
+          )}
+        </Panel>
+      )}
 
+      {/* 요약 패널 */}
       <Panel
         id={panelIds.summary}
         role="tabpanel"
@@ -142,6 +161,7 @@ export default function RightTabs({
           sidePaneRef={summary.sidePaneRef}
           stack={stack}
           panelHeight={PANEL_FIXED_H_LIVE}
+          loading={summary.loading}
         />
       </Panel>
     </Aside>
