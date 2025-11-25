@@ -18,59 +18,35 @@ import {
 import { useFocusTTS } from "src/hooks/useFocusTTS";
 import { Container, Grid, SrLive, Wrap } from "./pre/styles";
 import DocPane from "src/components/lecture/pre/DocPane";
-import SummaryPane from "src/components/lecture/pre/SummaryPane";
 import BottomToolbar from "src/components/lecture/pre/BottomToolBar";
 import { useLocalTTS } from "src/hooks/useLocalTTS";
+import RightTabs from "src/components/lecture/live/RightTabs";
 
 type RouteParams = { docId?: string; courseId?: string };
 type NavState = { navTitle?: string; totalPage?: number };
 type UserRole = "assistant" | "student";
 
-export default function PreClass() {
-  const params = useParams<RouteParams>();
-  const { state } = useLocation() as { state?: NavState };
-  const navigate = useNavigate();
-  const [totalPage, setTotalPage] = useState<number>();
-  const role: UserRole =
-    (localStorage.getItem("role") as UserRole) || "student";
-
-  const docIdNum = useMemo(() => {
+function useDocId(params: RouteParams) {
+  return useMemo(() => {
     const raw = params.docId ?? params.courseId;
     const n = Number.parseInt(raw ?? "", 10);
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [params.docId, params.courseId]);
+}
 
-  const [page, setPage] = useState(1);
-  const [docPage, setDocPage] = useState<DocPage | null>(null);
-  const [summary, setSummary] = useState<PageSummary | null>(null);
-  const [loading, setLoading] = useState(false);
-
+/** A11Y 관련 폰트/읽기 옵션 상태를 관리하는 훅 */
+function useA11ySettings() {
   const [fontPct, setFontPct] = useState<number>(readFontPct());
-  const stackByFont = fontPct >= 175;
   const [readOnFocus, setReadOnFocus] = useState<boolean>(readReadOnFocus());
-
-  const cleanOcr = useMemo(() => formatOcr(docPage?.ocr ?? ""), [docPage?.ocr]);
-
-  const [mode, setMode] = useState<"ocr" | "image">(
-    role === "assistant" ? "image" : "ocr"
-  );
-
-  const liveRef = useRef<HTMLDivElement | null>(null);
-  const announce = useMemo(() => makeAnnouncer(liveRef), []);
-  const mainRegionRef = useRef<HTMLDivElement | null>(null);
-  const docBodyRef = useRef<HTMLDivElement | null>(null);
-  const sidePaneRef = useRef<HTMLDivElement | null>(null);
-  const ocrAudioRef = useRef<HTMLAudioElement | null>(null);
-  const sumAudioRef = useRef<HTMLAudioElement | null>(null);
-
-  const { speak } = useLocalTTS();
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === A11Y_STORAGE_KEYS.font) setFontPct(readFontPct());
-      if (e.key === A11Y_STORAGE_KEYS.readOnFocus)
+      if (e.key === A11Y_STORAGE_KEYS.readOnFocus) {
         setReadOnFocus(readReadOnFocus());
+      }
     };
+
     const onFontCustom = () => setFontPct(readFontPct());
     const onReadCustom = () => setReadOnFocus(readReadOnFocus());
     const onVisible = () => {
@@ -79,6 +55,7 @@ export default function PreClass() {
         setReadOnFocus(readReadOnFocus());
       }
     };
+
     window.addEventListener("storage", onStorage);
     window.addEventListener("a11y:font-change", onFontCustom as EventListener);
     window.addEventListener(
@@ -86,6 +63,7 @@ export default function PreClass() {
       onReadCustom as EventListener
     );
     document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener(
@@ -100,15 +78,60 @@ export default function PreClass() {
     };
   }, []);
 
-  // 데이터 로드
+  return { fontPct, readOnFocus };
+}
+
+export default function PreClass() {
+  const params = useParams<RouteParams>();
+  const { state } = useLocation() as { state?: NavState };
+  const navigate = useNavigate();
+
+  const role: UserRole =
+    (localStorage.getItem("role") as UserRole) || "student";
+  const isAssistant = role === "assistant";
+
+  const docIdNum = useDocId(params);
+
+  const [page, setPage] = useState(1);
+  const [docPage, setDocPage] = useState<DocPage | null>(null);
+  const [totalPage, setTotalPage] = useState<number>();
+  const [loading, setLoading] = useState(false);
+
+  const { fontPct, readOnFocus } = useA11ySettings();
+  const stackByFont = fontPct >= 175;
+
+  const cleanOcr = useMemo(() => formatOcr(docPage?.ocr ?? ""), [docPage?.ocr]);
+
+  const [mode, setMode] = useState<"ocr" | "image">(
+    isAssistant ? "image" : "ocr"
+  );
+
+  const liveRef = useRef<HTMLDivElement | null>(null);
+  const announce = useMemo(() => makeAnnouncer(liveRef), []);
+  const mainRegionRef = useRef<HTMLDivElement | null>(null);
+  const docBodyRef = useRef<HTMLDivElement | null>(null);
+  const sidePaneRef = useRef<HTMLDivElement | null>(null);
+  const ocrAudioRef = useRef<HTMLAudioElement | null>(null);
+  const sumAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const [summary, setSummary] = useState<PageSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryRequested, setSummaryRequested] = useState(false);
+
+  const { speak } = useLocalTTS();
+
+  /** 교안 페이지 로드 */
   useEffect(() => {
+    if (!docIdNum) return;
+
     let cancelled = false;
-    (async () => {
-      if (!docIdNum) return;
+
+    const loadDocPage = async () => {
       try {
         setLoading(true);
         const dp = await fetchDocPage(docIdNum, page);
         if (cancelled) return;
+
         if (!dp) {
           setDocPage(null);
           setSummary(null);
@@ -116,22 +139,23 @@ export default function PreClass() {
           announce("교안 페이지를 불러오지 못했습니다.");
           return;
         }
-        setDocPage(dp);
 
+        setDocPage(dp);
         if (dp.totalPage != null) setTotalPage(dp.totalPage);
 
-        if (dp.pageId && dp.pageId > 0)
-          setSummary(await fetchPageSummary(dp.pageId));
-        else setSummary(null);
+        setSummary(null);
+        setSummaryLoading(false);
+        setSummaryRequested(false);
 
-        const nextDefault: "ocr" | "image" =
-          role === "assistant" ? "image" : "ocr";
+        const nextDefault: "ocr" | "image" = isAssistant ? "image" : "ocr";
         setMode(nextDefault);
+
+        const totalForAnnounce = dp.totalPage ?? totalPage;
         announce(
           `페이지 ${dp.pageNumber}${
-            totalPage ? ` / 총 ${totalPage}` : ""
+            totalForAnnounce ? ` / 총 ${totalForAnnounce}` : ""
           }로 이동했습니다. ${
-            (role === "assistant" ? "image" : "ocr") === "ocr"
+            nextDefault === "ocr"
               ? "본문 보기가 활성화되었습니다."
               : "원본 이미지 보기가 활성화되었습니다."
           }`
@@ -145,12 +169,50 @@ export default function PreClass() {
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
+    };
+
+    void loadDocPage();
     return () => {
       cancelled = true;
     };
-  }, [docIdNum, page, role, announce]);
+  }, [docIdNum, page, isAssistant, announce, totalPage]);
 
+  /* 요약 로드 */
+  useEffect(() => {
+    if (!docIdNum) return;
+    if (!docPage?.pageId || docPage.pageId <= 0) return;
+    if (!summaryRequested) return;
+
+    let cancelled = false;
+
+    const loadSummary = async () => {
+      try {
+        setSummaryLoading(true);
+        setSummary(null);
+
+        const s = await fetchPageSummary(docPage.pageId);
+        if (!cancelled) {
+          setSummary(s);
+        }
+      } catch {
+        if (!cancelled) {
+          toast.error("요약을 불러오지 못했어요.");
+          announce("요약을 불러오지 못했습니다.");
+        }
+      } finally {
+        if (!cancelled) {
+          setSummaryLoading(false);
+        }
+      }
+    };
+
+    void loadSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, [docIdNum, docPage?.pageId, summaryRequested, announce]);
+
+  /* 문서 제목 */
   useEffect(() => {
     const t = `${state?.navTitle ?? "수업 전"} - p.${page}`;
     document.title = `캠퍼스 메이트 | ${t}`;
@@ -215,13 +277,29 @@ export default function PreClass() {
             docBodyRef={docBodyRef}
             mainRegionRef={mainRegionRef}
           />
-          <SummaryPane
-            stack={stackByFont}
-            summaryText={summary?.summary}
-            summaryTtsUrl={summary?.summary_tts}
-            sidePaneRef={sidePaneRef}
-            sumAudioRef={sumAudioRef}
-          />
+
+          {docIdNum && (
+            <RightTabs
+              key={`pre-righttabs-${docIdNum}-${page}`}
+              stack={stackByFont}
+              activeInitial="memo"
+              showBoard={false}
+              role={role}
+              memo={{
+                docId: docIdNum,
+                pageId: docPage?.pageId ?? null,
+                pageNumber: docPage?.pageNumber ?? page,
+              }}
+              summary={{
+                text: summary?.summary ?? "",
+                ttsUrl: summary?.summary_tts ?? undefined,
+                sumAudioRef,
+                sidePaneRef,
+                loading: summaryLoading,
+              }}
+              onSummaryOpen={() => setSummaryRequested(true)}
+            />
+          )}
         </Grid>
       </Container>
 

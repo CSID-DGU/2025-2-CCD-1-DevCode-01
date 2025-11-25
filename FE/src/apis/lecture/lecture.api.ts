@@ -1,4 +1,4 @@
-import { getResponse } from "@apis/instance";
+import { getResponse, postResponse } from "@apis/instance";
 
 export type DocPage = {
   docId: number;
@@ -51,5 +51,10 @@ export type PageSummary = {
 };
 
 export async function fetchPageSummary(pageId: number) {
-  return getResponse<PageSummary>(`/page/${pageId}/summary/`);
+  const data = await postResponse<null, PageSummary>(
+    `/page/${pageId}/summary/`,
+    null
+  );
+  if (!data) throw new Error("요약 불러오기 실패");
+  return data;
 }
