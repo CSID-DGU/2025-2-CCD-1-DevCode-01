@@ -1,5 +1,6 @@
 import { PANEL_FIXED_H } from "@pages/class/pre/styles";
 import { fonts } from "@styles/fonts";
+import Spinner from "src/components/common/Spinner";
 import styled from "styled-components";
 
 type Props = {
@@ -9,6 +10,7 @@ type Props = {
   sumAudioRef: React.RefObject<HTMLAudioElement | null>;
   stack: boolean;
   panelHeight?: string;
+  loading: boolean;
 };
 
 export default function SummaryPane({
@@ -18,6 +20,7 @@ export default function SummaryPane({
   sumAudioRef,
   stack,
   panelHeight,
+  loading,
 }: Props) {
   return (
     <Pane
@@ -28,6 +31,7 @@ export default function SummaryPane({
       aria-label="요약"
       tabIndex={0}
       data-area="summary-pane"
+      aria-busy={!!loading}
     >
       <Header>
         <Title>요약</Title>
@@ -43,7 +47,11 @@ export default function SummaryPane({
         )}
       </Header>
       <Body>
-        <Paragraph>{summaryText ?? "요약이 없습니다."}</Paragraph>
+        {loading ? (
+          <Spinner role="status" aria-label="요약을 불러오는 중입니다" />
+        ) : (
+          <Paragraph>{summaryText ?? "요약이 없습니다."}</Paragraph>
+        )}
       </Body>
     </Pane>
   );

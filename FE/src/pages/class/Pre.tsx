@@ -44,6 +44,7 @@ export default function PreClass() {
   const [docPage, setDocPage] = useState<DocPage | null>(null);
   const [summary, setSummary] = useState<PageSummary | null>(null);
   const [loading, setLoading] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   const [fontPct, setFontPct] = useState<number>(readFontPct());
   const stackByFont = fontPct >= 175;
@@ -109,6 +110,7 @@ export default function PreClass() {
         setLoading(true);
         const dp = await fetchDocPage(docIdNum, page);
         if (cancelled) return;
+
         if (!dp) {
           setDocPage(null);
           setSummary(null);
@@ -116,13 +118,28 @@ export default function PreClass() {
           announce("교안 페이지를 불러오지 못했습니다.");
           return;
         }
-        setDocPage(dp);
 
+        setDocPage(dp);
         if (dp.totalPage != null) setTotalPage(dp.totalPage);
 
-        if (dp.pageId && dp.pageId > 0)
-          setSummary(await fetchPageSummary(dp.pageId));
-        else setSummary(null);
+        // ✅ 요약 로딩 스피너 ON
+        setSummary(null);
+        if (dp.pageId && dp.pageId > 0) {
+          setSummaryLoading(true);
+          try {
+            const s = await fetchPageSummary(dp.pageId);
+            if (!cancelled) setSummary(s);
+          } catch {
+            if (!cancelled) {
+              toast.error("요약을 불러오지 못했어요.");
+              announce("요약을 불러오지 못했습니다.");
+            }
+          } finally {
+            if (!cancelled) setSummaryLoading(false);
+          }
+        } else {
+          setSummaryLoading(false);
+        }
 
         const nextDefault: "ocr" | "image" =
           role === "assistant" ? "image" : "ocr";
@@ -149,7 +166,7 @@ export default function PreClass() {
     return () => {
       cancelled = true;
     };
-  }, [docIdNum, page, role, announce]);
+  }, [docIdNum, page, role, announce, totalPage]);
 
   useEffect(() => {
     const t = `${state?.navTitle ?? "수업 전"} - p.${page}`;
@@ -221,6 +238,7 @@ export default function PreClass() {
             summaryTtsUrl={summary?.summary_tts}
             sidePaneRef={sidePaneRef}
             sumAudioRef={sumAudioRef}
+            loading={summaryLoading}
           />
         </Grid>
       </Container>
