@@ -30,4 +30,8 @@ def make_mini_summary(content: str) -> str:
         ]
     )
 
-    return response.choices[0].message.content.strip()
+    summary = response.choices[0].message.content.strip()
+
+    print('⭐'+summary)
+
+    return summary

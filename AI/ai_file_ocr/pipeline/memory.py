@@ -1,33 +1,45 @@
-from typing import Optional
+# memory.py (llama_index SummaryIndex 기반 메모리)
 from llama_index.core import SummaryIndex, Document
+from typing import Optional
 
 
-def create_index() -> SummaryIndex:
-    """비어있는 SummaryIndex 생성"""
-    return SummaryIndex.from_documents([])
+class ContextMemory:
+    def __init__(self):
+        # 빈 SummaryIndex 생성
+        self.index = SummaryIndex([])
 
+    def add_summary(self, page_number: int, mini_summary: str):
+        """
+        페이지 요약(mini_summary)을 SummaryIndex에 추가
+        """
+        if not mini_summary or not mini_summary.strip():
+            mini_summary = "(내용 없음)"
 
-def get_context(index: SummaryIndex, max_chars: int = 800) -> str:
-    """현재까지 요약 기반 global context 문자열 반환"""
-    try:
-        summary = index.get_summary()
-    except Exception:
-        return ""
+        doc = Document(
+            text=mini_summary,
+            metadata={"page": page_number}
+        )
+        self.index.insert(doc)
 
-    if not summary:
-        return ""
+    def get_context(self, k: int = 5) -> str:
+        """
+        최근 요약 k개(기본 5개)를 기반으로 문맥 생성
+        (필요하면 전체로 확장 가능)
+        """
+        # SummaryIndex → Retriever
+        retriever = self.index.as_retriever(
+            similarity_top_k=k
+        )
+        nodes = retriever.retrieve("문맥 요청")
 
-    summary = summary.strip()
-    if len(summary) > max_chars:
-        return summary[:max_chars]
-    return summary
+        # 정렬(페이지 순)
+        nodes = sorted(nodes, key=lambda n: n.metadata.get("page", 0))
 
+        # context 텍스트 조립
+        context_texts = [
+            f"[페이지 {n.metadata.get('page')} 요약]\n{n.text}"
+            for n in nodes
+        ]
 
-def update_context(index: SummaryIndex, page_number: int, mini_summary: Optional[str]) -> None:
-    """특정 페이지 mini-summary를 SummaryIndex에 추가"""
-    if not mini_summary:
-        return
+        return "\n\n".join(context_texts)
 
-    text = f"[페이지 {page_number}]\n{mini_summary.strip()}"
-    doc = Document(text=text)
-    index.insert(doc)
