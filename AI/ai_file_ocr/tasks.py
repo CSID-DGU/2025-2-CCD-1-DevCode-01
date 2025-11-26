@@ -1,6 +1,3 @@
-# tasks.py (완전 수정본 ― llama_index SummaryIndex 기반 문맥 메모리 적용)
-
-import base64
 from io import BytesIO
 import os
 import requests

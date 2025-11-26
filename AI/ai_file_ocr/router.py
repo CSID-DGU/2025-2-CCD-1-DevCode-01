@@ -20,7 +20,7 @@ async def ocr_pdf(
 
     except Exception as e:
         print("\n🔥🔥🔥 FASTAPI INTERNAL ERROR 🔥🔥🔥")
-        print(traceback.format_exc())        # ← 콘솔에 전체 출력
+        print(traceback.format_exc())       
         print("🔥🔥🔥 END FASTAPI ERROR 🔥🔥🔥\n")
 
         raise HTTPException(status_code=500, detail=str(e))
