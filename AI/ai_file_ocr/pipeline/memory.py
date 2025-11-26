@@ -1,4 +1,3 @@
-# memory.py (llama_index SummaryIndex 기반 메모리)
 from llama_index.core import SummaryIndex, Document
 from typing import Optional
 

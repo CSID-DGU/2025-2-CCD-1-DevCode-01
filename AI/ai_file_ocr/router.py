@@ -1,24 +1,28 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, HttpUrl
+import traceback
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from ai_file_ocr.tasks import run_pdf_ocr
 
 router = APIRouter()
 
-class PdfOcrRequest(BaseModel):
-    doc_id: int
-    pdf_base64: str
-    callback_url: HttpUrl
-
-
-class PdfOcrResponse(BaseModel):
-    message: str
-
-#BE<>AI api
-@router.post("/ocr/pdf", response_model=PdfOcrResponse)
-def ocr_pdf(request: PdfOcrRequest):
+@router.post("/ocr/pdf")
+async def ocr_pdf(
+    doc_id: int = Form(...),
+    callback_url: str = Form(...),
+    file: UploadFile = File(...)
+):
     try:
-        run_pdf_ocr.delay(request.doc_id, request.pdf_base64, str(request.callback_url))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Celery task 등록 실패: {e}")
+        pdf_bytes = file.file.read()
 
-    return PdfOcrResponse(message="OCR 작업이 큐에 등록되었습니다.")
+        if not pdf_bytes:
+            raise ValueError("Empty PDF file received")
+
+        run_pdf_ocr.delay(doc_id, pdf_bytes, callback_url)
+
+    except Exception as e:
+        print("\n🔥🔥🔥 FASTAPI INTERNAL ERROR 🔥🔥🔥")
+        print(traceback.format_exc())        # ← 콘솔에 전체 출력
+        print("🔥🔥🔥 END FASTAPI ERROR 🔥🔥🔥\n")
+
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"message": "OCR 작업이 큐에 등록되었습니다."}

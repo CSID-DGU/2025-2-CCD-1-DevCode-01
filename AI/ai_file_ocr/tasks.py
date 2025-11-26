@@ -36,13 +36,7 @@ def upload_s3(image_bytes: bytes, key: str, content_type: str = "image/png") -> 
 
 
 @celery_app.task(name="ai_file_ocr.tasks.run_pdf_ocr")
-def run_pdf_ocr(doc_id: int, pdf_base64: str, callback_url: str):
-
-    # 1) base64 → PDF bytes 복원
-    try:
-        pdf_bytes = base64.b64decode(pdf_base64)
-    except Exception as e:
-        raise ValueError(f"PDF base64 디코딩 실패: {e}")
+def run_pdf_ocr(doc_id: int, pdf_bytes: bytes, callback_url: str):
 
     # 2) PDF → 이미지 변환
     pages = pdf_to_images(pdf_bytes)
