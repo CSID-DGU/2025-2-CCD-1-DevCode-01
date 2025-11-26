@@ -6,10 +6,11 @@ class DocSerializer(serializers.ModelSerializer):
     docId = serializers.IntegerField(source="id")
     review = serializers.SerializerMethodField()
     createdAt = serializers.SerializerMethodField()
+    timestamp = serializers.CharField(source="end_time")
 
     class Meta:
         model = Doc
-        fields = ["docId", "title", "review", "createdAt"]
+        fields = ["docId", "title", "review", "createdAt", "timestamp"]
 
     def get_review(self, obj):
         return True if obj.stt_summary else False

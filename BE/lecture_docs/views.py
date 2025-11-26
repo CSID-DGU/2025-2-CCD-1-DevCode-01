@@ -1,11 +1,10 @@
 from urllib.parse import unquote
 from io import BytesIO
-import os
-import tempfile
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+import fitz
 import requests
 from .serializers import *
 from rest_framework.views import APIView
@@ -45,41 +44,42 @@ class DocUploadView(APIView):
 
         # Doc 레코드 생성
         doc = Doc.objects.create(lecture=lecture, title=file.name)
+        pdf_bytes = file.read() 
 
-        # PDF bytes → base64 인코딩
-        pdf_bytes = file.read()
-        pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+        pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        total_pages = pdf_doc.page_count
+        pdf_doc.close()
 
-        # AI 서버 URL 
-        ai_ocr_url = settings.AI_OCR_URL  
-
-        # AI → 백엔드 콜백 URL 구성
-        callback_url = request.build_absolute_uri(
-            f"/docs/{doc.id}/ocr-callback/"
+        # page 객체 생성
+        for page_num in range(1, total_pages + 1):
+            Page.objects.create(
+                doc=doc,
+                page_number=page_num,
+                ocr=None,
+                image=None,
         )
+        # AI로 전송
+        ai_ocr_url = settings.AI_OCR_URL
+        callback_url = request.build_absolute_uri(f"/docs/{doc.id}/ocr-callback/")
+        files = {
+            "file": (file.name, pdf_bytes, file.content_type),
+        }
+
+        data = {
+            "doc_id": doc.id,
+            "callback_url": callback_url,
+        }
 
         try:
-            resp = requests.post(
-                ai_ocr_url,
-                json={
-                    "doc_id": doc.id,
-                    "pdf_base64": pdf_b64,
-                    "callback_url": callback_url,
-                },
-                timeout=10,
-            )
+            resp = requests.post(ai_ocr_url, files=files, data=data, timeout=10)
             resp.raise_for_status()
         except Exception as e:
-            # AI 서버 요청 실패 시, Doc만 생성해놓고 오류 리턴
             return Response(
-                {"error": f"AI OCR 서버 요청 실패: {e}"},
+                {"error": f"AI 서버 요청 실패: {e}"},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        return Response({
-            "docId": doc.id,
-            "title": doc.title
-        }, status=201)
+        return Response({"docId": doc.id, "title": doc.title}, status=201)
 #BE<>AI
 class OcrCallbackView(APIView):
 
@@ -215,12 +215,8 @@ class PageDetailView(APIView):
         except Doc.DoesNotExist:
             return Response({"detail": "문서를 찾을 수 없습니다."},
                             status=status.HTTP_404_NOT_FOUND)
-        try:
-            page = doc.pages.get(page_number=pageNumber)
-        except Page.DoesNotExist:
-            return Response({"detail": "페이지를 찾을 수 없습니다."},
-                            status=status.HTTP_404_NOT_FOUND)
 
+        page = doc.pages.get(page_number=pageNumber)
         data = PageSerializer(page).data
 
         if not page.ocr:
