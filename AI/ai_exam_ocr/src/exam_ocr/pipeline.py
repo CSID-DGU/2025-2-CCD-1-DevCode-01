@@ -75,10 +75,6 @@ def build_sequential_crops(structured_questions: List[Dict[str, Any]],
 
         seq_meta.append({"question_number": qnum, "items": items})
 
-    seq_meta_path = os.path.join(output_dir, "sequential_meta.json")
-    with open(seq_meta_path, "w", encoding="utf-8") as f:
-        json.dump(seq_meta, f, ensure_ascii=False, indent=2)
-
     return seq_meta
 
 
