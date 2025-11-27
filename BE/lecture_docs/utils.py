@@ -25,7 +25,7 @@ def summarize_stt(doc_id: int, user: User) -> tuple[str, str]:
     lecture_title = doc.lecture.title if doc.lecture else "강의"
     doc_title = doc.title
 
-    doc_end_time_sec = time_to_seconds(doc.end_time)
+    doc_end_time_sec = time_to_seconds(doc.end_time) if doc.end_time else 0.0
 
     # 2️⃣ 모든 페이지의 STT 텍스트 병합
     stt_texts = []

@@ -375,7 +375,7 @@ class DocSttSummaryView(APIView):
 
     def post(self, request, docId):
         """수업 종료 시 Gemini 기반 자동 요약 생성"""
-        doc = self.get_object(Id)
+        doc = self.get_object(docId)
         if not doc:
             return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
