@@ -42,7 +42,7 @@ outputs/
 results/
 *.pages.json
 *.txt
-*.md
+# *.md
 *.pdf
 *.png
 *.jpg
