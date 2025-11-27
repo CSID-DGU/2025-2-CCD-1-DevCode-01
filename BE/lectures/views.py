@@ -28,11 +28,15 @@ class LectureView(APIView):
         serializer = LectureCreateSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         lecture = serializer.save()
+
+        lecture.lecture_tts = text_to_speech(lecture.title, request.user, "tts/lecture/")
+        lecture.save(update_fields=['lecture_tts'])
         
         return Response({
             "title": lecture.title,
             "lecture_id": lecture.id,
             "code": lecture.code,
+            "lecture_tts": lecture.lecture_tts
         }, status=status.HTTP_201_CREATED)
 
 class LectureDetailView(APIView):
@@ -72,9 +76,13 @@ class LectureDetailView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
+        lecture.lecture_tts = text_to_speech(lecture.title, request.user, "tts/lecture/")
+        lecture.save(update_fields=['lecture_tts'])
+
         return Response({
             "lecture_id": lecture.id,
-            "title": lecture.title
+            "title": lecture.title,
+            "lecture_tts": lecture.lecture_tts
         }, status=status.HTTP_200_OK)
     
     def delete(self, request, lectureId):
@@ -146,6 +154,7 @@ class LectureJoinView(APIView):
         return Response({
             "lecture_id": lecture.id,
             "title": lecture.title,
+            "lecture_tts": lecture.lecture_tts,
             "role": user.role
         }, status=status.HTTP_200_OK)
 
