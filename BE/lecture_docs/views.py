@@ -60,7 +60,8 @@ class DocUploadView(APIView):
         )
         # AI로 전송
         ai_ocr_url = settings.AI_OCR_URL
-        callback_url = request.build_absolute_uri(f"/docs/{doc.id}/ocr-callback/")
+        callback_url = f"{settings.BACKEND_BASE_URL}/docs/{doc.id}/ocr-callback/"
+
         files = {
             "file": (file.name, pdf_bytes, file.content_type),
         }
