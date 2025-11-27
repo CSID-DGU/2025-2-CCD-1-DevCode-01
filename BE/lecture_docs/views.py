@@ -365,17 +365,17 @@ class DocSttSummaryView(APIView):
         doc = self.get_object(docId)
         if not doc:
             return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+        
+        summaries = SpeechSummary.objects.filter(doc=doc).order_by("created_at")
+        serializer = SpeechSummaryListSerializer(summaries, many=True)
 
         return Response({
-            "doc_id": doc.id,
-            "title": doc.title,
-            "stt_summary": doc.stt_summary or None,
-            "stt_summary_tts": doc.stt_summary_tts or None
+            "summaries": serializer.data
         }, status=status.HTTP_200_OK)
 
     def post(self, request, docId):
         """수업 종료 시 Gemini 기반 자동 요약 생성"""
-        doc = self.get_object(docId)
+        doc = self.get_object(Id)
         if not doc:
             return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -385,42 +385,65 @@ class DocSttSummaryView(APIView):
         summary, tts_url = summarize_stt(doc.id, user=request.user)
 
         # ✅ 결과 DB 반영
-        doc.stt_summary = summary
-        doc.stt_summary_tts = tts_url
+        speech_sum = SpeechSummary.objects.create(
+            doc=doc,
+            end_time=timestamp,
+            summary=summary,
+            summary_tts=tts_url
+        )
+
         doc.end_time = timestamp
-        doc.save()
+        doc.save(update_fields=['end_time'])
 
         return Response({
             "message": "STT 요약문 및 음성 파일이 성공적으로 생성되었습니다.",
             "doc_id": doc.id,
-            "stt_summary": doc.stt_summary,
-            "stt_summary_tts": doc.stt_summary_tts,
-            "timestamp": doc.end_time
+            "stt_summary": speech_sum.summary,
+            "stt_summary_tts": speech_sum.summary_tts,
+            "timestamp": speech_sum.end_time
         }, status=status.HTTP_200_OK)
+    
+class DocSttSummaryDetailView(APIView):
+    def get_object(self, speechSummaryId):
+        try:
+            return SpeechSummary.objects.get(id=speechSummaryId)
+        except SpeechSummary.DoesNotExist:
+            return None
+        
+    def get(self, request, speechSummaryId):
+        """특정 STT 요약문 조회"""
+        speech_sum = self.get_object(speechSummaryId)
+        if not speech_sum:
+            return Response({"error": "해당 요약을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = SpeechSummarySerializer(speech_sum)
 
-    def patch(self, request, docId):
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def patch(self, request, speechSummaryId):
         """요약문 직접 수정 시 TTS 재생성"""
-        doc = self.get_object(docId)
-        if not doc:
-            return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+        speech_sum = self.get_object(speechSummaryId)
+        if not speech_sum:
+            return Response({"error": "해당 요약을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
         new_summary = request.data.get("stt_summary")
         if not new_summary or not new_summary.strip():
             return Response({"error": "수정할 stt_summary 내용이 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
 
         # ✅ 수정된 요약 저장
-        doc.stt_summary = new_summary.strip()
+        speech_sum.summary = new_summary.strip()
 
         # ✅ 수정된 텍스트로 새 TTS 생성
-        tts_url = text_to_speech(doc.stt_summary, user=request.user, s3_folder="tts/stt_summary/")
-        doc.stt_summary_tts = tts_url
-        doc.save()
+        tts_url = text_to_speech(speech_sum.summary, user=request.user, s3_folder="tts/stt_summary/")
+        speech_sum.summary_tts = tts_url
+        speech_sum.save()
 
         return Response({
             "message": "요약문이 성공적으로 수정되고 새 TTS가 생성되었습니다.",
-            "doc_id": doc.id,
-            "stt_summary": doc.stt_summary,
-            "stt_summary_tts": doc.stt_summary_tts
+            "doc_id": speech_sum.doc.id,
+            "stt_summary": speech_sum.summary,
+            "stt_summary_tts": speech_sum.summary_tts,
+            "timestamp": speech_sum.end_time
         }, status=status.HTTP_200_OK)
 
 #review    
