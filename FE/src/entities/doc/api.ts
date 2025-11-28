@@ -4,7 +4,7 @@ import {
   postNoResponse,
   patchResponse,
 } from "@apis/instance";
-import type { LectureDoc, LectureDocDTO } from "./types";
+import type { LectureDoc, LectureDocDTO, LectureDocsResponse } from "./types";
 import { mapLectureDoc } from "./types";
 
 /* ---------- 타입 가드 ---------- */
@@ -14,13 +14,10 @@ const isLectureDocDTO = (v: unknown): v is LectureDocDTO => {
   return (
     typeof o.docId === "number" &&
     typeof o.title === "string" &&
-    typeof o.createdAt === "string"
+    typeof o.createdAt === "string" &&
+    typeof o.review === "boolean" &&
+    (typeof o.timestamp === "string" || o.timestamp === null)
   );
-};
-
-type LectureDocsResponse = {
-  lectureId: number;
-  doc: LectureDocDTO[];
 };
 
 type UpdateLectureDocReq = { title: string };
@@ -47,24 +44,13 @@ export const getLectureDocs = async (
   return res.doc.map(mapLectureDoc);
 };
 
-// 파일 업로드
 export const uploadLectureDoc = async (
   lectureId: number,
   file: File
-): Promise<LectureDoc> => {
+): Promise<void> => {
   const formData = new FormData();
   formData.append("file", file);
-
-  const res = await postNoResponse<unknown>(
-    `/lecture/${lectureId}/doc/`,
-    formData
-  );
-
-  if (!isLectureDocDTO(res)) {
-    throw new Error("Invalid upload response");
-  }
-
-  return mapLectureDoc(res);
+  await postNoResponse(`/lecture/${lectureId}/doc/`, formData);
 };
 
 export const deleteLectureDoc = async (docId: number): Promise<boolean> => {
