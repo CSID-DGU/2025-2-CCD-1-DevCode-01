@@ -27,7 +27,11 @@ load_dotenv()
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
+# 배포 시 false로 변경
+#DEBUG = False
+# 로컬 테스트용
 DEBUG = True
+
 
 ALLOWED_HOSTS = ['*']
 
@@ -114,7 +118,7 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.getenv("GOOGLE_APPLICATION_CRE
 os.environ["GOOGLE_CLOUD_DISABLE_GRPC"] = "false"
 os.environ["GRPC_DNS_ENABLE_SRV_QUERY"] = "0"
 os.environ["GRPC_DNS_RESOLVER"] = "native"
-GCP_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
+GCP_BUCKET_NAME = os.getenv("GCP_BUCKET_NAME")
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 GCP_REGION = os.getenv("GCP_REGION")
 

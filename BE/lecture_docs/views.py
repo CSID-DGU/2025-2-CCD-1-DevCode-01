@@ -16,6 +16,7 @@ from classes.utils import text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
 from .utils import  *
+from classes.serializers import *
 
 
 #교안 업로드/조회
@@ -60,8 +61,9 @@ class DocUploadView(APIView):
         )
         # AI로 전송
         ai_ocr_url = settings.AI_OCR_URL
-        callback_url = f"{settings.BACKEND_BASE_URL}/docs/{doc.id}/ocr-callback/"
-
+        #callback_url = f"{settings.BACKEND_BASE_URL}/docs/{doc.id}/ocr-callback/"
+        #로컬 테스트용
+        callback_url = request.build_absolute_uri(f"/docs/{doc.id}/ocr-callback/")
         files = {
             "file": (file.name, pdf_bytes, file.content_type),
         }
@@ -431,56 +433,24 @@ class PageView(APIView):
         try:
             page = Page.objects.get(id=pageId)
         except Page.DoesNotExist:
-            return Response({"detail": "페이지를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "페이지를 찾을 수 없습니다."}, status=404)
 
         user = request.user
 
-        # page_data = {
-        #     "doc_id": page.doc.id,
-        #     "page_id": page.id,
-        #     "page_number": page.page_number,
-        #     "ocr": page.ocr or None,
-        #     "page_tts": page.page_tts or None,
-        #     "embedded_images": page.embedded_images or None,
-        #     "image": page.image.url if page.image else None,
-        # }
-
         note = Note.objects.filter(page=page, user=user).first()
-        note_data = {
-            "note_id": note.id,
-            "content": note.content,
-            "note_tts": note.note_tts or None,
-        } if note else None
-
         speeches = Speech.objects.filter(page=page).order_by("-created_at")
-        speech_data = [
-            {
-                "speech_id": speech.id,
-                "stt": speech.stt,
-                "stt_tts": speech.stt_tts or None,
-                "end_time": speech.end_time,
-                "duration": speech.duration,
-            }
-            for speech in speeches
-        ]
+        bookmarks = BookmarkSerializer(
+            Bookmark.objects.filter(page=page, user=user).order_by("-created_at"),
+            many=True
+        ).data
 
-        bookmarks = Bookmark.objects.filter(page=page, user=user).order_by("-created_at")
-        bookmark_data = [
-            {
-                "bookmark_id": bookmark.id,
-                "timestamp": bookmark.timestamp,
-            }
-            for bookmark in bookmarks
-        ]
+        response_data = {
+            "note": NoteSerializer(note).data if note else None,
+            "speeches": SpeechSerializer(speeches, many=True).data,
+            "bookmarks": bookmarks,
+        }
 
-        return Response({
-            # "page": page_data,
-            "note": note_data,
-            "speeches": speech_data,
-            "bookmarks": bookmark_data,
-            # "boards": board_data,
-        }, status=status.HTTP_200_OK)
-    
+        return Response(response_data, status=200)
 
 #시험 OCR
 class ExamTTSView(APIView):
@@ -504,22 +474,21 @@ class ExamOCRView(APIView):
     def post(self, request):
         if 'image' not in request.FILES:
             return Response({"error": "이미지를 업로드하세요."}, status=400)
-        
-        #임시 데이터
-        ocr_text = "ocr text"  
-        question_number = 1  
 
-        tts_url = f"/exam/tts/?text={ocr_text}"
+        image = request.FILES['image']
 
-        response_data = {
-            "totalQuestions": 10,
-            "question": [
-                {
-                    "questionNumber": question_number,
-                    "ocrText": ocr_text,
-                    "tts": tts_url
-                }
-            ]
+        ai_url = settings.AI_EXAM_OCR_URL   
+
+        files = {
+            "image": (image.name, image.read(), image.content_type)
         }
-        serializer = TotalExamSerializer(response_data)
-        return Response(serializer.data, status=200)
+
+        try:
+            ai_resp = requests.post(ai_url, files=files, timeout=40)
+            ai_resp.raise_for_status()
+        except Exception as e:
+            return Response({"error": f"AI 서버 요청 실패: {e}"}, status=502)
+
+        result = ai_resp.json()
+
+        return Response(result, status=200)
