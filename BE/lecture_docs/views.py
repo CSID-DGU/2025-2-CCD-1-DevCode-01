@@ -1,3 +1,4 @@
+import re
 from urllib.parse import unquote
 from io import BytesIO
 from django.http import HttpResponse
@@ -12,7 +13,7 @@ from rest_framework import status,permissions
 from rest_framework.response import Response
 from classes.models import Bookmark, Note, Speech
 from classes.models import Bookmark, Note, Speech
-from classes.utils import text_to_speech
+from classes.utils import preprocess_code, text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
 from .utils import  *
@@ -122,9 +123,24 @@ class PageTTSView(APIView):
         
         if page.page_tts:
             return Response({"tts": page.page_tts}, status=200)
+        
+        # 1️⃣ <코드> ... </코드> 부분 추출
+        code_pattern = re.compile(r"<코드>(.*?)</코드>", re.DOTALL)
+        
+        def replace_code(match):
+            code_text = match.group(1)
+            # 2️⃣ 코드 전처리
+            processed_code = preprocess_code(code_text)
+            return f"<코드>{processed_code}</코드>"
+
+        preprocessed_text = code_pattern.sub(replace_code, page.ocr)
+
+        # 3️⃣ <수식> ... </수식> 부분 추출
+        # math_pattern = re.compile(r"<수식>(.*?)</수식>", re.DOTALL)
+        
         try:
             tts_url = text_to_speech(
-                page.ocr,
+                preprocessed_text,
                 user=request.user,
                 s3_folder="tts/page_ocr/"
             )

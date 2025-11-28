@@ -1,3 +1,4 @@
+import re
 import tempfile
 import wave
 from google.cloud import speech, storage
@@ -10,6 +11,44 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from users.models import User
+
+symbol_map = {
+    "!": "느낌표",
+    "@": "앳",
+    "#": "샵",
+    "$": "달러",
+    "%": "퍼센트",
+    "^": "캐럿",
+    "&": "앤드",
+    "*": "애스터리스크",
+    "(": "괄호 열고",
+    ")": "괄호 닫고",
+    "-": "하이픈",
+    "_": "언더스코어",
+    "=": "이퀄",
+    "+": "플러스",
+    "[": "대괄호 열고",
+    "]": "대괄호 닫고",
+    "{": "중괄호 열고",
+    "}": "중괄호 닫고",
+    "\\": "백슬래시",
+    "|": "파이프",
+    ";": "세미콜론",
+    ":": "콜론",
+    "'": "작은따옴표",
+    '"': "큰따옴표",
+    ",": "콤마",
+    ".": "점",
+    "/": "슬래시",
+    "?": "물음표",
+    "<": "꺾쇠 열고",
+    ">": "꺾쇠 닫고",
+    "~": "틸다",
+    "`": "백틱",
+    "\t": "들여쓰기",
+}
+
+symbol_pattern = re.compile("|".join(re.escape(k) for k in symbol_map.keys()))
 
 def upload_to_gcs(file_bytes: bytes, filename: str, bucket_name: str) -> str:
     """GCS 버킷에 파일 업로드 후 URI 반환"""
@@ -194,6 +233,32 @@ def find_full_text(stt_words, target_word, user: User):
     
     # 단어 결합 (▁ 제거하고 공백 처리)
     return "".join([w.replace("▁", " ") for w in sentence_words]).strip()
+
+# 코드 전처리
+def preprocess_code(code_text: str) -> str:
+    lines = code_text.split("\n")
+    processed_lines = []
+
+    for line in lines:
+        # 1) 앞쪽 공백 개수 → 들여쓰기
+        leading_spaces = len(line) - len(line.lstrip(' '))
+        total_indent = (leading_spaces // 4)
+        indent_text = " ".join(["들여쓰기"] * total_indent) + " " if total_indent > 0 else ""
+
+        # 2) 내용 부분
+        content = line.lstrip(' ')
+
+        # 3) 특수문자 전처리
+        def replace_symbol(match):
+            return f" {symbol_map[match.group(0)]} "
+
+        content = symbol_pattern.sub(replace_symbol, content)
+
+        # 4) 결과 합치기
+        processed_lines.append(indent_text + content.strip())
+
+    # 5) 줄바꿈 처리
+    return " 줄바꿈 ".join(processed_lines)
 
 def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     
