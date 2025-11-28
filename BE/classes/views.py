@@ -192,19 +192,17 @@ class NoteView(APIView):
         if Note.objects.filter(page=page, user=user).exists():
             return Response({"error": "이미 이 페이지에 작성한 노트가 있습니다."}, status=status.HTTP_400_BAD_REQUEST)
         
-        note_tts = text_to_speech(content, user, "tts/note/")
+        # note_tts = text_to_speech(content, user, "tts/note/")
 
         note = Note.objects.create(
             page=page,
             user=user,
-            content=content.strip(),
-            note_tts=note_tts
+            content=content.strip()
         )
 
         return Response({
             "note_id": note.id,
-            "content": note.content,
-            "note_tts": note.note_tts,
+            "content": note.content
         }, status=status.HTTP_201_CREATED)
     
 class NoteDetailView(APIView):
@@ -224,17 +222,16 @@ class NoteDetailView(APIView):
         content = request.data.get("content")
         note.content = content.strip()
         
-        if not content or content.strip() == "":
-            note.note_tts = None
-        else:
-            note_tts = text_to_speech(content, user, "tts/note/")
-            note.note_tts = note_tts
+        # if not content or content.strip() == "":
+        #     note.note_tts = None
+        # else:
+        #     note_tts = text_to_speech(content, user, "tts/note/")
+        #     note.note_tts = note_tts
 
         note.save()
 
         return Response({
             "note_id": note.id,
-            "content": note.content,
-            "note_tts": note.note_tts
+            "content": note.content
         }, status=status.HTTP_200_OK)
     
