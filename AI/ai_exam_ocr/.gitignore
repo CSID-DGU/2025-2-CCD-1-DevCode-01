@@ -1,0 +1,11 @@
+# venv
+.venv/
+venv/
+
+# 환경 변수
+.env
+
+# 기타
+__pycache__/
+*.pyc
+exam_outputs/

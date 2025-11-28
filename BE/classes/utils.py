@@ -1,3 +1,4 @@
+import re
 import tempfile
 import wave
 from google.cloud import speech, storage
@@ -10,6 +11,44 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from users.models import User
+
+symbol_map = {
+    "!": "느낌표",
+    "@": "앳",
+    "#": "샵",
+    "$": "달러",
+    "%": "퍼센트",
+    "^": "캐럿",
+    "&": "앤드",
+    "*": "애스터리스크",
+    "(": "괄호 열고",
+    ")": "괄호 닫고",
+    "-": "하이픈",
+    "_": "언더스코어",
+    "=": "이퀄",
+    "+": "플러스",
+    "[": "대괄호 열고",
+    "]": "대괄호 닫고",
+    "{": "중괄호 열고",
+    "}": "중괄호 닫고",
+    "\\": "백슬래시",
+    "|": "파이프",
+    ";": "세미콜론",
+    ":": "콜론",
+    "'": "작은따옴표",
+    '"': "큰따옴표",
+    ",": "콤마",
+    ".": "점",
+    "/": "슬래시",
+    "?": "물음표",
+    "<": "꺾쇠 열고",
+    ">": "꺾쇠 닫고",
+    "~": "틸다",
+    "`": "백틱",
+    "\t": "들여쓰기",
+}
+
+symbol_pattern = re.compile("|".join(re.escape(k) for k in symbol_map.keys()))
 
 def upload_to_gcs(file_bytes: bytes, filename: str, bucket_name: str) -> str:
     """GCS 버킷에 파일 업로드 후 URI 반환"""
@@ -123,10 +162,13 @@ def speech_to_text(audio_file) -> str:
         enable_separate_recognition_per_channel=False,
         model="latest_long",
         use_enhanced=True,
-        enable_automatic_punctuation=True
+        enable_automatic_punctuation=True,
+        enable_word_time_offsets=True # 단어 단위 구간 제공
     )
 
     transcript = ""
+    stt_words = []
+    offset = 0.0
 
     for chunk in chunks:
         with open(chunk, "rb") as f:
@@ -142,14 +184,81 @@ def speech_to_text(audio_file) -> str:
             response = operation.result(timeout=900)
 
         if response.results:
-            text = " ".join([r.alternatives[0].transcript.strip() for r in response.results])
-            transcript += text + " "
+            for result in response.results:
+                alt = result.alternatives[0]
+                transcript += alt.transcript.strip() + " "
+
+                if alt.words:
+                    for w in alt.words:
+                        start = w.start_time.total_seconds() + offset
+                        end = w.end_time.total_seconds() + offset
+
+                        stt_words.append({
+                            "word": w.word,
+                            "start": start,
+                            "end": end
+                        })
 
         os.remove(chunk)
+
     if not transcript or transcript.strip() == "":
         raise ValueError("인식된 텍스트가 비어 있습니다.")
 
-    return transcript
+    return transcript, stt_words
+
+def extract_text(stt_words, relative_time, user: User):
+    for w in stt_words:
+        if w["start"] <= relative_time <= w["end"]:
+            return find_full_text(stt_words, w, user)
+    return None
+
+def find_full_text(stt_words, target_word, user: User):
+    idx = stt_words.index(target_word)
+
+    # 오른쪽으로 wps초 구간만 추출
+    sentence_words = [target_word["word"]]
+    start_time = target_word["start"]
+
+    if user.rate == "느림":
+        wps = 4.0
+    elif user.rate == "빠름":
+        wps = 8.0
+    else:
+        wps = 6.0  # 기본값
+    
+    for w in stt_words[idx+1:]:
+        if w["end"] - start_time > wps: # 시작 단어 기준으로 wps초
+            break
+        sentence_words.append(w["word"])
+    
+    # 단어 결합 (▁ 제거하고 공백 처리)
+    return "".join([w.replace("▁", " ") for w in sentence_words]).strip()
+
+# 코드 전처리
+def preprocess_code(code_text: str) -> str:
+    lines = code_text.split("\n")
+    processed_lines = []
+
+    for line in lines:
+        # 1) 앞쪽 공백 개수 → 들여쓰기
+        leading_spaces = len(line) - len(line.lstrip(' '))
+        total_indent = (leading_spaces // 4)
+        indent_text = " ".join(["들여쓰기"] * total_indent) + " " if total_indent > 0 else ""
+
+        # 2) 내용 부분
+        content = line.lstrip(' ')
+
+        # 3) 특수문자 전처리
+        def replace_symbol(match):
+            return f" {symbol_map[match.group(0)]} "
+
+        content = symbol_pattern.sub(replace_symbol, content)
+
+        # 4) 결과 합치기
+        processed_lines.append(indent_text + content.strip())
+
+    # 5) 줄바꿈 처리
+    return " 줄바꿈 ".join(processed_lines)
 
 def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     
@@ -295,8 +404,8 @@ def get_duration(audio):
             with wave.open(audio, "rb") as wav_file:
                 frames = wav_file.getnframes()
                 rate = wav_file.getframerate()
-                duration_sec = round(frames / float(rate), 2)
-                duration = str(timedelta(seconds=int(duration_sec)))
+                duration_sec = int(frames / rate)
+                duration = str(timedelta(seconds=duration_sec))
                 return duration_sec, duration
         except Exception as e:
             raise ValueError(f"WAV 길이 계산 실패: {e}")

@@ -12,15 +12,15 @@ const toSec = (hhmmss: string) => {
 const clamp = (v: number, min: number, max: number) =>
   Math.max(min, Math.min(max, v));
 
-/* ---------- 더미 ---------- */
-const DUMMY_SPEECH = {
-  speech_id: 0,
-  stt: "직접 재산권을 다른 매체로 확장하는 사업 전략 되면 미디어 프랜차이즈업 원소스 멀티유즈가 있습니다 애들은 하나의 IP를 영화 드라마 소설 게임 등 여러 형태로 전개하여 수익을 창출하고 브랜드 가치를 확장하는 방법입니다 원소스 멀티유즈는 하나의 콘텐츠를 다양한 매체를 활용하여 난 전략입니다 미디어플랜 성공한 IP를 기반으로 영화 시리즈 게임 상품전 확장해나가는 사업 모델입니다",
-  stt_tts: "",
-  end_time: "00:00:30",
-  duration: "00:00:30",
-};
-const DUMMY_BOOKMARK = { bookmark_id: 0, timestamp: "00:00:15" };
+// /* ---------- 더미 ---------- */
+// const DUMMY_SPEECH = {
+//   speech_id: 0,
+//   stt: "직접 재산권을 다른 매체로 확장하는 사업 전략 되면 미디어 프랜차이즈업 원소스 멀티유즈가 있습니다 애들은 하나의 IP를 영화 드라마 소설 게임 등 여러 형태로 전개하여 수익을 창출하고 브랜드 가치를 확장하는 방법입니다 원소스 멀티유즈는 하나의 콘텐츠를 다양한 매체를 활용하여 난 전략입니다 미디어플랜 성공한 IP를 기반으로 영화 시리즈 게임 상품전 확장해나가는 사업 모델입니다",
+//   stt_tts: "",
+//   end_time: "00:00:30",
+//   duration: "00:00:30",
+// };
+// const DUMMY_BOOKMARK = { bookmark_id: 0, timestamp: "00:00:15" };
 
 type Props = {
   review: PageReview | null;
@@ -29,8 +29,10 @@ type Props = {
 };
 
 export default function ClassPane({ review, isActive }: Props) {
-  const stt = review?.speeches?.[0] ?? DUMMY_SPEECH; // 한 페이지 = 1 발화
-  const bookmarks = review?.bookmarks ?? [DUMMY_BOOKMARK];
+  const stt = review?.speeches?.[0]; // 한 페이지 = 1 발화
+  const bookmarks = review?.bookmarks;
+  //   const stt = review?.speeches?.[0] ?? DUMMY_SPEECH; // 한 페이지 = 1 발화
+  // const bookmarks = review?.bookmarks ?? [DUMMY_BOOKMARK];
 
   // refs
   const cardRef = useRef<HTMLElement | null>(null);
@@ -44,14 +46,14 @@ export default function ClassPane({ review, isActive }: Props) {
   const ensureSrc = () => {
     const a = audioRef.current;
     if (!a) return null;
-    if (stt.stt_tts && a.src !== stt.stt_tts) a.src = stt.stt_tts;
+    if (stt?.stt_tts && a.src !== stt.stt_tts) a.src = stt.stt_tts;
     return a;
   };
 
   const playFrom = (sec: number) => {
     const a = ensureSrc();
     if (!a) return;
-    const dur = Math.max(1, toSec(stt.duration ?? "00:00:00")); // 0 방지
+    const dur = Math.max(1, toSec(stt?.duration ?? "00:00:00")); // 0 방지
     a.currentTime = clamp(sec, 0, dur);
     a.play().then(
       () => setPlaying(true),
@@ -98,7 +100,7 @@ export default function ClassPane({ review, isActive }: Props) {
       <Section aria-label="북마크">
         <p>북마크</p>
         <MarkWrap>
-          {(bookmarks.length > 0 ? bookmarks : [DUMMY_BOOKMARK])
+          {(bookmarks ?? [])
             .slice()
             .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
             .map((b) => (
@@ -137,11 +139,10 @@ export default function ClassPane({ review, isActive }: Props) {
             playing ? "재생 중, 클릭하면 일시정지" : "일시정지, 클릭하면 재생"
           }
         >
-          <Content>{stt.stt}</Content>
+          <Content>{stt?.stt}</Content>
           <Hint>{playing ? "⏸ 클릭: 일시정지" : "▶ 클릭: 재생"}</Hint>
         </Card>
 
-        {/* 숨김 오디오(컨트롤 없음) */}
         <audio
           ref={audioRef}
           preload="none"

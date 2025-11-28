@@ -28,10 +28,7 @@ class Bookmark(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bookmarks')
     timestamp = models.CharField(max_length=10)
     timestamp_sec = models.FloatField(default=0.0)
+    relative_time = models.FloatField(default=0.0, null=True, blank=True)
+    text = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-#시험 DB저장x
-@dataclass
-class Exam:
-    title: str
-    questions: List[Dict[str, str]] = field(default_factory=list)

@@ -19,7 +19,7 @@ import BottomToolbar from "src/components/lecture/pre/BottomToolBar";
 import RightTabsPost from "src/components/lecture/post/RightTabPost";
 
 type RouteParams = { courseId?: string; docId?: string };
-type NavState = { navTitle?: string; totalPages?: number; docId?: number };
+type NavState = { navTitle?: string; totalPage?: number; docId?: number };
 
 export default function PostClass() {
   const params = useParams<RouteParams>();
@@ -31,7 +31,7 @@ export default function PostClass() {
   const parsedParamId = Number(params.docId);
   const docId =
     state?.docId ?? (Number.isFinite(parsedParamId) ? parsedParamId : NaN);
-  const totalPages = state?.totalPages ?? null;
+  const totalPage = state?.totalPage ?? null;
 
   const [page, setPage] = useState<number>(1);
   const [loading, setLoading] = useState(false);
@@ -109,7 +109,7 @@ export default function PostClass() {
         setMode(nextDefault);
 
         announce(
-          `페이지 ${dp.pageNumber}${totalPages ? ` / 총 ${totalPages}` : ""}, ${
+          `페이지 ${dp.pageNumber}${totalPage ? ` / 총 ${totalPage}` : ""}, ${
             nextDefault === "ocr" ? "본문" : "원본"
           } 보기`
         );
@@ -129,7 +129,7 @@ export default function PostClass() {
     return () => {
       cancelled = true;
     };
-  }, [docId, page, role, totalPages, announce]);
+  }, [docId, page, role, totalPage, announce]);
 
   useFocusTTS({
     enabled: readOnFocus,
@@ -144,7 +144,7 @@ export default function PostClass() {
 
   // 페이지 이동/토글
   const clampPage = (n: number) =>
-    !totalPages ? Math.max(1, n) : Math.min(Math.max(1, n), totalPages);
+    !totalPage ? Math.max(1, n) : Math.min(Math.max(1, n), totalPage);
   const goToPage = (n: number) => {
     const next = clampPage(n);
     if (next === page) return;
@@ -160,7 +160,7 @@ export default function PostClass() {
     });
 
   const canPrev = page > 1;
-  const canNext = totalPages ? page < totalPages : true;
+  const canNext = totalPage ? page < totalPage : true;
 
   return (
     <Wrap aria-busy={loading} aria-describedby="live-status">
@@ -209,7 +209,7 @@ export default function PostClass() {
         canPrev={canPrev}
         canNext={canNext}
         page={page}
-        totalPages={totalPages ?? undefined}
+        totalPage={totalPage ?? undefined}
         mode={mode}
         onPrev={() => void goToPage(page - 1)}
         onNext={() => void goToPage(page + 1)}
@@ -220,7 +220,7 @@ export default function PostClass() {
           navigate(`/lecture/doc/${docId}/live`, {
             state: {
               docId,
-              totalPages,
+              totalPage,
               startPage: page,
               pageId,
               autoRecord: true,

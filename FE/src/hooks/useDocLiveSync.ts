@@ -1,4 +1,3 @@
-// src/hooks/useDocLiveSync.ts
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 export type BoardEventType = "created" | "updated" | "deleted";
@@ -27,7 +26,7 @@ export interface UseDocLiveSyncOptions {
   onBoardUpdated?: (data: BoardEventCreatedOrUpdated) => void;
   onBoardDeleted?: (data: BoardEventDataBase) => void;
 
-  totalPages?: number | null;
+  totalPage?: number | null;
   announce?: (msg: string) => void;
   debug?: boolean;
 }
@@ -40,7 +39,7 @@ export function useDocLiveSync({
   onBoardCreated,
   onBoardUpdated,
   onBoardDeleted,
-  totalPages,
+  totalPage,
   announce,
   debug = import.meta.env?.DEV ?? false,
 }: UseDocLiveSyncOptions) {
@@ -61,10 +60,10 @@ export function useDocLiveSync({
   const clamp = useCallback(
     (n: number) => {
       const min = 1;
-      if (!totalPages) return Math.max(min, n);
-      return Math.min(Math.max(min, n), totalPages);
+      if (!totalPage) return Math.max(min, n);
+      return Math.min(Math.max(min, n), totalPage);
     },
-    [totalPages]
+    [totalPage]
   );
 
   const url = useMemo(() => {

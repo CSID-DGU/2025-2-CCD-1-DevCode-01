@@ -1,4 +1,4 @@
-import { getResponse } from "@apis/instance";
+import { getResponse, postResponse } from "@apis/instance";
 
 export type DocPage = {
   docId: number;
@@ -6,7 +6,7 @@ export type DocPage = {
   pageId: number;
   image: string;
   ocr: string;
-  sum?: string;
+  totalPage: number;
   tts?: string;
 };
 
@@ -18,7 +18,7 @@ export async function fetchDocPage(docId: number, page: number) {
     pagId?: number;
     image: string;
     ocr: string;
-    sum?: string;
+    totalPage: number;
     tts?: string;
   };
 
@@ -38,7 +38,7 @@ export async function fetchDocPage(docId: number, page: number) {
     pageId,
     image: fullImage,
     ocr: data.ocr,
-    sum: data.sum,
+    totalPage: data.totalPage,
     tts: data.tts,
   };
   return mapped;
@@ -51,5 +51,10 @@ export type PageSummary = {
 };
 
 export async function fetchPageSummary(pageId: number) {
-  return getResponse<PageSummary>(`/page/${pageId}/summary/`);
+  const data = await postResponse<null, PageSummary>(
+    `/page/${pageId}/summary/`,
+    null
+  );
+  if (!data) throw new Error("요약 불러오기 실패");
+  return data;
 }
