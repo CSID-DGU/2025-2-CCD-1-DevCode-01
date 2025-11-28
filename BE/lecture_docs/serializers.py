@@ -13,7 +13,7 @@ class DocSerializer(serializers.ModelSerializer):
         fields = ["docId", "title", "review", "createdAt", "timestamp"]
 
     def get_review(self, obj):
-        return True if obj.stt_summary else False
+        return True if obj.end_time else False
 
     def get_createdAt(self, obj):
         return obj.created_at.strftime("%Y-%m-%d %H:%M")
