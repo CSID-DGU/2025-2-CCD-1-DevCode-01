@@ -12,9 +12,9 @@ const isLectureDocDTO = (v: unknown): v is LectureDocDTO => {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
   return (
-    typeof o.docId === "number" &&
-    typeof o.title === "string" &&
-    typeof o.createdAt === "string"
+    typeof o.lectureId === "number" &&
+    Array.isArray(o.docs) &&
+    o.docs.every(isLectureDocDTO)
   );
 };
 
