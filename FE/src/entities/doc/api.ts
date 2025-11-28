@@ -4,7 +4,7 @@ import {
   postNoResponse,
   patchResponse,
 } from "@apis/instance";
-import type { LectureDoc, LectureDocDTO } from "./types";
+import type { LectureDoc, LectureDocDTO, LectureDocsResponse } from "./types";
 import { mapLectureDoc } from "./types";
 
 /* ---------- 타입 가드 ---------- */
@@ -12,15 +12,12 @@ const isLectureDocDTO = (v: unknown): v is LectureDocDTO => {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
   return (
-    typeof o.lectureId === "number" &&
-    Array.isArray(o.docs) &&
-    o.docs.every(isLectureDocDTO)
+    typeof o.docId === "number" &&
+    typeof o.title === "string" &&
+    typeof o.createdAt === "string" &&
+    typeof o.review === "boolean" &&
+    (typeof o.timestamp === "string" || o.timestamp === null)
   );
-};
-
-type LectureDocsResponse = {
-  lectureId: number;
-  doc: LectureDocDTO[];
 };
 
 type UpdateLectureDocReq = { title: string };

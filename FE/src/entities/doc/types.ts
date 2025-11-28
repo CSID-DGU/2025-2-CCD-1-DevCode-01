@@ -18,7 +18,7 @@ export type LectureDocDTO = {
 
 export type LectureDocsResponse = {
   lectureId: number;
-  docs: LectureDocDTO[];
+  doc: LectureDocDTO[];
 };
 
 export const mapLectureDoc = (dto: LectureDocDTO): LectureDoc => ({
