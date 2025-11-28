@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
@@ -6,6 +6,7 @@ import {
   fetchDocPage,
   type DocPage,
   type PageSummary,
+  fetchPageTTS,
 } from "@apis/lecture/lecture.api";
 import { formatOcr } from "@shared/formatOcr";
 import {
@@ -118,6 +119,10 @@ export default function PreClass() {
   const [summaryRequested, setSummaryRequested] = useState(false);
 
   const { speak } = useLocalTTS();
+
+  //tts
+  const [pageTtsUrl, setPageTtsUrl] = useState<string | null>(null);
+  const [pageTtsLoading, setPageTtsLoading] = useState(false);
 
   /** 교안 페이지 로드 + status 폴링 */
   useEffect(() => {
@@ -287,8 +292,61 @@ export default function PreClass() {
     });
   };
 
+  useEffect(() => {
+    setPageTtsUrl(null);
+    setPageTtsLoading(false);
+  }, [docPage?.pageId, page]);
+
+  const handlePlayOcrTts = useCallback(async () => {
+    if (!docPage?.pageId || docPage.pageId <= 0) {
+      toast.error("페이지 정보가 없어 TTS를 재생할 수 없어요.");
+      announce("페이지 정보가 없어 TTS를 재생할 수 없습니다.");
+      return;
+    }
+
+    try {
+      if (!pageTtsUrl) {
+        setPageTtsLoading(true);
+        const url = await fetchPageTTS(docPage.pageId);
+        setPageTtsUrl(url);
+
+        if (ocrAudioRef.current) {
+          ocrAudioRef.current.src = url;
+        }
+      }
+
+      await ocrAudioRef.current?.play();
+      announce("본문 음성을 재생합니다.");
+    } catch (e) {
+      console.error("handlePlayOcrTts error:", e);
+      toast.error("음성을 불러오지 못했어요.");
+      announce("음성을 불러오지 못했습니다.");
+    } finally {
+      setPageTtsLoading(false);
+    }
+  }, [docPage?.pageId, pageTtsUrl, ocrAudioRef, announce]);
+
+  useEffect(() => {
+    if (!readOnFocus) return;
+    if (!docBodyRef.current) return;
+
+    const el = docBodyRef.current;
+
+    const onFocusIn = () => {
+      if (mode !== "ocr") return;
+      void handlePlayOcrTts();
+    };
+
+    el.addEventListener("focusin", onFocusIn);
+
+    return () => {
+      el.removeEventListener("focusin", onFocusIn);
+    };
+  }, [readOnFocus, mode, handlePlayOcrTts, docBodyRef]);
+
   return (
     <Wrap aria-busy={loading}>
+      <audio ref={ocrAudioRef} src={pageTtsUrl ?? undefined} preload="none" />
       <SrLive ref={liveRef} aria-live="polite" aria-atomic="true" />
       <Container>
         <Grid $stack={stackByFont}>
@@ -296,9 +354,10 @@ export default function PreClass() {
             mode={mode}
             ocrText={cleanOcr}
             imageUrl={docPage?.image}
-            ocrAudioRef={ocrAudioRef}
             docBodyRef={docBodyRef}
             mainRegionRef={mainRegionRef}
+            onPlayOcrTts={handlePlayOcrTts}
+            ocrTtsLoading={pageTtsLoading}
           />
 
           {docIdNum && (

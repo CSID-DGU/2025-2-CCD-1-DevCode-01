@@ -2,6 +2,10 @@ import { getResponse, postResponse } from "@apis/instance";
 
 export type PageStatus = "processing" | "done";
 
+export type PageTTSResponse = {
+  page_tts: string;
+};
+
 export type DocPage = {
   docId: number;
   pageNumber: number;
@@ -66,4 +70,20 @@ export async function fetchPageSummary(pageId: number) {
   );
   if (!data) throw new Error("요약 불러오기 실패");
   return data;
+}
+
+//강의 tts
+export async function fetchPageTTS(pageId: number): Promise<string> {
+  const formData = new FormData();
+
+  const data = await postResponse<FormData, PageTTSResponse>(
+    `/page/${pageId}/tts/`,
+    formData
+  );
+
+  if (!data || !data.page_tts) {
+    throw new Error("TTS 응답이 올바르지 않습니다.");
+  }
+
+  return data.page_tts;
 }

@@ -7,18 +7,20 @@ type Props = {
   mode: "ocr" | "image";
   ocrText: string;
   imageUrl?: string | null;
-  ocrAudioRef: React.RefObject<HTMLAudioElement | null>;
   docBodyRef: React.RefObject<HTMLDivElement | null>;
   mainRegionRef: React.RefObject<HTMLDivElement | null>;
+  onPlayOcrTts: () => void;
+  ocrTtsLoading: boolean;
 };
 
 export default function DocPane({
   mode,
   ocrText,
   imageUrl,
-  ocrAudioRef,
   docBodyRef,
   mainRegionRef,
+  onPlayOcrTts,
+  ocrTtsLoading,
 }: Props) {
   const isOcrLoading = mode === "ocr" && !ocrText;
   const isImageLoading = mode === "image" && !imageUrl;
@@ -28,11 +30,15 @@ export default function DocPane({
       ref={mainRegionRef}
       role="region"
       aria-label={mode === "ocr" ? "교안 본문 텍스트" : "교안 원본 이미지"}
-      tabIndex={-1}
+      tabIndex={0}
+      onFocus={() => {
+        if (mode === "ocr" && !isOcrLoading) {
+          onPlayOcrTts();
+        }
+      }}
     >
       <Body
         ref={docBodyRef}
-        tabIndex={0}
         role="group"
         aria-label={mode === "ocr" ? "본문 영역" : "원본 이미지 영역"}
         data-area="doc-body"
@@ -51,8 +57,11 @@ export default function DocPane({
             {!isOcrLoading && (
               <SrOnlyFocusable
                 type="button"
-                onClick={() => ocrAudioRef.current?.play()}
-                aria-label="본문 TTS 재생"
+                onClick={onPlayOcrTts}
+                disabled={ocrTtsLoading}
+                aria-label={
+                  ocrTtsLoading ? "본문 음성을 준비 중입니다" : "본문 TTS 재생"
+                }
               >
                 본문 듣기
               </SrOnlyFocusable>
@@ -135,16 +144,10 @@ const LoadingBox = styled.div`
 `;
 
 const SrOnlyFocusable = styled.button`
+  border: 10px solid red;
+  z-index: 100;
   position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  border: 0;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  overflow: hidden;
-  &:focus {
-    outline: none;
-  }
+  width: 100px;
+  height: 100px;
+  background-color: red;
 `;
