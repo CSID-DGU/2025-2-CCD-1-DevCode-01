@@ -1,16 +1,12 @@
-import { useCallback, useEffect, useState, type FocusEvent } from "react";
+import { useCallback, type FocusEvent } from "react";
 import styled from "styled-components";
 
 import { PANEL_FIXED_H } from "@pages/class/pre/styles";
 import { fonts } from "@styles/fonts";
 import Spinner from "src/components/common/Spinner";
 
-import {
-  readRateFromLS,
-  SOUND_LS_KEYS,
-  type SoundRate,
-} from "@shared/a11y/soundOptions";
 import { RichOcrContent } from "src/components/common/RichOcrContent";
+import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 
 type Props = {
   summaryText?: string | null;
@@ -31,33 +27,7 @@ export default function SummaryPane({
   panelHeight,
   loading,
 }: Props) {
-  /* ----- 사운드 옵션(속도) ----- */
-  const [soundRate, setSoundRate] = useState<SoundRate>(() =>
-    readRateFromLS("보통")
-  );
-
-  useEffect(() => {
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === SOUND_LS_KEYS.rate) {
-        setSoundRate(readRateFromLS("보통"));
-      }
-    };
-
-    const handleSoundChange = () => {
-      setSoundRate(readRateFromLS("보통"));
-    };
-
-    window.addEventListener("storage", handleStorage);
-    window.addEventListener("sound:change", handleSoundChange as EventListener);
-
-    return () => {
-      window.removeEventListener("storage", handleStorage);
-      window.removeEventListener(
-        "sound:change",
-        handleSoundChange as EventListener
-      );
-    };
-  }, []);
+  const { soundRate } = useSoundOptions();
 
   /* ----- 요약 TTS 재생 ----- */
   const playSummaryTts = useCallback(async () => {
@@ -77,8 +47,7 @@ export default function SummaryPane({
     }
 
     // 속도 반영
-    audio.playbackRate =
-      soundRate === "빠름" ? 1.4 : soundRate === "느림" ? 0.85 : 1.0;
+    applyPlaybackRate(audio, soundRate);
 
     audio.currentTime = 0;
     try {

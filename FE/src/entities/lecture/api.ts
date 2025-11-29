@@ -4,13 +4,13 @@ import {
   patchResponse,
   postResponse,
 } from "@apis/instance";
-import type { Lecture } from "./types";
+import type { Lecture, LectureTts } from "./types";
 
 type LectureListItemDTO = {
   id: number;
   title: string;
   code: string;
-  lecture_tts: string | null;
+  lecture_tts: LectureTts;
   created_at: string;
 };
 

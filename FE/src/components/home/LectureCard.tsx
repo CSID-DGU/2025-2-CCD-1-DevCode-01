@@ -22,6 +22,7 @@ type Props = {
   onCancelEdit: () => void;
   onDelete: () => void;
   onCopyCode: () => void;
+  onFocus?: () => void;
 };
 
 export const LectureCard = ({
@@ -39,6 +40,7 @@ export const LectureCard = ({
   onCancelEdit,
   onDelete,
   onCopyCode,
+  onFocus,
 }: Props) => {
   const arrowDown = useContrastImage("/img/home/arrowDown");
 
@@ -55,6 +57,7 @@ export const LectureCard = ({
             onOpen();
           }
         }}
+        onFocus={onFocus}
         title={lec.title}
       >
         <FolderImg src="/img/home/folder.png" alt="" aria-hidden />
@@ -108,7 +111,7 @@ export const LectureCard = ({
   );
 };
 
-/* ============================= styled ============================= */
+/* ============ styled =========== */
 const TileBase = styled.div`
   width: 100%;
   border-radius: 10px;

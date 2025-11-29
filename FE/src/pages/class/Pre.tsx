@@ -22,20 +22,13 @@ import {
 import { useFocusTTS } from "src/hooks/useFocusTTS";
 import { useLocalTTS } from "src/hooks/useLocalTTS";
 
-import {
-  readRateFromLS,
-  readVoiceFromLS,
-  SOUND_LS_KEYS,
-  type SoundRate,
-  type SoundVoice,
-} from "@shared/a11y/soundOptions";
-
 import { Container, Grid, SrLive, Wrap } from "./pre/styles";
 import DocPane from "src/components/lecture/pre/DocPane";
 import RightTabs from "src/components/lecture/live/RightTabs";
 import BottomToolbar from "src/components/lecture/pre/BottomToolBar";
 import { useTtsTextBuilder } from "src/hooks/useTtsTextBuilder";
 import { useOcrTtsAutoStop } from "src/hooks/useOcrTtsAutoStop";
+import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 
 type RouteParams = { docId?: string; courseId?: string };
 type NavState = { navTitle?: string; totalPage?: number };
@@ -144,40 +137,10 @@ export default function PreClass() {
   /* page TTS */
   const [pageTtsLoading, setPageTtsLoading] = useState(false);
 
-  /* sound options */
-  const [soundRate, setSoundRate] = useState<SoundRate>(() =>
-    readRateFromLS("보통")
-  );
-  const [soundVoice, setSoundVoice] = useState<SoundVoice>(() =>
-    readVoiceFromLS("여성")
-  );
-
   /* SRE 텍스트 빌더 */
   const { buildTtsText } = useTtsTextBuilder();
 
-  /* 사운드 변경 감지 */
-  useEffect(() => {
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === SOUND_LS_KEYS.rate) setSoundRate(readRateFromLS("보통"));
-      if (e.key === SOUND_LS_KEYS.voice) setSoundVoice(readVoiceFromLS("여성"));
-    };
-
-    const handleSoundChange = () => {
-      setSoundRate(readRateFromLS("보통"));
-      setSoundVoice(readVoiceFromLS("여성"));
-    };
-
-    window.addEventListener("storage", handleStorage);
-    window.addEventListener("sound:change", handleSoundChange as EventListener);
-
-    return () => {
-      window.removeEventListener("storage", handleStorage);
-      window.removeEventListener(
-        "sound:change",
-        handleSoundChange as EventListener
-      );
-    };
-  }, []);
+  const { soundRate, soundVoice } = useSoundOptions();
 
   /* 페이지 로드 */
   useEffect(() => {
@@ -333,8 +296,7 @@ export default function PreClass() {
       if (ocrAudioRef.current) {
         ocrAudioRef.current.src = url;
 
-        ocrAudioRef.current.playbackRate =
-          soundRate === "빠름" ? 1.4 : soundRate === "느림" ? 0.85 : 1.0;
+        applyPlaybackRate(ocrAudioRef.current, soundRate);
 
         ocrAudioRef.current.currentTime = 0;
         await ocrAudioRef.current.play();
