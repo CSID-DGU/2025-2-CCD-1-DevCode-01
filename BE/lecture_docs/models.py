@@ -22,9 +22,9 @@ class Page(models.Model):
     page_number = models.IntegerField()
     image = models.URLField(blank=True, null=True)
     ocr = models.TextField(blank=True, null=True)  # OCR 결과 텍스트
-    page_tts =  models.URLField(blank=True, null=True) 
+    page_tts =  models.JSONField(blank=True, null=True) 
     summary = models.TextField(blank=True, null=True) 
-    summary_tts = models.URLField(blank=True, null=True)
+    summary_tts = models.JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -36,7 +36,7 @@ class Page(models.Model):
 class Board(models.Model):
     page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name='boards',  null=True, blank=True)
     text = models.TextField(blank=True, null=True) 
-    board_tts =  models.URLField(blank=True, null=True) 
+    board_tts =  models.JSONField(blank=True, null=True) 
     image = models.URLField(blank=True, null=True) #판서이미지
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -46,5 +46,5 @@ class SpeechSummary(models.Model):
     doc = models.ForeignKey(Doc, on_delete=models.CASCADE, related_name='speech_summaries', null=True, blank=True)
     end_time = models.CharField(max_length=10)
     summary = models.TextField(blank=True, null=True)
-    summary_tts =  models.URLField(blank=True, null=True)
+    summary_tts =  models.JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

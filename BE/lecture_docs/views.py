@@ -125,6 +125,10 @@ class PageTTSView(APIView):
         
         if page.page_tts:
             return Response({"tts": page.page_tts}, status=200)
+
+        # 수식 전처리된 OCR 텍스트
+        # 없으면 원본 OCR 사용
+        processed_math = request.data.get("ocr_text", page.ocr)
         
         # 1️⃣ <코드> ... </코드> 부분 추출
         code_pattern = re.compile(r"<코드>(.*?)</코드>", re.DOTALL)
@@ -135,10 +139,7 @@ class PageTTSView(APIView):
             processed_code = preprocess_code(code_text)
             return f"<코드>{processed_code}</코드>"
 
-        preprocessed_text = code_pattern.sub(replace_code, page.ocr)
-
-        # 3️⃣ <수식> ... </수식> 부분 추출
-        # math_pattern = re.compile(r"<수식>(.*?)</수식>", re.DOTALL)
+        preprocessed_text = code_pattern.sub(replace_code, processed_math)
         
         try:
             tts_url = text_to_speech(
@@ -152,7 +153,7 @@ class PageTTSView(APIView):
         page.page_tts = tts_url
         page.save(update_fields=["page_tts"])
 
-        return Response({"tts": page.page_tts}, status=201)
+        return Response({"page_tts": page.page_tts}, status=201)
 
 
 #교안 ocr 요약

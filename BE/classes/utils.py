@@ -256,68 +256,61 @@ def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     
     if not text or text.strip() == "":
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
-    
-    voice = (user.voice or "여성")
-    rate = (user.rate or "보통")
 
-    # 1️⃣ Google TTS 클라이언트 생성
     client = texttospeech.TextToSpeechClient(transport="rest")
 
     synthesis_input = texttospeech.SynthesisInput(text=text)
     
     voice_map = {
-        "여성": "ko-KR-Neural2-A",
-        "남성": "ko-KR-Neural2-C",
+        "female": "ko-KR-Neural2-A",
+        "male": "ko-KR-Neural2-C",
     }
-    name = voice_map.get(voice)
-    
-    voice_config = texttospeech.VoiceSelectionParams(
-        language_code="ko-KR",
-        name=name,
-    )
-
-    rate_map = {"느림": 0.8, "보통": 1.0, "빠름": 1.25}
-    speaking_rate = rate_map.get(rate)
 
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=speaking_rate,
+        speaking_rate=1.0,
     )
 
-    # 2️⃣ TTS 변환
-    response = client.synthesize_speech(
-        input=synthesis_input,
-        voice=voice_config,
-        audio_config=audio_config
-    )
+    s3_urls = {}
 
-    if not response.audio_content:
-        raise ValueError("TTS 변환에 실패했습니다. 응답이 비어 있습니다.")
+    for gender, name in voice_map.items():
+        voice_config = texttospeech.VoiceSelectionParams(
+            language_code="ko-KR",
+            name=name,
+        )
+
+        response = client.synthesize_speech(
+            input=synthesis_input,
+            voice=voice_config,
+            audio_config=audio_config
+        )
+
+        if not response.audio_content:
+            raise ValueError("TTS 변환에 실패했습니다. 응답이 비어 있습니다.")
     
+        s3 = boto3.client(
+            's3',
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name='ap-northeast-2'
+        )
 
-    # 3️⃣ S3 업로드 (메모리 버퍼 사용)
-    s3 = boto3.client(
-        's3',
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        region_name='ap-northeast-2'
-    )
+        bucket_name = settings.AWS_BUCKET_NAME
+        filename = f"{uuid.uuid4()}.mp3"
+        s3_key = f"{s3_folder}{filename}"
 
-    bucket_name = settings.AWS_BUCKET_NAME
-    filename = f"{uuid.uuid4()}.mp3"
-    s3_key = f"{s3_folder}{filename}"
+        # BytesIO로 메모리 내에서 직접 업로드
+        s3.upload_fileobj(
+            io.BytesIO(response.audio_content),
+            bucket_name,
+            s3_key,
+            ExtraArgs={'ContentType': 'audio/mpeg'}
+        )
 
-    # BytesIO로 메모리 내에서 직접 업로드
-    s3.upload_fileobj(
-        io.BytesIO(response.audio_content),
-        bucket_name,
-        s3_key,
-        ExtraArgs={'ContentType': 'audio/mpeg'}
-    )
+        s3_url = f"{settings.AWS_S3_BASE_URL}/{s3_key}"
+        s3_urls[gender] = s3_url
 
-    s3_url = f"{settings.AWS_S3_BASE_URL}/{s3_key}"
-
-    return s3_url
+    return s3_urls
 
 def text_to_speech_local(text: str, voice: str, rate: str) -> str:
     """

@@ -78,7 +78,7 @@ class SpeechSummarySerializer(serializers.ModelSerializer):
     docId = serializers.IntegerField(source="doc.id")
     createdAt = serializers.SerializerMethodField()
     stt_summary = serializers.CharField(source="summary")
-    stt_summary_tts = serializers.URLField(source="summary_tts")
+    stt_summary_tts = serializers.JSONField(source="summary_tts")
 
     class Meta:
         model = SpeechSummary
