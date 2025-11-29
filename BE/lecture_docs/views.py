@@ -530,29 +530,45 @@ class ExamTTSView(APIView):
         return response
 
 #시험 시작
+kst = timezone(timedelta(hours=9))  # 한국 시간대
+
+
 class ExamStartView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         user = request.user
-
-        end_time_str = request.data.get("endTime")
+        end_time_str = request.data.get("endTime")  
         images = request.FILES.getlist("images")
 
         if not end_time_str:
-            return Response({"error": "endTime 필요"}, status=400)
+            return Response({"error": "endTime 필요 (예: 13:30)"}, status=400)
         if not images:
             return Response({"error": "images[] 필요"}, status=400)
 
-        # endTime 문자열 → datetime 변환 + 검증
+        # "HH:MM" 파싱
         try:
-            end_time = datetime.fromisoformat(end_time_str)
-        except ValueError:
-            return Response({"error": "endTime 형식 오류 (ISO8601 필요)"}, status=400)
+            hour, minute = map(int, end_time_str.split(":"))
+        except:
+            return Response({"error": "endTime 형식 오류 (예: 13:30)"}, status=400)
 
-        # Redis에 endTime 저장 
+        # 오늘 날짜 + 입력 시간 → full datetime (KST)
+        now_kst = datetime.now(kst)
+        end_time_kst = datetime(
+            year=now_kst.year,
+            month=now_kst.month,
+            day=now_kst.day,
+            hour=hour,
+            minute=minute,
+            tzinfo=kst,
+        )
+
+        # Redis에 full datetime(ISO 형태) 저장
         session_key = f"exam_session:{user.id}"
-        redis_client.set(session_key,json.dumps({"endTime": end_time_str}))
+        redis_client.set(
+            session_key,
+            json.dumps({"endTime": end_time_kst.isoformat()})
+        )
 
         # OCR 처리
         ai_url = settings.AI_EXAM_OCR_URL
@@ -568,15 +584,14 @@ class ExamStartView(APIView):
             ocr_json = ai_resp.json()
             all_questions.extend(ocr_json.get("questions", []))
 
+        # 결과 저장
         ocr_key = f"exam_ocr:{user.id}"
         redis_client.set(ocr_key, json.dumps(all_questions))
 
         return Response({
-            "message": "시험 시작됨",
-            "endTime": end_time,
+            "endTime": end_time_kst.isoformat(),  
             "questions": all_questions
         }, status=200)
-
 
 
 #분석 결과
@@ -594,13 +609,12 @@ class ExamResultView(APIView):
             return Response({"error": "시험 종료됨"}, status=403)
 
         session = json.loads(session_val)
-        end_time = datetime.fromisoformat(session["endTime"])
+        end_time_kst = datetime.fromisoformat(session["endTime"])
+        now_kst = datetime.now(kst)
 
-        # 종료 검증
-        if datetime.now(timezone.utc) > end_time:
+        if now_kst > end_time_kst:
             return Response({"error": "시험 종료됨"}, status=403)
 
-        # OCR 데이터 반환
         cached = redis_client.get(ocr_key)
         if not cached:
             return Response({"error": "OCR 없음"}, status=404)
@@ -609,7 +623,6 @@ class ExamResultView(APIView):
             "endTime": session["endTime"],
             "questions": json.loads(cached)
         }, status=200)
-
 
 #시험 종료
 class ExamEndView(APIView):

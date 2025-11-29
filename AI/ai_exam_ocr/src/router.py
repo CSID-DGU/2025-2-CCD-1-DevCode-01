@@ -35,7 +35,6 @@ def upload_s3(local_path: str, key_prefix: str) -> str:
 
     s3_client.upload_file(
         local_path,
-        S3_EXAM_BUCKET,
         key,
         ExtraArgs={"ContentType": "image/png"}   
     )
