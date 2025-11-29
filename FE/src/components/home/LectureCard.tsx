@@ -57,7 +57,9 @@ export const LectureCard = ({
             onOpen();
           }
         }}
-        onFocus={onFocus}
+        onFocus={() => {
+          onFocus?.();
+        }}
         title={lec.title}
       >
         <FolderImg src="/img/home/folder.png" alt="" aria-hidden />

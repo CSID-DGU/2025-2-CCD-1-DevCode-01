@@ -39,7 +39,6 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
   const lectureAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // 사운드 옵션 변경 감지
-
   const { soundRate, soundVoice } = useSoundOptions();
 
   /* -------------------- 포커스 이탈 시 강의 TTS 자동 정지 -------------------- */
@@ -120,6 +119,7 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
   const playLectureTts = useCallback(
     async (lec: Lecture) => {
       const tts = lec.lecture_tts;
+
       if (!tts) return;
 
       const femaleUrl = tts.female ?? undefined;
@@ -153,7 +153,6 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
     [soundRate, soundVoice]
   );
 
-  /* -------------------- 렌더 -------------------- */
   return (
     <Main
       ref={mainRef}
@@ -221,7 +220,7 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
   );
 }
 
-/* ============================= styled ============================= */
+// style
 const Main = styled.main<{ $uiScale: number }>`
   font-size: ${({ $uiScale }) => `${16 * $uiScale}px`};
   padding: 3rem;
