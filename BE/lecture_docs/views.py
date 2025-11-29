@@ -488,6 +488,19 @@ class PageView(APIView):
             many=True
         ).data
 
+        if note:
+            # note_tts 생성
+            if not note.note_tts:
+                try:
+                    # note.content → TTS 생성
+                    tts_url = text_to_speech(note.content, user)
+
+                    # JSONField는 문자열 단독 저장 불가 → dict로 저장
+                    note.note_tts = {"url": tts_url}
+                    note.save()
+                except Exception as e:
+                    print("노트 TTS 생성 중 오류:", e)
+
         response_data = {
             "note": NoteSerializer(note).data if note else None,
             "speeches": SpeechSerializer(speeches, many=True).data,
@@ -495,6 +508,7 @@ class PageView(APIView):
         }
 
         return Response(response_data, status=200)
+
 
 #시험 OCR
 load_dotenv()
@@ -522,23 +536,23 @@ class ExamStartView(APIView):
     def post(self, request):
         user = request.user
 
-        end_time = request.data.get("endTime")
+        end_time_str = request.data.get("endTime")
         images = request.FILES.getlist("images")
 
-        if not end_time:
+        if not end_time_str:
             return Response({"error": "endTime 필요"}, status=400)
         if not images:
             return Response({"error": "images[] 필요"}, status=400)
 
-        # 문자열 → datetime으로 검증
+        # endTime 문자열 → datetime 변환 + 검증
         try:
-            end_time = datetime.fromisoformat(end_time)
-        except:
-            return Response({"error": "endTime 형식 오류"}, status=400)
+            end_time = datetime.fromisoformat(end_time_str)
+        except ValueError:
+            return Response({"error": "endTime 형식 오류 (ISO8601 필요)"}, status=400)
 
-        # Redis 저장
+        # Redis에 endTime 저장 
         session_key = f"exam_session:{user.id}"
-        redis_client.set(session_key, json.dumps({"endTime": end_time}))
+        redis_client.set(session_key,json.dumps({"endTime": end_time_str}))
 
         # OCR 처리
         ai_url = settings.AI_EXAM_OCR_URL
