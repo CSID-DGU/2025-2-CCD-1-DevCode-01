@@ -1,8 +1,8 @@
 export const SOUND_RATES = ["느림", "보통", "빠름"] as const;
 export const SOUND_VOICES = ["여성", "남성"] as const;
 
-export type SoundRate = (typeof SOUND_RATES)[number]; // "느림" | "보통" | "빠름"
-export type SoundVoice = (typeof SOUND_VOICES)[number]; // "여성" | "남성"
+export type SoundRate = (typeof SOUND_RATES)[number];
+export type SoundVoice = (typeof SOUND_VOICES)[number];
 
 export const SOUND_LS_KEYS = {
   rate: "rate",
@@ -25,4 +25,9 @@ export function readVoiceFromLS(fallback: SoundVoice = "여성"): SoundVoice {
 export function writeSoundToLS(rate: SoundRate, voice: SoundVoice): void {
   localStorage.setItem(SOUND_LS_KEYS.rate, rate);
   localStorage.setItem(SOUND_LS_KEYS.voice, voice);
+  window.dispatchEvent(
+    new CustomEvent("sound:change", {
+      detail: { rate, voice },
+    })
+  );
 }

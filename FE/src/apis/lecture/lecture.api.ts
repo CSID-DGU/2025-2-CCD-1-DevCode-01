@@ -1,9 +1,18 @@
 import { getResponse, postResponse } from "@apis/instance";
+import type { AxiosError } from "axios";
 
 export type PageStatus = "processing" | "done";
 
 export type PageTTSResponse = {
-  page_tts: string;
+  page_tts?: {
+    female?: string;
+    male?: string;
+  };
+};
+
+export type PageTTSResult = {
+  female: string;
+  male: string;
 };
 
 export type DocPage = {
@@ -73,17 +82,57 @@ export async function fetchPageSummary(pageId: number) {
 }
 
 //강의 tts
-export async function fetchPageTTS(pageId: number): Promise<string> {
-  const formData = new FormData();
+export type PageTTSRequestBody = {
+  ocr_text: string;
+};
 
-  const data = await postResponse<FormData, PageTTSResponse>(
-    `/page/${pageId}/tts/`,
-    formData
-  );
+function isAxiosError(error: unknown): error is AxiosError {
+  return typeof error === "object" && error !== null && "isAxiosError" in error;
+}
 
-  if (!data || !data.page_tts) {
-    throw new Error("TTS 응답이 올바르지 않습니다.");
+function getHttpStatus(err: unknown): number | null {
+  if (isAxiosError(err) && err.response?.status) {
+    return err.response.status;
   }
+  return null;
+}
 
-  return data.page_tts;
+// 수식 포함 최종 텍스트 기반 TTS 요청
+
+export async function fetchPageTTS(
+  pageId: number,
+  ocrText: string,
+  retry = 1
+): Promise<PageTTSResult> {
+  try {
+    const body: PageTTSRequestBody = { ocr_text: ocrText };
+
+    const data = await postResponse<PageTTSRequestBody, PageTTSResponse>(
+      `/page/${pageId}/tts/`,
+      body
+    );
+
+    const female = data?.page_tts?.female;
+    const male = data?.page_tts?.male;
+
+    if (!female || !male) {
+      throw new Error("TTS 응답 형식이 올바르지 않습니다.");
+    }
+
+    const result: PageTTSResult = { female, male };
+    return result;
+  } catch (err: unknown) {
+    const status = getHttpStatus(err);
+
+    if (
+      status !== null &&
+      retry > 0 &&
+      (status === 404 || status === 409 || status === 500)
+    ) {
+      await new Promise((r) => setTimeout(r, 800));
+      return fetchPageTTS(pageId, ocrText, retry - 1);
+    }
+
+    throw err;
+  }
 }
