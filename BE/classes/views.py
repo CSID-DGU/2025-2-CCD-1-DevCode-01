@@ -1,89 +1,53 @@
-from django.shortcuts import render
 from django.http import JsonResponse
-from classes.serializers import SpeechCreateSerializer
+from classes.tasks import run_speech, save_temp_audio
+from classes.serializers import *
 from classes.models import Bookmark, Note, Speech
-from classes.utils import extract_text, get_duration, speech_to_text, text_to_speech, text_to_speech_local, time_to_seconds
+from classes.utils import text_to_speech, text_to_speech_local, time_to_seconds
 from lecture_docs.models import Page
 from rest_framework.response import Response
-from rest_framework import status, generics, permissions
+from rest_framework import status, permissions
 import traceback
 from rest_framework.views import APIView
 
-"""
-1. 음성 파일(STT 변환)
-2. 변환된 텍스트(TTS 변환)
-3. DB 저장
-4. speechId, stt, tts, page 반환
-"""
-class SpeechView(generics.CreateAPIView):
+
+
+class SpeechView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, pageId):
         try:
-            user = request.user
-            # ✅ 1️⃣ pageId로 Page 객체 조회
             page = Page.objects.get(id=pageId)
         except Page.DoesNotExist:
-            return JsonResponse({"error": "해당 페이지를 찾을 수 없습니다."}, status=404)
-
+            return Response({"error": "해당 페이지를 찾을 수 없습니다."}, status=404)
+        
         serializer = SpeechCreateSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            audio = serializer.validated_data['audio']
-            end_time = serializer.validated_data['timestamp']
+        serializer.is_valid(raise_exception=True)
 
-            end_time_sec = time_to_seconds(end_time)
-                
-            # 1️⃣ STT 변환
-            stt_text, stt_words = speech_to_text(audio)
-            if not stt_text or stt_text.strip() == "":
-                return JsonResponse({"error": "변환된 텍스트가 비어 있습니다."}, status=400)
+        audio = serializer.validated_data["audio"]
+        timestamp = serializer.validated_data["timestamp"]
 
-            # 2️⃣ TTS 변환 + S3 업로드
-            s3_url = text_to_speech(stt_text, user, s3_folder="tts/speech/")
+        end_time_sec = time_to_seconds(timestamp)
 
-            duration_sec, duration = get_duration(audio)
+        audio_path = save_temp_audio(audio)
 
-            bookmarks = Bookmark.objects.filter(page=page)
+        speech = Speech.objects.create(
+            page=page,
+            end_time=timestamp,
+            end_time_sec=end_time_sec
+        )
 
-            start_time_sec = end_time_sec - duration_sec
-            
-            for b in bookmarks:
-                if start_time_sec <= b.timestamp_sec <= end_time_sec:
-                    b.relative_time = round(b.timestamp_sec - start_time_sec)
-                    b.text = extract_text(stt_words, b.relative_time, user)
-                    b.save(update_fields=['relative_time', 'text'])
+        run_speech.delay(
+            speech.id,
+            audio_path,
+            page.id,
+            request.user.id,
+        )
 
-            # 3️⃣ DB 저장
-            speech = Speech.objects.create(
-                stt=stt_text,
-                stt_tts=s3_url,
-                page=page,
-                end_time=end_time,
-                end_time_sec=end_time_sec,
-                duration=duration,
-                duration_sec=duration_sec,
-            )
+        return Response({
+            "speech_id": speech.id,
+            "status": "processing"
+        }, status=201)
 
-            # 성공 응답
-            return JsonResponse({
-                "speech_id": speech.id,
-                "stt": stt_text,
-                "stt_tts": s3_url,
-                "page": page.page_number,
-                "end_time": end_time,
-                "duration": duration,
-            }, status=200)
-        
-        except Exception as e:
-            traceback.print_exc()  # 서버 로그 출력용
-            return JsonResponse(
-                {"error": f"TTS 변환 중 오류가 발생했습니다: {str(e)}"},
-                status=500
-            )
-        
 class TTSTestView(APIView):
     """
     TTS 변환 로컬 저장 테스트용 API
@@ -174,25 +138,21 @@ class BookmarkDetailView(APIView):
         
         bookmark.delete()
         return JsonResponse({"message": "북마크가 삭제되었습니다."}, status=200)
-    
+
 class NoteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, pageId):
-        """페이지별 개인 노트 작성"""
         try:
             page = Page.objects.get(id=pageId)
         except Page.DoesNotExist:
-            return JsonResponse({"error": "해당 페이지를 찾을 수 없습니다."}, status=404)
-        
+            return Response({"error": "해당 페이지를 찾을 수 없습니다."}, status=404)
+
         user = request.user
         content = request.data.get("content")
 
-        # ✅ 이미 해당 페이지에 본인 노트가 존재하면 작성 불가 (1페이지당 1개)
         if Note.objects.filter(page=page, user=user).exists():
-            return Response({"error": "이미 이 페이지에 작성한 노트가 있습니다."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # note_tts = text_to_speech(content, user, "tts/note/")
+            return Response({"error": "이미 이 페이지에 작성한 노트가 있습니다."}, status=400)
 
         note = Note.objects.create(
             page=page,
@@ -200,38 +160,23 @@ class NoteView(APIView):
             content=content.strip()
         )
 
-        return Response({
-            "note_id": note.id,
-            "content": note.content
-        }, status=status.HTTP_201_CREATED)
+        return Response(NoteSerializer(note).data, status=201)
     
 class NoteDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def patch(self, request, noteId):
-        """개인 노트 수정"""
         note = Note.objects.filter(id=noteId).first()
         if not note:
-            return Response({"error": "해당 노트를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "해당 노트를 찾을 수 없습니다."}, status=404)
 
-        user = request.user
-        if note.user != user:
-            return Response({"error": "본인이 작성한 노트만 수정할 수 있습니다."},
-                            status=status.HTTP_403_FORBIDDEN)
-
-        content = request.data.get("content")
-        note.content = content.strip()
+        if note.user != request.user:
+            return Response({"error": "본인이 작성한 노트만 수정할 수 있습니다."}, status=403)
         
-        # if not content or content.strip() == "":
-        #     note.note_tts = None
-        # else:
-        #     note_tts = text_to_speech(content, user, "tts/note/")
-        #     note.note_tts = note_tts
+        content = request.data.get("content", "").strip()
+        note.content = content
 
         note.save()
 
-        return Response({
-            "note_id": note.id,
-            "content": note.content
-        }, status=status.HTTP_200_OK)
+        return Response(NoteSerializer(note).data, status=200)
     

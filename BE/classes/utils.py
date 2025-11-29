@@ -128,31 +128,22 @@ def split_audio_on_silence(wav_bytes: bytes, silence_threshold=150, min_silence_
 
     return chunks, rate
 
-def speech_to_text(audio_file) -> str:
-    """
-    업로드된 음성 파일을 Google Speech-to-Text로 변환
-    짧은 음성(1초 미만) 또는 변환 결과가 없을 경우 예외 처리
-    """
-
+def speech_to_text(audio_path) -> tuple[str, list]:
     client = speech.SpeechClient(transport="rest")
 
-    # 1️⃣ 메모리에서 파일 내용 바로 읽기
-    audio_file.seek(0)
-    content = audio_file.read()
-    audio_file.seek(0)
+    with open(audio_path, "rb") as f:
+        content = f.read()
 
-    if len(content) < 10000:  # 대략 1초 이하 (10KB 미만)
+    if len(content) < 10000:  
         raise ValueError("음성 파일이 너무 짧습니다. 1초 이상 길이의 파일을 업로드해주세요.")
 
-
-    # 2️⃣ 확장자에 따라 인코딩 설정
-    filename = audio_file.name.lower()
+    filename = audio_path.lower()
     if filename.endswith(".wav"):
         format_type = "wav"
         encoding = speech.RecognitionConfig.AudioEncoding.LINEAR16
     else:
         raise ValueError("지원하지 않는 오디오 형식입니다. (wav만 가능)")
-    
+
     chunks, rate = split_audio_on_silence(content)
 
     config = speech.RecognitionConfig(
@@ -163,7 +154,7 @@ def speech_to_text(audio_file) -> str:
         model="latest_long",
         use_enhanced=True,
         enable_automatic_punctuation=True,
-        enable_word_time_offsets=True # 단어 단위 구간 제공
+        enable_word_time_offsets=True
     )
 
     transcript = ""
@@ -178,7 +169,11 @@ def speech_to_text(audio_file) -> str:
             audio = speech.RecognitionAudio(content=chunk_bytes)
             response = client.recognize(config=config, audio=audio)
         else:
-            gcs_uri = upload_to_gcs(chunk_bytes, f"{uuid.uuid4()}.{format_type}", settings.GCP_BUCKET_NAME)
+            gcs_uri = upload_to_gcs(
+                chunk_bytes,
+                f"{uuid.uuid4()}.{format_type}",
+                settings.GCP_BUCKET_NAME
+            )
             audio = speech.RecognitionAudio(uri=gcs_uri)
             operation = client.long_running_recognize(config=config, audio=audio)
             response = operation.result(timeout=900)
@@ -187,24 +182,21 @@ def speech_to_text(audio_file) -> str:
             for result in response.results:
                 alt = result.alternatives[0]
                 transcript += alt.transcript.strip() + " "
-
-                if alt.words:
-                    for w in alt.words:
-                        start = w.start_time.total_seconds() + offset
-                        end = w.end_time.total_seconds() + offset
-
-                        stt_words.append({
-                            "word": w.word,
-                            "start": start,
-                            "end": end
-                        })
+                for w in alt.words:
+                    stt_words.append({
+                        "word": w.word,
+                        "start": w.start_time.total_seconds() + offset,
+                        "end": w.end_time.total_seconds() + offset,
+                    })
 
         os.remove(chunk)
 
-    if not transcript or transcript.strip() == "":
+    transcript = transcript.strip()
+    if not transcript:
         raise ValueError("인식된 텍스트가 비어 있습니다.")
 
     return transcript, stt_words
+
 
 def extract_text(stt_words, relative_time, user: User):
     for w in stt_words:
@@ -394,21 +386,35 @@ def time_to_seconds(hhmmss: str) -> float:
         raise ValueError("시간 형식이 잘못되었습니다. (예: 00:12:45)")
     
 def get_duration(audio):
-    audio.seek(0)
-    filename = getattr(audio, "name", "").lower()
+    
+    if isinstance(audio, str):
+        file_path = audio
 
-    # ✅ WAV 파일은 wave 모듈로 직접 계산
+        if not os.path.exists(file_path):
+            raise ValueError(f"파일 경로가 존재하지 않습니다: {file_path}")
+    else:
+        audio.seek(0)
+        content = audio.read()
+        file_path = "/tmp/_duration_temp.wav"
+        with open(file_path, "wb") as f:
+            f.write(content)
+
+    filename = file_path.lower()
+
     if filename.endswith(".wav"):
         try:
-            audio.seek(0)
-            with wave.open(audio, "rb") as wav_file:
+            with wave.open(file_path, "rb") as wav_file:
                 frames = wav_file.getnframes()
                 rate = wav_file.getframerate()
                 duration_sec = int(frames / rate)
                 duration = str(timedelta(seconds=duration_sec))
                 return duration_sec, duration
+
         except Exception as e:
             raise ValueError(f"WAV 길이 계산 실패: {e}")
+
+    else:
+        raise ValueError("지원하지 않는 오디오 포맷입니다. (WAV만 가능)")
 
     # ✅ MP3 파일
     # try:
@@ -424,3 +430,4 @@ def get_duration(audio):
     #         raise ValueError("오디오 파일의 길이를 계산할 수 없습니다.")
     # except Exception as e:
     #     raise ValueError(f"오디오 길이 계산 실패: {e}")
+

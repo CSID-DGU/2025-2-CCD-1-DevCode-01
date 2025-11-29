@@ -96,7 +96,6 @@ export default function PreClass() {
   const [docPage, setDocPage] = useState<DocPage | null>(null);
   const [totalPage, setTotalPage] = useState<number>();
   const [loading, setLoading] = useState(false);
-
   const { fontPct, readOnFocus } = useA11ySettings();
   const stackByFont = fontPct >= 175;
 
@@ -120,15 +119,21 @@ export default function PreClass() {
 
   const { speak } = useLocalTTS();
 
-  /** 교안 페이지 로드 */
+  /** 교안 페이지 로드 + status 폴링 */
   useEffect(() => {
     if (!docIdNum) return;
 
     let cancelled = false;
+    let retryTimeout: number | null = null;
 
-    const loadDocPage = async () => {
+    const POLL_INTERVAL = 2000;
+
+    const loadDocPage = async (isRetry = false) => {
       try {
-        setLoading(true);
+        if (!isRetry) {
+          setLoading(true);
+        }
+
         const dp = await fetchDocPage(docIdNum, page);
         if (cancelled) return;
 
@@ -137,11 +142,24 @@ export default function PreClass() {
           setSummary(null);
           toast.error("교안 페이지를 불러오지 못했어요.");
           announce("교안 페이지를 불러오지 못했습니다.");
+          setLoading(false);
           return;
         }
 
         setDocPage(dp);
         if (dp.totalPage != null) setTotalPage(dp.totalPage);
+
+        if (dp.status === "processing") {
+          if (!isRetry) {
+            announce("현재 페이지를 처리하는 중입니다. 잠시만 기다려 주세요.");
+          }
+
+          retryTimeout = window.setTimeout(() => {
+            void loadDocPage(true);
+          }, POLL_INTERVAL);
+
+          return;
+        }
 
         setSummary(null);
         setSummaryLoading(false);
@@ -161,19 +179,24 @@ export default function PreClass() {
           }`
         );
         mainRegionRef.current?.focus();
+
+        setLoading(false);
       } catch {
         if (!cancelled) {
           toast.error("데이터 로딩 중 오류가 발생했어요.");
           announce("데이터 로딩 중 오류가 발생했습니다.");
+          setLoading(false);
         }
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     };
 
-    void loadDocPage();
+    void loadDocPage(false);
+
     return () => {
       cancelled = true;
+      if (retryTimeout != null) {
+        window.clearTimeout(retryTimeout);
+      }
     };
   }, [docIdNum, page, isAssistant, announce, totalPage]);
 

@@ -1,13 +1,16 @@
 import { getResponse, postResponse } from "@apis/instance";
 
+export type PageStatus = "processing" | "done";
+
 export type DocPage = {
   docId: number;
   pageNumber: number;
   pageId: number;
-  image: string;
-  ocr: string;
+  image: string | null;
+  ocr: string | null;
   totalPage: number;
   tts?: string;
+  status: PageStatus;
 };
 
 export async function fetchDocPage(docId: number, page: number) {
@@ -16,10 +19,11 @@ export async function fetchDocPage(docId: number, page: number) {
     pageNumber: number;
     pageId?: number;
     pagId?: number;
-    image: string;
-    ocr: string;
+    image: string | null;
+    ocr: string | null;
     totalPage: number;
     tts?: string;
+    status: PageStatus;
   };
 
   const data = await getResponse<Raw>(`/doc/${docId}/${page}/`);
@@ -28,9 +32,13 @@ export async function fetchDocPage(docId: number, page: number) {
   const pageId = data.pageId ?? data.pagId ?? -1;
 
   const base = import.meta.env.VITE_BASE_URL?.replace(/\/$/, ""); // 맨뒤 / 제거
-  const fullImage = data.image.startsWith("http")
-    ? data.image
-    : `${base}${data.image.startsWith("/") ? "" : "/"}${data.image}`;
+
+  let fullImage: string | null = null;
+  if (data.image) {
+    fullImage = data.image.startsWith("http")
+      ? data.image
+      : `${base}${data.image.startsWith("/") ? "" : "/"}${data.image}`;
+  }
 
   const mapped: DocPage = {
     docId: data.docId,
@@ -40,6 +48,7 @@ export async function fetchDocPage(docId: number, page: number) {
     ocr: data.ocr,
     totalPage: data.totalPage,
     tts: data.tts,
+    status: data.status ?? "done",
   };
   return mapped;
 }

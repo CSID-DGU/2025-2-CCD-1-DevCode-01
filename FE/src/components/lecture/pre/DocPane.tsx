@@ -1,5 +1,6 @@
 import { DOC_TEXT_MEASURE, PANEL_FIXED_H } from "@pages/class/pre/styles";
 import { fonts } from "@styles/fonts";
+import Spinner from "src/components/common/Spinner";
 import styled from "styled-components";
 
 type Props = {
@@ -19,6 +20,9 @@ export default function DocPane({
   docBodyRef,
   mainRegionRef,
 }: Props) {
+  const isOcrLoading = mode === "ocr" && !ocrText;
+  const isImageLoading = mode === "image" && !imageUrl;
+
   return (
     <Pane
       ref={mainRegionRef}
@@ -34,21 +38,34 @@ export default function DocPane({
         data-area="doc-body"
       >
         {mode === "image" ? (
-          imageUrl ? (
-            <Image src={imageUrl} alt="교안 원본 이미지" />
+          isImageLoading ? (
+            <LoadingBox role="status" aria-live="polite">
+              <Spinner aria-hidden="true" />
+              <span>이미지를 불러오는 중입니다...</span>
+            </LoadingBox>
           ) : (
-            <Empty role="status">이미지를 불러오는 중…</Empty>
+            imageUrl && <Image src={imageUrl} alt="교안 원본 이미지" />
           )
         ) : (
           <section>
-            <SrOnlyFocusable
-              type="button"
-              onClick={() => ocrAudioRef.current?.play()}
-              aria-label="본문 TTS 재생"
-            >
-              본문 듣기
-            </SrOnlyFocusable>
-            <Paragraph>{ocrText || "텍스트가 없습니다."}</Paragraph>
+            {!isOcrLoading && (
+              <SrOnlyFocusable
+                type="button"
+                onClick={() => ocrAudioRef.current?.play()}
+                aria-label="본문 TTS 재생"
+              >
+                본문 듣기
+              </SrOnlyFocusable>
+            )}
+
+            {isOcrLoading ? (
+              <LoadingBox role="status" aria-live="polite">
+                <Spinner aria-hidden="true" />
+                <span>본문을 처리하는 중입니다...</span>
+              </LoadingBox>
+            ) : (
+              <Paragraph>{ocrText}</Paragraph>
+            )}
           </section>
         )}
       </Body>
@@ -67,6 +84,7 @@ const Pane = styled.div`
   flex-direction: column;
   overflow: hidden;
 `;
+
 const Body = styled.div`
   flex: 1 1 auto;
   overflow: auto;
@@ -82,6 +100,7 @@ const Body = styled.div`
     max-width: ${DOC_TEXT_MEASURE}ch;
   }
 `;
+
 const Image = styled.img`
   width: 100%;
   height: auto;
@@ -89,6 +108,7 @@ const Image = styled.img`
   border: 1px solid #eef2f7;
   background: #fafafa;
 `;
+
 const Paragraph = styled.p`
   white-space: pre-wrap;
   line-height: 1.7;
@@ -96,14 +116,24 @@ const Paragraph = styled.p`
   color: var(--c-black);
   letter-spacing: 0.002em;
 `;
-const Empty = styled.div`
-  border: 1px dashed #d6e2f0;
+
+const LoadingBox = styled.div`
+  border: 1px solid #d6e2f0;
   border-radius: 10px;
   padding: 28px;
   color: #6b7280;
   text-align: center;
-  background: #fbfdff;
+  background: ${({ theme }) => theme.colors.base.white};
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+
+  span {
+    ${fonts.medium26};
+  }
 `;
+
 const SrOnlyFocusable = styled.button`
   position: absolute;
   width: 1px;

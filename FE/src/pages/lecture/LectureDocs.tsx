@@ -8,6 +8,10 @@ import { useLectureDocs } from "src/hooks/useLectureDocs";
 import MemoListCard from "src/components/lecture/MemoCard";
 import { useLectureMemoList } from "src/hooks/useLectureMemoList";
 
+import type { LectureDoc } from "src/entities/doc/types";
+import ReviewRecordModal from "src/components/lecture/pre/ReviewRecordModal";
+import { useState } from "react";
+
 type RouteParams = { courseId?: string };
 
 export default function LectureDocs() {
@@ -27,6 +31,8 @@ export default function LectureDocs() {
     saveAll,
     iconOf,
   } = useLectureMemoList(hasValidId ? lectureNumericId : null);
+
+  const [reviewDoc, setReviewDoc] = useState<LectureDoc | null>(null);
 
   const fmtDate = (iso: string) => {
     try {
@@ -63,11 +69,15 @@ export default function LectureDocs() {
               <DocItem
                 doc={doc}
                 fmtDate={fmtDate}
-                onOpen={(d) =>
-                  nav(`/lecture/doc/${d.id}`, {
-                    state: { navTitle: d.title },
-                  })
-                }
+                onOpen={(d) => {
+                  if (d.review) {
+                    setReviewDoc(d);
+                  } else {
+                    nav(`/lecture/doc/${d.id}`, {
+                      state: { navTitle: d.title },
+                    });
+                  }
+                }}
                 onDelete={async () => {
                   await remove(doc.id);
                 }}
@@ -91,6 +101,24 @@ export default function LectureDocs() {
           stickyTop="1rem"
         />
       </Right>
+      <ReviewRecordModal
+        open={!!reviewDoc}
+        onClose={() => setReviewDoc(null)}
+        onReview={() => {
+          if (!reviewDoc) return;
+          nav(`/lecture/doc/${reviewDoc.id}/post`, {
+            state: { navTitle: reviewDoc.title },
+          });
+          setReviewDoc(null);
+        }}
+        onContinue={() => {
+          if (!reviewDoc) return;
+          nav(`/lecture/doc/${reviewDoc.id}`, {
+            state: { navTitle: reviewDoc.title },
+          });
+          setReviewDoc(null);
+        }}
+      />
     </Wrap>
   );
 }

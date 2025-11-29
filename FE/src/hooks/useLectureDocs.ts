@@ -34,16 +34,17 @@ export function useLectureDocs(lectureId: number | null) {
       if (!lectureId) return;
       setBusy(true);
       try {
-        const created = await uploadLectureDoc(lectureId, file);
-        setDocs((prev) => [created, ...prev]);
+        await uploadLectureDoc(lectureId, file);
+        await refresh();
         toast.success(`업로드 완료: ${file.name}`);
-      } catch {
+      } catch (e) {
+        console.error("교안 업로드 실패 error:", e);
         toast.error("업로드에 실패했어요.");
       } finally {
         setBusy(false);
       }
     },
-    [lectureId]
+    [lectureId, refresh]
   );
 
   const remove = useCallback(
