@@ -107,7 +107,12 @@ function OcrRichContent({ text }: OcrRichContentProps) {
 
         if (seg.type === "code") {
           return (
-            <CodeBlock key={`${idx}-code`}>
+            <CodeBlock
+              key={`${idx}-code`}
+              tabIndex={-1}
+              aria-hidden="true"
+              data-skip-focus-tts="true"
+            >
               <code>{seg.content}</code>
             </CodeBlock>
           );
@@ -136,15 +141,32 @@ function MathBlock({ latex }: MathBlockProps) {
         MathJax?: { typesetPromise?: (nodes: Element[]) => Promise<unknown> };
       }
     ).MathJax;
-    if (!mj?.typesetPromise || !ref.current) return;
 
-    mj.typesetPromise([ref.current]).catch((err) => {
-      console.error("[MathJax] typeset 실패:", err);
-    });
+    const root = ref.current;
+    if (!mj?.typesetPromise || !root) return;
+
+    mj.typesetPromise([root])
+      .then(() => {
+        const focusableSelector =
+          'a, button, input, textarea, select, [tabindex], [contenteditable="true"], svg[focusable="true"]';
+
+        root.querySelectorAll<HTMLElement>(focusableSelector).forEach((el) => {
+          el.tabIndex = -1;
+          el.setAttribute("aria-hidden", "true");
+        });
+      })
+      .catch((err) => {
+        console.error("[MathJax] typeset 실패:", err);
+      });
   }, [latex]);
 
   return (
-    <MathContainer ref={ref} aria-label={`수식: ${latex}`}>
+    <MathContainer
+      ref={ref}
+      aria-hidden="true"
+      tabIndex={-1}
+      data-skip-focus-tts="true"
+    >
       {"$$ " + latex + " $$"}
     </MathContainer>
   );
@@ -208,6 +230,10 @@ const CodeBlock = styled.pre`
   color: var(--c-black);
   border-radius: 8px;
   overflow-x: auto;
+
+  &:focus-visible {
+    outline: none;
+  }
 `;
 
 const MathContainer = styled.div`
@@ -218,7 +244,11 @@ const MathContainer = styled.div`
   border-radius: 8px;
   ${fonts.medium26};
   color: var(--c-black);
-  overflow: scroll;
+  overflow: auto;
+
+  &:focus-visible {
+    outline: none;
+  }
 `;
 
 const LoadingBox = styled.div`
