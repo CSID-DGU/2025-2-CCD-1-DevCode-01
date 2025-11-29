@@ -11,6 +11,37 @@
       href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-gov-dynamic-subset.min.css"
     />
     <title>ClassMate</title>
+    <!-- MathJax 설정 -->
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [
+            ["$", "$"],
+            ["\\(", "\\)"],
+          ],
+          displayMath: [
+            ["$$", "$$"],
+            ["\\[", "\\]"],
+          ],
+        },
+        svg: {
+          fontCache: "global",
+        },
+      };
+    </script>
+
+    <!-- MathJax 본체: TeX -> SVG -->
+    <script
+      id="MathJax-script"
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"
+      defer
+    ></script>
+
+    <!-- SRE -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/speech-rule-engine@3.2.0/lib/sre_browser.js"
+      defer
+    ></script>
   </head>
   <body>
     <!-- <div id="zoom-root"> -->

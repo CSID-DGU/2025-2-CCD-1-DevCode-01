@@ -2,23 +2,28 @@ import { DOC_TEXT_MEASURE, PANEL_FIXED_H } from "@pages/class/pre/styles";
 import { fonts } from "@styles/fonts";
 import Spinner from "src/components/common/Spinner";
 import styled from "styled-components";
+import { useEffect, useMemo, useRef } from "react";
+import type { OcrSegment } from "@shared/ocr/types";
+import { parseOcrSegments } from "@shared/ocr/parse";
 
 type Props = {
   mode: "ocr" | "image";
   ocrText: string;
   imageUrl?: string | null;
-  ocrAudioRef: React.RefObject<HTMLAudioElement | null>;
   docBodyRef: React.RefObject<HTMLDivElement | null>;
   mainRegionRef: React.RefObject<HTMLDivElement | null>;
+  onPlayOcrTts: () => void;
+  ocrTtsLoading: boolean;
 };
 
 export default function DocPane({
   mode,
   ocrText,
   imageUrl,
-  ocrAudioRef,
   docBodyRef,
   mainRegionRef,
+  onPlayOcrTts,
+  ocrTtsLoading,
 }: Props) {
   const isOcrLoading = mode === "ocr" && !ocrText;
   const isImageLoading = mode === "image" && !imageUrl;
@@ -28,11 +33,15 @@ export default function DocPane({
       ref={mainRegionRef}
       role="region"
       aria-label={mode === "ocr" ? "교안 본문 텍스트" : "교안 원본 이미지"}
-      tabIndex={-1}
+      tabIndex={0}
+      onFocus={() => {
+        if (mode === "ocr" && !isOcrLoading) {
+          onPlayOcrTts();
+        }
+      }}
     >
       <Body
         ref={docBodyRef}
-        tabIndex={0}
         role="group"
         aria-label={mode === "ocr" ? "본문 영역" : "원본 이미지 영역"}
         data-area="doc-body"
@@ -51,8 +60,11 @@ export default function DocPane({
             {!isOcrLoading && (
               <SrOnlyFocusable
                 type="button"
-                onClick={() => ocrAudioRef.current?.play()}
-                aria-label="본문 TTS 재생"
+                onClick={onPlayOcrTts}
+                disabled={ocrTtsLoading}
+                aria-label={
+                  ocrTtsLoading ? "본문 음성을 준비 중입니다" : "본문 TTS 재생"
+                }
               >
                 본문 듣기
               </SrOnlyFocusable>
@@ -64,7 +76,7 @@ export default function DocPane({
                 <span>본문을 처리하는 중입니다...</span>
               </LoadingBox>
             ) : (
-              <Paragraph>{ocrText}</Paragraph>
+              <OcrRichContent text={ocrText} />
             )}
           </section>
         )}
@@ -73,7 +85,73 @@ export default function DocPane({
   );
 }
 
-/* styled */
+/* ---------- OCR 리치 렌더러 ---------- */
+
+type OcrRichContentProps = {
+  text: string;
+};
+
+function OcrRichContent({ text }: OcrRichContentProps) {
+  const segments: OcrSegment[] = useMemo(() => parseOcrSegments(text), [text]);
+
+  return (
+    <div>
+      {segments.map((seg, idx) => {
+        if (seg.type === "text") {
+          return seg.content
+            .split(/\n{2,}/)
+            .map((block, i) => (
+              <Paragraph key={`${idx}-text-${i}`}>{block.trim()}</Paragraph>
+            ));
+        }
+
+        if (seg.type === "code") {
+          return (
+            <CodeBlock key={`${idx}-code`}>
+              <code>{seg.content}</code>
+            </CodeBlock>
+          );
+        }
+
+        if (seg.type === "math") {
+          return <MathBlock key={`${idx}-math`} latex={seg.content} />;
+        }
+
+        return null;
+      })}
+    </div>
+  );
+}
+
+type MathBlockProps = {
+  latex: string;
+};
+
+function MathBlock({ latex }: MathBlockProps) {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const mj = (
+      window as unknown as {
+        MathJax?: { typesetPromise?: (nodes: Element[]) => Promise<unknown> };
+      }
+    ).MathJax;
+    if (!mj?.typesetPromise || !ref.current) return;
+
+    mj.typesetPromise([ref.current]).catch((err) => {
+      console.error("[MathJax] typeset 실패:", err);
+    });
+  }, [latex]);
+
+  return (
+    <MathContainer ref={ref} aria-label={`수식: ${latex}`}>
+      {"$$ " + latex + " $$"}
+    </MathContainer>
+  );
+}
+
+/* ---------- styled ---------- */
+
 const Pane = styled.div`
   background: var(--c-white);
   border: 1px solid #e7eef6;
@@ -90,11 +168,13 @@ const Body = styled.div`
   overflow: auto;
   padding: clamp(16px, 2.2vw, 24px);
   overscroll-behavior: contain;
+
   &:focus-visible {
-    outline: 2px solid #2563eb;
+    outline: 2px solid var(--c-blue);
     outline-offset: 2px;
     border-radius: 8px;
   }
+
   p,
   li {
     max-width: ${DOC_TEXT_MEASURE}ch;
@@ -115,15 +195,38 @@ const Paragraph = styled.p`
   ${fonts.medium26};
   color: var(--c-black);
   letter-spacing: 0.002em;
+  max-width: ${DOC_TEXT_MEASURE}ch;
+  margin-bottom: 0.75rem;
+`;
+
+const CodeBlock = styled.pre`
+  max-width: ${DOC_TEXT_MEASURE}ch;
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  background: var(--c-grayL);
+  ${fonts.regular20};
+  color: var(--c-black);
+  border-radius: 8px;
+  overflow-x: auto;
+`;
+
+const MathContainer = styled.div`
+  max-width: ${DOC_TEXT_MEASURE}ch;
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  background: var(--c-grayL);
+  border-radius: 8px;
+  ${fonts.medium26};
+  color: var(--c-black);
 `;
 
 const LoadingBox = styled.div`
   border: 1px solid #d6e2f0;
   border-radius: 10px;
   padding: 28px;
-  color: #6b7280;
+  color: var(--c-black);
   text-align: center;
-  background: ${({ theme }) => theme.colors.base.white};
+  background: var(--c-white);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -140,11 +243,8 @@ const SrOnlyFocusable = styled.button`
   height: 1px;
   margin: -1px;
   padding: 0;
-  border: 0;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
   overflow: hidden;
-  &:focus {
-    outline: none;
-  }
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 `;
