@@ -5,12 +5,7 @@ import re
 
 import cv2
 import requests
-
-# 패키지로 실행할 때 / 단일 스크립트로 실행할 때 둘 다 지원
-try:
-    from .ocr_hybrid import enhance_for_ocr, paddle_ocr_with_newlines
-except ImportError:
-    from ocr_hybrid import enhance_for_ocr, paddle_ocr_with_newlines
+from ai_exam_ocr.src.exam_ocr.ocr_hybrid import enhance_for_ocr, paddle_ocr_with_newlines
 
 
 # ==============================

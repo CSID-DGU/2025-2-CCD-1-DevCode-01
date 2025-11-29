@@ -50,14 +50,6 @@ class PageSerializer(serializers.ModelSerializer):
     def get_status(self, obj):
         return "done" if obj.ocr else "processing"
 
-class ExamSerializer(serializers.Serializer):
-    questionNumber = serializers.IntegerField(allow_null=True)
-    ocrText = serializers.CharField(allow_null=True)
-    tts = serializers.CharField(allow_null=True)
-
-class TotalExamSerializer(serializers.Serializer):
-    totalQuestions = serializers.IntegerField(allow_null=True)
-    question = ExamSerializer(many=True)
 
 class BoardCreateSerializer(serializers.Serializer):
     image = serializers.ImageField(required=True)
