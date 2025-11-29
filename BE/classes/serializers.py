@@ -29,7 +29,9 @@ class NoteSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Note
-        fields = ["note_id", "content", "note_tts"]
+        fields = ["note_id", "content"]
+
+
 
 
 class BookmarkSerializer(serializers.ModelSerializer):

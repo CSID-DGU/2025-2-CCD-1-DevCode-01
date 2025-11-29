@@ -22,6 +22,7 @@ class Note(models.Model):
     note_tts =  models.JSONField(blank=True, null=True) 
     created_at = models.DateTimeField(auto_now_add=True)
 
+
 #북마크
 class Bookmark(models.Model):
     page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name='bookmarks', null=True, blank=True)

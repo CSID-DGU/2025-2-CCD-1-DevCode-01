@@ -16,7 +16,8 @@ urlpatterns = [
     path("doc/<int:docId>/speech/summary/", DocSttSummaryView.as_view(), name="doc-stt-summary"),
     path("doc/speech/summary/<int:speechSummaryId>/", DocSttSummaryDetailView.as_view(), name="doc-stt-summary-detail"),
 
-    path('exam/', ExamOCRView.as_view(), name='exam'),
+    path('exam/start/', ExamStartView.as_view(), name='exam'),
+    path('exam/result',  ExamResultView.as_view(), name='exam-result'),
     path("exam/tts/", ExamTTSView.as_view()),
 
 

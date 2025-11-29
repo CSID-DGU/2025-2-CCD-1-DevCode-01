@@ -1,3 +1,5 @@
+import json
+import os
 import re
 from urllib.parse import unquote
 from io import BytesIO
@@ -18,8 +20,9 @@ from .models import Doc, Page, Board
 from lectures.models import Lecture
 from .utils import  *
 from classes.serializers import *
-from datetime import datetime, timezone
-
+from datetime import datetime, timedelta, timezone
+import redis
+from dotenv import load_dotenv
 
 #교안 업로드/조회
 class DocUploadView(APIView):
@@ -494,6 +497,9 @@ class PageView(APIView):
         return Response(response_data, status=200)
 
 #시험 OCR
+load_dotenv()
+redis_client = redis.Redis.from_url(os.getenv("EXAM_REDIS_URL"))
+
 class ExamTTSView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -508,41 +514,100 @@ class ExamTTSView(APIView):
         response = HttpResponse(audio_bytes, content_type="audio/mp3")
         response["Content-Disposition"] = 'inline; filename="tts.mp3"'
         return response
-    
-class ExamOCRView(APIView):
+
+#시험 시작
+class ExamStartView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        if 'image' not in request.FILES:
-            return Response({"error": "이미지를 업로드하세요."}, status=400)
+        user = request.user
 
-        image = request.FILES['image']
-        end_time = request.data.get("endTime")  # 프론트에서 보낸 시험 종료시간
+        end_time = request.data.get("endTime")
+        images = request.FILES.getlist("images")
 
         if not end_time:
-            return Response({"error": "endTime이 필요합니다."}, status=400)
+            return Response({"error": "endTime 필요"}, status=400)
+        if not images:
+            return Response({"error": "images[] 필요"}, status=400)
 
-        now = datetime.now(timezone.utc)
-        end_dt = datetime.fromisoformat(end_time)
-
-        if now > end_dt:
-            return Response({"error": "시험 시간이 아닙니다."}, status=403)
-
-        ai_url = settings.AI_EXAM_OCR_URL
-
-        files = {
-            "image": (image.name, image.read(), image.content_type)
-        }
-
-        data = {
-            "endTime": end_time  # AI 서버로 전달
-        }
-
+        # 문자열 → datetime으로 검증
         try:
-            ai_resp = requests.post(ai_url, files=files, data=data, timeout=40)
+            end_time = datetime.fromisoformat(end_time)
+        except:
+            return Response({"error": "endTime 형식 오류"}, status=400)
+
+        # Redis 저장
+        session_key = f"exam_session:{user.id}"
+        redis_client.set(session_key, json.dumps({"endTime": end_time}))
+
+        # OCR 처리
+        ai_url = settings.AI_EXAM_OCR_URL
+        all_questions = []
+
+        for image in images:
+            files = {
+                "image": (image.name, image.read(), image.content_type)
+            }
+            ai_resp = requests.post(ai_url, files=files, timeout=60)
             ai_resp.raise_for_status()
-        except Exception as e:
-            return Response({"error": f"AI 서버 요청 실패: {e}"}, status=502)
 
-        return Response(ai_resp.json(), status=200)
+            ocr_json = ai_resp.json()
+            all_questions.extend(ocr_json.get("questions", []))
 
+        ocr_key = f"exam_ocr:{user.id}"
+        redis_client.set(ocr_key, json.dumps(all_questions))
+
+        return Response({
+            "message": "시험 시작됨",
+            "endTime": end_time,
+            "questions": all_questions
+        }, status=200)
+
+
+
+#분석 결과
+class ExamResultView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        session_key = f"exam_session:{user.id}"
+        ocr_key = f"exam_ocr:{user.id}"
+
+        session_val = redis_client.get(session_key)
+        if not session_val:
+            return Response({"error": "시험 종료됨"}, status=403)
+
+        session = json.loads(session_val)
+        end_time = datetime.fromisoformat(session["endTime"])
+
+        # 종료 검증
+        if datetime.now(timezone.utc) > end_time:
+            return Response({"error": "시험 종료됨"}, status=403)
+
+        # OCR 데이터 반환
+        cached = redis_client.get(ocr_key)
+        if not cached:
+            return Response({"error": "OCR 없음"}, status=404)
+
+        return Response({
+            "endTime": session["endTime"],
+            "questions": json.loads(cached)
+        }, status=200)
+
+
+#시험 종료
+class ExamEndView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+
+        session_key = f"exam_session:{user.id}"
+        ocr_key = f"exam_ocr:{user.id}"
+
+        redis_client.delete(session_key)
+        redis_client.delete(ocr_key)
+
+        return Response({"message": "시험 종료됨"}, status=200)
