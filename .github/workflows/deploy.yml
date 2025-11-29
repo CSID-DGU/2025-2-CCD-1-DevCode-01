@@ -3,7 +3,10 @@ name: Deploy BE to EC2
 on:
   push:
     branches: ["main"]
+    paths:
+      - "BE/**"
 
+      
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -35,6 +38,9 @@ jobs:
           echo "📌 Daphne 재시작..."
           sudo systemctl daemon-reload
           sudo systemctl restart daphne
+
+          echo "📌 Celery 재시작..."
+          sudo systemctl restart celery
 
           echo "📌 Nginx 재시작..."
           sudo systemctl restart nginx
