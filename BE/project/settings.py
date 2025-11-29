@@ -28,9 +28,9 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # 배포 시 false로 변경
-#DEBUG = False
+DEBUG = False
 # 로컬 테스트용
-DEBUG = True
+#DEBUG = True
 
 
 ALLOWED_HOSTS = ['*']

@@ -1,10 +1,9 @@
-# ai_exam_ocr/router.py
 import os
 import uuid
 import shutil
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
-from .pipeline import process_exam
+from ai_exam_ocr.src.exam_ocr.pipeline import process_exam
 
 router = APIRouter(
     prefix="/exam",
