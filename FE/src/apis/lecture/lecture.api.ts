@@ -69,7 +69,10 @@ export async function fetchDocPage(docId: number, page: number) {
 export type PageSummary = {
   page_id: number;
   summary: string;
-  summary_tts?: string;
+  summary_tts?: {
+    female?: string;
+    male?: string;
+  } | null;
 };
 
 export async function fetchPageSummary(pageId: number) {

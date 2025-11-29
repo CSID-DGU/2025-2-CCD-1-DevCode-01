@@ -138,7 +138,7 @@ export default function PreClass() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryRequested, setSummaryRequested] = useState(false);
 
-  /* local TTS (시간/확인) */
+  /* local TTS */
   const { speak } = useLocalTTS();
 
   /* page TTS */
@@ -267,7 +267,7 @@ export default function PreClass() {
     document.title = `캠퍼스 메이트 | ${t}`;
   }, [state?.navTitle, page]);
 
-  /* 포커스 TTS (기존 기능) */
+  /* 포커스 TTS */
   useFocusTTS({
     enabled: readOnFocus,
     mode,
@@ -282,10 +282,20 @@ export default function PreClass() {
   useOcrTtsAutoStop(ocrAudioRef, {
     pageKey: docPage?.pageId,
     mode,
-    docBodyRef,
+    areaRef: docBodyRef as React.RefObject<HTMLElement | null>,
     announce,
     stopMessageOnBlur: "본문 음성 재생이 중지되었습니다.",
     stopMessageOnChange: "페이지 또는 보기 모드 변경으로 음성을 중지합니다.",
+  });
+
+  useOcrTtsAutoStop(sumAudioRef, {
+    pageKey: docPage?.pageId,
+    mode,
+    areaRef: sidePaneRef as React.RefObject<HTMLElement | null>,
+    announce,
+    stopMessageOnBlur: "요약 음성 재생이 중지되었습니다.",
+    stopMessageOnChange:
+      "페이지 또는 보기 모드 변경으로 요약 음성을 중지합니다.",
   });
 
   const canPrev = page > 1;
@@ -363,6 +373,12 @@ export default function PreClass() {
     });
   };
 
+  const summaryTtsUrl = summary?.summary_tts
+    ? soundVoice === "여성"
+      ? summary.summary_tts.female ?? null
+      : summary.summary_tts.male ?? null
+    : null;
+
   return (
     <Wrap aria-busy={loading}>
       <audio ref={ocrAudioRef} preload="none" />
@@ -393,7 +409,7 @@ export default function PreClass() {
               }}
               summary={{
                 text: summary?.summary ?? "",
-                ttsUrl: summary?.summary_tts,
+                ttsUrl: summaryTtsUrl ?? undefined,
                 sumAudioRef,
                 sidePaneRef,
                 loading: summaryLoading,

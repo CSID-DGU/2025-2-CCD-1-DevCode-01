@@ -1,10 +1,8 @@
 import { DOC_TEXT_MEASURE, PANEL_FIXED_H } from "@pages/class/pre/styles";
 import { fonts } from "@styles/fonts";
+import { RichOcrContent } from "src/components/common/RichOcrContent";
 import Spinner from "src/components/common/Spinner";
 import styled from "styled-components";
-import { useEffect, useMemo, useRef } from "react";
-import type { OcrSegment } from "@shared/ocr/types";
-import { parseOcrSegments } from "@shared/ocr/parse";
 
 type Props = {
   mode: "ocr" | "image";
@@ -76,99 +74,12 @@ export default function DocPane({
                 <span>본문을 처리하는 중입니다...</span>
               </LoadingBox>
             ) : (
-              <OcrRichContent text={ocrText} />
+              <RichOcrContent text={ocrText} />
             )}
           </section>
         )}
       </Body>
     </Pane>
-  );
-}
-
-/* ---------- OCR 리치 렌더러 ---------- */
-
-type OcrRichContentProps = {
-  text: string;
-};
-
-function OcrRichContent({ text }: OcrRichContentProps) {
-  const segments: OcrSegment[] = useMemo(() => parseOcrSegments(text), [text]);
-
-  return (
-    <div>
-      {segments.map((seg, idx) => {
-        if (seg.type === "text") {
-          return seg.content
-            .split(/\n{2,}/)
-            .map((block, i) => (
-              <Paragraph key={`${idx}-text-${i}`}>{block.trim()}</Paragraph>
-            ));
-        }
-
-        if (seg.type === "code") {
-          return (
-            <CodeBlock
-              key={`${idx}-code`}
-              tabIndex={-1}
-              aria-hidden="true"
-              data-skip-focus-tts="true"
-            >
-              <code>{seg.content}</code>
-            </CodeBlock>
-          );
-        }
-
-        if (seg.type === "math") {
-          return <MathBlock key={`${idx}-math`} latex={seg.content} />;
-        }
-
-        return null;
-      })}
-    </div>
-  );
-}
-
-type MathBlockProps = {
-  latex: string;
-};
-
-function MathBlock({ latex }: MathBlockProps) {
-  const ref = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const mj = (
-      window as unknown as {
-        MathJax?: { typesetPromise?: (nodes: Element[]) => Promise<unknown> };
-      }
-    ).MathJax;
-
-    const root = ref.current;
-    if (!mj?.typesetPromise || !root) return;
-
-    mj.typesetPromise([root])
-      .then(() => {
-        const focusableSelector =
-          'a, button, input, textarea, select, [tabindex], [contenteditable="true"], svg[focusable="true"]';
-
-        root.querySelectorAll<HTMLElement>(focusableSelector).forEach((el) => {
-          el.tabIndex = -1;
-          el.setAttribute("aria-hidden", "true");
-        });
-      })
-      .catch((err) => {
-        console.error("[MathJax] typeset 실패:", err);
-      });
-  }, [latex]);
-
-  return (
-    <MathContainer
-      ref={ref}
-      aria-hidden="true"
-      tabIndex={-1}
-      data-skip-focus-tts="true"
-    >
-      {"$$ " + latex + " $$"}
-    </MathContainer>
   );
 }
 
@@ -209,46 +120,6 @@ const Image = styled.img`
   border-radius: 10px;
   border: 1px solid #eef2f7;
   background: #fafafa;
-`;
-
-const Paragraph = styled.p`
-  white-space: pre-wrap;
-  line-height: 1.7;
-  ${fonts.medium26};
-  color: var(--c-black);
-  letter-spacing: 0.002em;
-  max-width: ${DOC_TEXT_MEASURE}ch;
-  margin-bottom: 0.75rem;
-`;
-
-const CodeBlock = styled.pre`
-  max-width: ${DOC_TEXT_MEASURE}ch;
-  margin: 1rem 0;
-  padding: 0.75rem 1rem;
-  background: var(--c-grayL);
-  ${fonts.regular20};
-  color: var(--c-black);
-  border-radius: 8px;
-  overflow-x: auto;
-
-  &:focus-visible {
-    outline: none;
-  }
-`;
-
-const MathContainer = styled.div`
-  max-width: ${DOC_TEXT_MEASURE}ch;
-  margin: 1rem 0;
-  padding: 0.75rem 1rem;
-  background: var(--c-grayL);
-  border-radius: 8px;
-  ${fonts.medium26};
-  color: var(--c-black);
-  overflow: auto;
-
-  &:focus-visible {
-    outline: none;
-  }
 `;
 
 const LoadingBox = styled.div`

@@ -1,94 +1,84 @@
-// src/hooks/useOcrTtsAutoStop.ts
-import { useEffect, type RefObject } from "react";
-
-type ModeType = "ocr" | "image";
+import { useEffect, useRef } from "react";
 
 type Options = {
-  /** 페이지 식별용 키(페이지 번호, pageId 등) - 바뀌면 자동으로 끊음 */
+  /** 페이지/스크린 구분용 키 - 바뀌면 TTS 정지 */
   pageKey?: number | string | null;
-  /** 모드(ocr/image 등) - 바뀌면 자동으로 끊음 */
-  mode?: ModeType;
-  /** 포커스를 유지하고 싶은 본문 영역 */
-  docBodyRef?: RefObject<HTMLElement | null>;
-  /** 재생 중단 안내용 라이브 리전 announcer */
+  /** 모드 바뀌면 TTS 정지 */
+  mode?: string;
+  /** 이 영역 밖으로 포커스 나가면 TTS 정지 */
+  areaRef?: React.RefObject<HTMLElement | null>;
+  /** SR 라이브 영역에 읽어줄 함수 */
   announce?: (msg: string) => void;
-  /** 포커스 빠져 나갈 때 멘트 커스터마이즈 */
+  /** 포커스 벗어나서 끊길 때 안내 문구 */
   stopMessageOnBlur?: string;
-  /** 페이지/모드 변경 시 멘트 커스터마이즈 */
+  /** pageKey / mode 변경으로 끊길 때 안내 문구 */
   stopMessageOnChange?: string;
 };
 
-/**
- * OCR 페이지 TTS를 공통으로 제어하는 훅
- * - pageKey/모드 변경 시 오디오 정지
- * - 포커스가 docBodyRef 바깥으로 빠지면 정지
- */
 export function useOcrTtsAutoStop(
-  audioRef: RefObject<HTMLAudioElement | null>,
+  audioRef: React.RefObject<HTMLAudioElement | null>,
   {
     pageKey,
     mode,
-    docBodyRef,
+    areaRef,
     announce,
-    stopMessageOnBlur = "본문 음성 재생이 중지되었습니다.",
+    stopMessageOnBlur,
     stopMessageOnChange,
   }: Options
 ) {
-  // 1) 페이지 key 변경 시 TTS 정지
+  const lastPageKeyRef = useRef<typeof pageKey>(pageKey);
+  const lastModeRef = useRef<typeof mode>(mode);
+
+  // 1) 포커스가 areaRef 밖으로 나가면 정지
   useEffect(() => {
-    if (!pageKey) return;
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    audio.pause();
-    audio.currentTime = 0;
-
-    if (announce && stopMessageOnChange) {
-      announce(stopMessageOnChange);
-    }
-  }, [pageKey, audioRef, announce, stopMessageOnChange]);
-
-  // 2) 모드 변경 시 TTS 정지
-  useEffect(() => {
-    if (!mode) return;
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    audio.pause();
-    audio.currentTime = 0;
-
-    if (announce && stopMessageOnChange) {
-      announce(stopMessageOnChange);
-    }
-  }, [mode, audioRef, announce, stopMessageOnChange]);
-
-  // 3) 포커스가 docBodyRef 바깥으로 이동하면 TTS 정지
-  useEffect(() => {
-    if (!docBodyRef) return;
-
-    const handleFocusIn = (event: FocusEvent) => {
+    const handleFocusIn = (event: Event) => {
       const audio = audioRef.current;
-      if (!audio || audio.paused) return;
+      const areaEl = areaRef?.current;
+      if (!audio || !areaEl) return;
 
       const target = event.target as HTMLElement | null;
+      if (!target) return;
 
-      // 본문 영역 안이면 계속 재생
-      if (target && docBodyRef.current?.contains(target)) {
-        return;
+      // 영역 안이면 유지
+      if (areaEl.contains(target)) return;
+
+      // 영역 밖으로 나갔으면 정지
+      if (!audio.paused) {
+        audio.pause();
+        audio.currentTime = 0;
+        if (stopMessageOnBlur && announce) {
+          announce(stopMessageOnBlur);
+        }
       }
+    };
 
-      // 그 외 요소로 포커스 이동 → 정지
+    window.addEventListener("focusin", handleFocusIn);
+    return () => {
+      window.removeEventListener("focusin", handleFocusIn);
+    };
+  }, [audioRef, areaRef, announce, stopMessageOnBlur]);
+
+  // 2) pageKey나 mode가 바뀌면 정지
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) {
+      lastPageKeyRef.current = pageKey;
+      lastModeRef.current = mode;
+      return;
+    }
+
+    const pageChanged = lastPageKeyRef.current !== pageKey;
+    const modeChanged = lastModeRef.current !== mode;
+
+    if ((pageChanged || modeChanged) && !audio.paused) {
       audio.pause();
       audio.currentTime = 0;
-
-      if (announce) {
-        announce(stopMessageOnBlur);
+      if (stopMessageOnChange && announce) {
+        announce(stopMessageOnChange);
       }
-    };
+    }
 
-    document.addEventListener("focusin", handleFocusIn, true);
-    return () => {
-      document.removeEventListener("focusin", handleFocusIn, true);
-    };
-  }, [audioRef, docBodyRef, announce, stopMessageOnBlur]);
+    lastPageKeyRef.current = pageKey;
+    lastModeRef.current = mode;
+  }, [audioRef, pageKey, mode, announce, stopMessageOnChange]);
 }

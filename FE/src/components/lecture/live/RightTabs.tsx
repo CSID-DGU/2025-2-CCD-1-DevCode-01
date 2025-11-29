@@ -124,7 +124,7 @@ export default function RightTabs({
         )}
       </Panel>
 
-      {/* 판서 패널: pre에선 아예 렌더 X → BoardBox API도 절대 안 돈다 */}
+      {/* 판서 패널*/}
       {hasBoard && (
         <Panel
           id={panelIds.board}
@@ -168,7 +168,6 @@ export default function RightTabs({
   );
 }
 
-/* --- 스타일 --- */
 const Aside = styled.aside<{ $stack: boolean }>`
   position: ${({ $stack }) => ($stack ? "static" : "sticky")};
   top: 16px;
