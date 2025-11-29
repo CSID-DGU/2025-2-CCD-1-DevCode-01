@@ -2,23 +2,24 @@
 
 export type Mode = "base" | "hc";
 
-export const getMode = (): Mode =>
-  (localStorage.getItem("mode") as Mode) || "base";
-
-export const applyMode = (mode: Mode) => {
-  document.documentElement.classList.toggle("hc", mode === "hc");
+export const getMode = (): Mode => {
+  const raw = localStorage.getItem("high_contrast");
+  return raw === "true" ? "hc" : "base";
 };
 
 export const setMode = (mode: Mode) => {
-  localStorage.setItem("mode", mode);
+  localStorage.setItem("high_contrast", mode === "hc" ? "true" : "false");
   applyMode(mode);
-
   window.dispatchEvent(new CustomEvent("modechange", { detail: mode }));
 };
 
 export const toggleMode = () => {
   const next = getMode() === "base" ? "hc" : "base";
   setMode(next);
+};
+
+export const applyMode = (mode: Mode) => {
+  document.documentElement.classList.toggle("hc", mode === "hc");
 };
 
 // 앱 시작 시 저장된 모드 반영
