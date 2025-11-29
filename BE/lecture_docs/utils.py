@@ -2,7 +2,7 @@ import base64
 from google.cloud import texttospeech
 from openai import OpenAI
 import vertexai
-from classes.utils import text_to_speech
+from classes.utils import text_to_speech, time_to_seconds
 from lecture_docs.models import *
 from dotenv import load_dotenv
 from vertexai import generative_models
@@ -25,13 +25,17 @@ def summarize_stt(doc_id: int, user: User) -> tuple[str, str]:
     lecture_title = doc.lecture.title if doc.lecture else "강의"
     doc_title = doc.title
 
+    doc_end_time_sec = time_to_seconds(doc.end_time) if doc.end_time else 0.0
+
     # 2️⃣ 모든 페이지의 STT 텍스트 병합
-    stt_texts = [
-        speech.stt.strip()
-        for page in doc.pages.all()
-        for speech in page.speeches.all()
-        if speech.stt and speech.stt.strip()
-    ]
+    stt_texts = []
+    for page in doc.pages.all():
+        for speech in page.speeches.all():
+            if speech.stt and speech.stt.strip():
+                # 교안 종료 이후의 STT만 포함
+                if speech.end_time_sec >= doc_end_time_sec:
+                    stt_texts.append(speech.stt.strip())
+
     if not stt_texts:
         raise ValueError("요약할 STT 데이터가 없습니다.")
 

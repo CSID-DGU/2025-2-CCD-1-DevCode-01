@@ -154,13 +154,10 @@ class NoteView(APIView):
         if Note.objects.filter(page=page, user=user).exists():
             return Response({"error": "이미 이 페이지에 작성한 노트가 있습니다."}, status=400)
 
-        note_tts = text_to_speech(content, user, "tts/note/")
-
         note = Note.objects.create(
             page=page,
             user=user,
-            content=content.strip(),
-            note_tts=note_tts,
+            content=content.strip()
         )
 
         return Response(NoteSerializer(note).data, status=201)
@@ -175,17 +172,11 @@ class NoteDetailView(APIView):
 
         if note.user != request.user:
             return Response({"error": "본인이 작성한 노트만 수정할 수 있습니다."}, status=403)
-
+        
         content = request.data.get("content", "").strip()
         note.content = content
-
-        if content:
-            note.note_tts = text_to_speech(content, request.user, "tts/note/")
-        else:
-            note.note_tts = None
 
         note.save()
 
         return Response(NoteSerializer(note).data, status=200)
-
     

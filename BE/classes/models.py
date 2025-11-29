@@ -7,7 +7,7 @@ from lecture_docs.models import *
 class Speech(models.Model):
     page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name='speeches', null=True, blank=True)
     stt = models.TextField(blank=True, null=True)
-    stt_tts =  models.URLField(blank=True, null=True)
+    stt_tts =  models.JSONField(blank=True, null=True)
     end_time = models.CharField(max_length=10, blank=True, null=True)  # hh:mm:ss
     duration = models.CharField(max_length=10, blank=True, null=True)
     end_time_sec = models.FloatField(default=0.0)  # 계산용
@@ -19,7 +19,7 @@ class Note(models.Model):
     page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name='notes', null=True, blank=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notes')  # 작성자
     content = models.TextField()
-    note_tts =  models.URLField(blank=True, null=True) 
+    note_tts =  models.JSONField(blank=True, null=True) 
     created_at = models.DateTimeField(auto_now_add=True)
 
 #북마크

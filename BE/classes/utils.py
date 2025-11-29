@@ -1,3 +1,4 @@
+import re
 import tempfile
 import wave
 from google.cloud import speech, storage
@@ -10,6 +11,44 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from users.models import User
+
+symbol_map = {
+    "!": "느낌표",
+    "@": "앳",
+    "#": "샵",
+    "$": "달러",
+    "%": "퍼센트",
+    "^": "캐럿",
+    "&": "앤드",
+    "*": "애스터리스크",
+    "(": "괄호 열고",
+    ")": "괄호 닫고",
+    "-": "하이픈",
+    "_": "언더스코어",
+    "=": "이퀄",
+    "+": "플러스",
+    "[": "대괄호 열고",
+    "]": "대괄호 닫고",
+    "{": "중괄호 열고",
+    "}": "중괄호 닫고",
+    "\\": "백슬래시",
+    "|": "파이프",
+    ";": "세미콜론",
+    ":": "콜론",
+    "'": "작은따옴표",
+    '"': "큰따옴표",
+    ",": "콤마",
+    ".": "점",
+    "/": "슬래시",
+    "?": "물음표",
+    "<": "꺾쇠 열고",
+    ">": "꺾쇠 닫고",
+    "~": "틸다",
+    "`": "백틱",
+    "\t": "들여쓰기",
+}
+
+symbol_pattern = re.compile("|".join(re.escape(k) for k in symbol_map.keys()))
 
 def upload_to_gcs(file_bytes: bytes, filename: str, bucket_name: str) -> str:
     """GCS 버킷에 파일 업로드 후 URI 반환"""
@@ -187,72 +226,91 @@ def find_full_text(stt_words, target_word, user: User):
     # 단어 결합 (▁ 제거하고 공백 처리)
     return "".join([w.replace("▁", " ") for w in sentence_words]).strip()
 
+# 코드 전처리
+def preprocess_code(code_text: str) -> str:
+    lines = code_text.split("\n")
+    processed_lines = []
+
+    for line in lines:
+        # 1) 앞쪽 공백 개수 → 들여쓰기
+        leading_spaces = len(line) - len(line.lstrip(' '))
+        total_indent = (leading_spaces // 4)
+        indent_text = " ".join(["들여쓰기"] * total_indent) + " " if total_indent > 0 else ""
+
+        # 2) 내용 부분
+        content = line.lstrip(' ')
+
+        # 3) 특수문자 전처리
+        def replace_symbol(match):
+            return f" {symbol_map[match.group(0)]} "
+
+        content = symbol_pattern.sub(replace_symbol, content)
+
+        # 4) 결과 합치기
+        processed_lines.append(indent_text + content.strip())
+
+    # 5) 줄바꿈 처리
+    return " 줄바꿈 ".join(processed_lines)
+
 def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     
     if not text or text.strip() == "":
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
-    
-    voice = (user.voice or "여성")
-    rate = (user.rate or "보통")
 
-    # 1️⃣ Google TTS 클라이언트 생성
     client = texttospeech.TextToSpeechClient(transport="rest")
 
     synthesis_input = texttospeech.SynthesisInput(text=text)
     
     voice_map = {
-        "여성": "ko-KR-Neural2-A",
-        "남성": "ko-KR-Neural2-C",
+        "female": "ko-KR-Neural2-A",
+        "male": "ko-KR-Neural2-C",
     }
-    name = voice_map.get(voice)
-    
-    voice_config = texttospeech.VoiceSelectionParams(
-        language_code="ko-KR",
-        name=name,
-    )
-
-    rate_map = {"느림": 0.8, "보통": 1.0, "빠름": 1.25}
-    speaking_rate = rate_map.get(rate)
 
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=speaking_rate,
+        speaking_rate=1.0,
     )
 
-    # 2️⃣ TTS 변환
-    response = client.synthesize_speech(
-        input=synthesis_input,
-        voice=voice_config,
-        audio_config=audio_config
-    )
+    s3_urls = {}
 
-    if not response.audio_content:
-        raise ValueError("TTS 변환에 실패했습니다. 응답이 비어 있습니다.")
+    for gender, name in voice_map.items():
+        voice_config = texttospeech.VoiceSelectionParams(
+            language_code="ko-KR",
+            name=name,
+        )
+
+        response = client.synthesize_speech(
+            input=synthesis_input,
+            voice=voice_config,
+            audio_config=audio_config
+        )
+
+        if not response.audio_content:
+            raise ValueError("TTS 변환에 실패했습니다. 응답이 비어 있습니다.")
     
+        s3 = boto3.client(
+            's3',
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name='ap-northeast-2'
+        )
 
-    # 3️⃣ S3 업로드 (메모리 버퍼 사용)
-    s3 = boto3.client(
-        's3',
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        region_name='ap-northeast-2'
-    )
+        bucket_name = settings.AWS_BUCKET_NAME
+        filename = f"{uuid.uuid4()}.mp3"
+        s3_key = f"{s3_folder}{filename}"
 
-    bucket_name = settings.AWS_BUCKET_NAME
-    filename = f"{uuid.uuid4()}.mp3"
-    s3_key = f"{s3_folder}{filename}"
+        # BytesIO로 메모리 내에서 직접 업로드
+        s3.upload_fileobj(
+            io.BytesIO(response.audio_content),
+            bucket_name,
+            s3_key,
+            ExtraArgs={'ContentType': 'audio/mpeg'}
+        )
 
-    # BytesIO로 메모리 내에서 직접 업로드
-    s3.upload_fileobj(
-        io.BytesIO(response.audio_content),
-        bucket_name,
-        s3_key,
-        ExtraArgs={'ContentType': 'audio/mpeg'}
-    )
+        s3_url = f"{settings.AWS_S3_BASE_URL}/{s3_key}"
+        s3_urls[gender] = s3_url
 
-    s3_url = f"{settings.AWS_S3_BASE_URL}/{s3_key}"
-
-    return s3_url
+    return s3_urls
 
 def text_to_speech_local(text: str, voice: str, rate: str) -> str:
     """

@@ -14,6 +14,7 @@ urlpatterns = [
     path('page/<int:pageId>/review/', PageView.as_view(), name='page-review'),
     path('board/<int:boardId>/', BoardView.as_view(), name="board-detail"),
     path("doc/<int:docId>/speech/summary/", DocSttSummaryView.as_view(), name="doc-stt-summary"),
+    path("doc/speech/summary/<int:speechSummaryId>/", DocSttSummaryDetailView.as_view(), name="doc-stt-summary-detail"),
 
     path('exam/', ExamOCRView.as_view(), name='exam'),
     path("exam/tts/", ExamTTSView.as_view()),
