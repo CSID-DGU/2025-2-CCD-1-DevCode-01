@@ -218,6 +218,7 @@ const MathContainer = styled.div`
   border-radius: 8px;
   ${fonts.medium26};
   color: var(--c-black);
+  overflow: scroll;
 `;
 
 const LoadingBox = styled.div`
