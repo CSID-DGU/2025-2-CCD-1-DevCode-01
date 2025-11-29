@@ -17,9 +17,9 @@ urlpatterns = [
     path("doc/speech/summary/<int:speechSummaryId>/", DocSttSummaryDetailView.as_view(), name="doc-stt-summary-detail"),
 
     path('exam/start/', ExamStartView.as_view(), name='exam'),
-    path('exam/result',  ExamResultView.as_view(), name='exam-result'),
+    path('exam/result/',  ExamResultView.as_view(), name='exam-result'),
     path("exam/tts/", ExamTTSView.as_view()),
-
+    path('exam/end/',  ExamEndView.as_view(), name='exam-result'),
 
     ## BE <> AI
     path("docs/<int:docId>/ocr-callback/", OcrCallbackView.as_view(), name="doc-ocr-callback"),
