@@ -1,16 +1,61 @@
+type SreEngine = {
+  setupEngine?: (options: Record<string, unknown>) => void;
+  toSpeech?: (mathml: string) => string;
+};
+
+function getSreFromWindow(): SreEngine | null {
+  const w = window as unknown as { SRE?: SreEngine; sre?: SreEngine };
+  return w.SRE ?? w.sre ?? null;
+}
+
 let sreInitialized = false;
 
-function ensureSRE() {
-  const sre = window.SRE;
+async function waitForSre(
+  maxWaitMs = 5000,
+  intervalMs = 100
+): Promise<SreEngine | null> {
+  const start = Date.now();
 
-  if (!sre) {
+  const existing = getSreFromWindow();
+  if (existing) return existing;
+
+  return new Promise((resolve) => {
+    const tick = () => {
+      const sre = getSreFromWindow();
+
+      if (sre) {
+        resolve(sre);
+        return;
+      }
+
+      if (Date.now() - start >= maxWaitMs) {
+        console.warn("[waitForSre] SRE를 지정 시간 안에 찾지 못했습니다.");
+        resolve(null);
+        return;
+      }
+
+      setTimeout(tick, intervalMs);
+    };
+
+    tick();
+  });
+}
+
+// MathML → 영어 음성 문자열
+
+export async function mathmlToSpeech(mathml: string): Promise<string> {
+  const sre = await waitForSre();
+
+  console.log("[mathmlToSpeech] SRE after wait:", sre);
+
+  if (!sre || typeof sre.toSpeech !== "function") {
     console.warn(
-      "[SRE] SRE 전역 객체가 없습니다. sre_browser.js 로드 여부 확인 필요"
+      "[mathmlToSpeech] SRE 엔진을 찾을 수 없습니다. MathML 그대로 사용"
     );
-    return null;
+    return mathml;
   }
 
-  if (!sreInitialized) {
+  if (!sreInitialized && typeof sre.setupEngine === "function") {
     try {
       sre.setupEngine({
         locale: "en",
@@ -19,24 +64,14 @@ function ensureSRE() {
       });
       sreInitialized = true;
     } catch (e) {
-      console.error("[SRE] setupEngine 실패:", e);
+      console.error("[mathmlToSpeech] SRE setupEngine 실패:", e);
     }
   }
 
-  return sre;
-}
-
-/** MathML -> 영어 speech 문자열 */
-export function mathmlToSpeech(mathml: string): string {
-  const sre = ensureSRE();
-  if (!sre) {
-    return mathml;
-  }
-
   try {
-    return sre.toSpeech(mathml);
+    return sre.toSpeech!(mathml);
   } catch (e) {
-    console.error("[SRE] toSpeech 실패:", e);
+    console.error("[mathmlToSpeech] SRE toSpeech 실패:", e);
     return mathml;
   }
 }
