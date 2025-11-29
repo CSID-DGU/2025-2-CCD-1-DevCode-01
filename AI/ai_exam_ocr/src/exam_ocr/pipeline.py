@@ -155,10 +155,32 @@ def build_exam_json_for_views(seq_meta_hybrid: List[Dict[str, Any]],
 # 3. public API
 # ==============================
 
+# def process_exam(
+#     image_path: str,
+#     output_dir: str,
+#     base_url: str | None = None,
+# ) -> Dict[str, Any]:
+#     os.makedirs(output_dir, exist_ok=True)
+
+#     img_bgr, all_boxes = detect_boxes_with_roboflow(image_path, ROBOFLOW_API_KEY, MODEL_ID)
+#     structured_questions = build_structured_questions(img_bgr, all_boxes)
+#     seq_meta = build_sequential_crops(structured_questions, img_bgr, output_dir)
+#     seq_meta_hybrid = run_hybrid_ocr_on_seq_meta(seq_meta)
+#     exam_json = build_exam_json_for_views(seq_meta_hybrid, img_bgr, output_dir, base_url)
+
+#     # JSON 파일 저장
+#     out_path = os.path.join(output_dir, "exam_questions.json")
+#     with open(out_path, "w", encoding="utf-8") as f:
+#         json.dump(exam_json, f, ensure_ascii=False, indent=2)
+
+#     exam_json["_output_path"] = out_path
+#     return exam_json
+
 def process_exam(
     image_path: str,
     output_dir: str,
     base_url: str | None = None,
+    save_json: bool = False, #로컬저장x
 ) -> Dict[str, Any]:
     os.makedirs(output_dir, exist_ok=True)
 
@@ -168,14 +190,13 @@ def process_exam(
     seq_meta_hybrid = run_hybrid_ocr_on_seq_meta(seq_meta)
     exam_json = build_exam_json_for_views(seq_meta_hybrid, img_bgr, output_dir, base_url)
 
-    # JSON 파일 저장
-    out_path = os.path.join(output_dir, "exam_questions.json")
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(exam_json, f, ensure_ascii=False, indent=2)
+    if save_json:
+        out_path = os.path.join(output_dir, "exam_questions.json")
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(exam_json, f, ensure_ascii=False, indent=2)
+        exam_json["_output_path"] = out_path
 
-    exam_json["_output_path"] = out_path
     return exam_json
-
 
 # ==============================
 # 4. CLI 엔트리
@@ -191,7 +212,7 @@ if __name__ == "__main__":
     img_path = sys.argv[1]
     out_dir = sys.argv[2] if len(sys.argv) >= 3 else "exam_outputs"
 
-    result = process_exam(img_path, out_dir, base_url=None)
+    result = process_exam(img_path, out_dir, base_url=None, save_json=True)
 
     print("=== Exam OCR 완료 ===")
     print(f"JSON 경로: {result['_output_path']}")
