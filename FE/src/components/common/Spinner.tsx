@@ -22,10 +22,10 @@ const SpinnerWrap = styled.div`
 `;
 
 const SpinnerIcon = styled.div`
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 999px;
-  border: 3px solid ${({ theme }) => theme.colors.base.white};
+  border: 5px solid ${({ theme }) => theme.colors.base.grayL};
   border-top-color: ${({ theme }) => theme.colors.base.blue};
   animation: spin 0.8s linear infinite;
 
