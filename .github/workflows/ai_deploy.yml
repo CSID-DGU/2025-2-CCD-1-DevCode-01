@@ -1,0 +1,36 @@
+name: Deploy AI Server to EC2
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "AI/**"    
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Deploy to EC2 via SSH
+      uses: appleboy/ssh-action@v1.2.0
+      with:
+        host: ${{ secrets.AI_EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.AI_EC2_KEY }}
+        script: |
+          echo "📌 AI 서버 배포 시작"
+
+          cd /home/ubuntu/2025-2-CCD-1-DevCode-01/AI
+
+          echo "📌 최신 코드 가져오는 중..."
+          git pull origin main
+
+          echo "📌 가상환경 활성화..."
+          source venv/bin/activate
+
+          echo "📌 AI 서버 systemd 재시작..."
+          sudo systemctl restart ai-api
+          sudo systemctl restart ai-celery
+          sudo systemctl restart nginx
+
+          echo "✅ AI 서버 배포 완료!"

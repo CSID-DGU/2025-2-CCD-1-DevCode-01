@@ -18,6 +18,7 @@ from .models import Doc, Page, Board
 from lectures.models import Lecture
 from .utils import  *
 from classes.serializers import *
+from datetime import datetime, timezone
 
 
 #교안 업로드/조회
@@ -516,19 +517,32 @@ class ExamOCRView(APIView):
             return Response({"error": "이미지를 업로드하세요."}, status=400)
 
         image = request.FILES['image']
+        end_time = request.data.get("endTime")  # 프론트에서 보낸 시험 종료시간
 
-        ai_url = settings.AI_EXAM_OCR_URL   
+        if not end_time:
+            return Response({"error": "endTime이 필요합니다."}, status=400)
+
+        now = datetime.now(timezone.utc)
+        end_dt = datetime.fromisoformat(end_time)
+
+        if now > end_dt:
+            return Response({"error": "시험 시간이 아닙니다."}, status=403)
+
+        ai_url = settings.AI_EXAM_OCR_URL
 
         files = {
             "image": (image.name, image.read(), image.content_type)
         }
 
+        data = {
+            "endTime": end_time  # AI 서버로 전달
+        }
+
         try:
-            ai_resp = requests.post(ai_url, files=files, timeout=40)
+            ai_resp = requests.post(ai_url, files=files, data=data, timeout=40)
             ai_resp.raise_for_status()
         except Exception as e:
             return Response({"error": f"AI 서버 요청 실패: {e}"}, status=502)
 
-        result = ai_resp.json()
+        return Response(ai_resp.json(), status=200)
 
-        return Response(result, status=200)
