@@ -3,8 +3,8 @@ import { fonts } from "@styles/fonts";
 import Spinner from "src/components/common/Spinner";
 import styled from "styled-components";
 import { useEffect, useMemo, useRef } from "react";
-import type { OcrSegment } from "@shared/ocr/parse";
-import { parseOcrSegments } from "@shared/ocr/types";
+import type { OcrSegment } from "@shared/ocr/types";
+import { parseOcrSegments } from "@shared/ocr/parse";
 
 type Props = {
   mode: "ocr" | "image";
@@ -145,7 +145,7 @@ function MathBlock({ latex }: MathBlockProps) {
 
   return (
     <MathContainer ref={ref} aria-label={`수식: ${latex}`}>
-      {latex}
+      {"$$ " + latex + " $$"}
     </MathContainer>
   );
 }
