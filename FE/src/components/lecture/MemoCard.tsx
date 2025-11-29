@@ -1,15 +1,16 @@
+import type { LectureNote } from "@apis/lecture/memo.api";
+
 import { fonts } from "@styles/fonts";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { MemoItem, Role } from "src/hooks/useLectureMemoList";
 import styled from "styled-components";
-
-type Role = "student" | "assistant" | string;
-export type MemoItem = { text: string; role: Role; createdAt: string };
 
 type Props = {
   items: MemoItem[];
   onSaveAll: (lines: { text: string; role?: Role }[]) => Promise<void>;
   iconOf: (role: Role) => string;
   stickyTop?: string;
+  onFocusNote?: (note: LectureNote) => void;
 };
 
 const normalize = (s: string) =>
@@ -24,6 +25,7 @@ export default function MemoListCard({
   onSaveAll,
   iconOf,
   stickyTop = "0",
+  onFocusNote,
 }: Props) {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
@@ -45,6 +47,7 @@ export default function MemoListCard({
     () => (items.length ? items[items.length - 1].createdAt : ""),
     [items]
   );
+
   useEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -123,6 +126,7 @@ export default function MemoListCard({
           </SaveButton>
         </RightWrap>
       </Header>
+
       <Hint>Enter 저장 · Shift+Enter 줄바꿈</Hint>
 
       <List
@@ -132,7 +136,12 @@ export default function MemoListCard({
         aria-live="polite"
       >
         {items.map((it, idx) => (
-          <Row key={`${it.createdAt}-${idx}`} $role={it.role}>
+          <Row
+            key={`${it.createdAt}-${idx}`}
+            $role={it.role}
+            tabIndex={0}
+            onFocus={() => onFocusNote?.(it.note)}
+          >
             <Icon aria-hidden="true">{iconOf(it.role)}</Icon>
             <Text>
               {it.text}
@@ -280,7 +289,13 @@ const Row = styled.div<{ $role: Role }>`
     if ($role === "student") return theme.colors.base.blueL;
     return "#f3f4f6";
   }};
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.base.blueD};
+    outline-offset: 2px;
+  }
 `;
+
 const Icon = styled.div`
   font-size: 1.1rem;
   line-height: 1.75rem;
