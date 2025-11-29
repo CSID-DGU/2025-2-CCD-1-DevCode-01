@@ -29,18 +29,16 @@ if not S3_EXAM_BUCKET:
     raise RuntimeError("AWS_BUCKET_NAME이 설정되지 않았습니다.")
 
 
-def upload_and_get_public_url(local_path: str, key_prefix: str) -> str:
+def upload_s3(local_path: str, key_prefix: str) -> str:
     filename = os.path.basename(local_path)
     key = f"exam/{key_prefix}/{filename}"
 
     s3_client.upload_file(
         local_path,
         key,
-        ExtraArgs={
-            "ContentType": "image/png",
-            "ACL": "public-read"  
-        }
+        ExtraArgs={"ContentType": "image/png"}   
     )
+
 
     return f"https://{S3_EXAM_BUCKET}.s3.amazonaws.com/{key}"
 
@@ -80,7 +78,7 @@ async def exam_ocr_api(image: UploadFile = File(...)):
         for q in questions:
             q_img = q.get("questionImagePath")
             if q_img:
-                q["questionImagePath"] = upload_and_get_public_url(
+                q["questionImagePath"] = upload_s3(
                     q_img,
                     key_prefix=f"questions/{uid}"
                 )
@@ -88,7 +86,7 @@ async def exam_ocr_api(image: UploadFile = File(...)):
             for item in q.get("items", []):
                 item_img = item.get("imagePath")
                 if item_img:
-                    item["imagePath"] = upload_and_get_public_url(
+                    item["imagePath"] = upload_s3(
                         item_img,
                         key_prefix=f"items/{uid}"
                     )
