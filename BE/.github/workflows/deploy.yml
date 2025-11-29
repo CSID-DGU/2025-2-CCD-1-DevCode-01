@@ -1,0 +1,42 @@
+name: Deploy BE to EC2
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Deploy to EC2 with SSH
+      uses: appleboy/ssh-action@v1.2.0
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_KEY }}
+        script: |
+          echo "📌 BE 배포 시작"
+
+          cd /home/ubuntu/2025-2-CCD-1-DevCode-01/BE
+
+          echo "📌 최신 코드 가져오는 중..."
+          git pull origin main
+
+          echo "📌 가상환경 활성화..."
+          source venv/bin/activate
+
+          echo "📌 패키지 업데이트..."
+          pip install -r requirements.txt
+
+          echo "📌 Django migrate 실행..."
+          python manage.py migrate --noinput
+
+          echo "📌 Daphne 재시작..."
+          sudo systemctl daemon-reload
+          sudo systemctl restart daphne
+
+          echo "📌 Nginx 재시작..."
+          sudo systemctl restart nginx
+
+          echo "✅ BE 배포 완료!"
