@@ -322,7 +322,7 @@ export default function PreClass() {
 
         // 속도 옵션 적용
         ocrAudioRef.current.playbackRate =
-          soundRate === "빠름" ? 1.4 : soundRate === "느림" ? 0.85 : 1.0;
+          soundRate === "빠름" ? 1.4 : soundRate === "느림" ? 0.6 : 1.0;
 
         ocrAudioRef.current.currentTime = 0;
         await ocrAudioRef.current.play();
