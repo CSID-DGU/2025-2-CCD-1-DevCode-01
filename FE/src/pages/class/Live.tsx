@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useReducer } from "react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
+import styled from "styled-components";
 import toast from "react-hot-toast";
 
 import { fetchDocPage, fetchPageSummary } from "@apis/lecture/lecture.api";
@@ -11,6 +12,7 @@ import BottomToolbar from "src/components/lecture/pre/BottomToolBar";
 
 import { useFocusTTS } from "src/hooks/useFocusTTS";
 import { useDocLiveSync } from "src/hooks/useDocLiveSync";
+import type { LiveRole } from "src/hooks/useDocLiveSync";
 import {
   A11Y_STORAGE_KEYS,
   makeAnnouncer,
@@ -31,11 +33,10 @@ type NavState = {
   startPage?: number;
 };
 
-/* ------------------ 녹음 세션 영속 저장 ------------------ */
 type RecPersist = {
   status: "idle" | "recording" | "paused";
-  startedAt?: number; // ms epoch
-  accumulated: number; // 누적 sec
+  startedAt?: number;
+  accumulated: number;
 };
 const recKey = (docId: number) => `rec:${docId}`;
 
@@ -69,9 +70,8 @@ export default function LiveClass() {
 
   const navigate = useNavigate();
 
-  const role = (localStorage.getItem("role") || "student") as
-    | "assistant"
-    | "student";
+  const storedRole = localStorage.getItem("role") as LiveRole | null;
+  const role: LiveRole = storedRole ?? "student";
 
   const parsedParamId = Number(params.docId);
   const docId =
@@ -79,6 +79,8 @@ export default function LiveClass() {
   const totalPage = state?.totalPage ?? null;
 
   const [page, setPage] = useState<number>(Number(state?.startPage) || 1);
+  const lastRemotePageRef = useRef<number | null>(null);
+
   const [loading, setLoading] = useState<boolean>(false);
 
   const [docPage, setDocPage] = useState<Awaited<
@@ -97,6 +99,9 @@ export default function LiveClass() {
     role === "assistant" ? "image" : "ocr"
   );
 
+  // 페이지 따라가기 토글 (장애학우 전용)
+  const [followEnabled, setFollowEnabled] = useState<boolean>(false);
+
   // ------- refs -------
   const liveRef = useRef<HTMLDivElement | null>(null);
   const mainRegionRef = useRef<HTMLDivElement | null>(null);
@@ -104,6 +109,11 @@ export default function LiveClass() {
   const sidePaneRef = useRef<HTMLDivElement | null>(null);
   const ocrAudioRef = useRef<HTMLAudioElement | null>(null);
   const sumAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const pageRef = useRef<number>(page);
+  useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
 
   const announce = useMemo(() => makeAnnouncer(liveRef), []);
   const cleanOcr = useMemo(() => formatOcr(docPage?.ocr ?? ""), [docPage?.ocr]);
@@ -222,26 +232,67 @@ export default function LiveClass() {
   };
 
   const applyRemotePage = (p: number) => {
-    setPage((cur) => (cur === p ? cur : p));
+    const target = clampPage(p);
+    lastRemotePageRef.current = target;
+
+    setPage((cur) => {
+      if (role !== "student") return cur;
+      if (!followEnabled) return cur;
+
+      return cur === target ? cur : target;
+    });
   };
 
-  const { notifyLocalPage } = useDocLiveSync({
+  const { notifyLocalPage, sendToggleSync } = useDocLiveSync({
     serverBase,
     docId: Number(docId),
     token,
+    role,
     onRemotePage: applyRemotePage,
+    currentPageRef: pageRef,
     totalPage: totalPageNum ?? null,
     announce,
   });
 
   useEffect(() => {
     const sp = Number(state?.startPage);
-    if (Number.isFinite(sp) && sp > 0 && sp !== page) {
-      const target = clampPage(sp);
-      setPage(target);
+    if (!Number.isFinite(sp) || sp <= 0) return;
+
+    const target = clampPage(sp);
+    setPage(target);
+    if (role === "assistant") {
       notifyLocalPage(target);
     }
-  }, [state?.startPage, notifyLocalPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ------------------ 장애학우: 따라가기 토글 핸들러 ------------------ */
+  const handleToggleFollow = () => {
+    if (role !== "student") return;
+
+    setFollowEnabled((prev) => {
+      const next = !prev;
+      const ok = sendToggleSync(next);
+      if (!ok) {
+        toast.error("실시간 연결이 불안정합니다.");
+        return prev;
+      }
+
+      if (next) {
+        const target = lastRemotePageRef.current;
+        if (typeof target === "number") {
+          setPage((cur) => (cur === target ? cur : target));
+          announce?.(`학습도우미가 보고 있는 페이지 ${target}로 이동합니다.`);
+        } else {
+          announce?.("학습도우미 페이지를 따라갑니다.");
+        }
+      } else {
+        announce?.("페이지 따라가기를 끕니다.");
+      }
+
+      return next;
+    });
+  };
 
   /* ------------------ 녹음 훅 ------------------ */
   const { start, stop, pause, resume } = useAudioRecorder();
@@ -378,14 +429,6 @@ export default function LiveClass() {
   /* ------------------ 페이지 전환 업로드: Blob + 끝시각만 ------------------ */
   const cuttingRef = useRef(false);
 
-  // const getEndSec = (dId: number): number => {
-  //   const p = loadRec(dId);
-  //   if (p.status === "recording" && p.startedAt) {
-  //     return p.accumulated + Math.floor((Date.now() - p.startedAt) / 1000);
-  //   }
-  //   return p.accumulated ?? 0;
-  // };
-
   const cutAndUploadCurrentPageAsync = async (prevPageId: number | null) => {
     if (!Number.isFinite(docId) || !prevPageId) return;
     const dId = Number(docId);
@@ -445,7 +488,6 @@ export default function LiveClass() {
       const pageId = docPage?.pageId;
       if (!pageId) throw new Error("pageId 없음");
 
-      // 상태 확인 후 안전하게 마지막 조각 확보(빈 Blob이면 스킵)
       let p = loadRec(dId);
       let blob: Blob | null = null;
 
@@ -489,6 +531,7 @@ export default function LiveClass() {
       announce("강의 종료 처리 중 오류가 발생했습니다.");
     }
   };
+
   /* ------------------ 페이지 이동: 즉시 전환 + 비동기 업로드 ------------------ */
   const goToPage = (n: number) => {
     const next = clampPage(n);
@@ -499,7 +542,14 @@ export default function LiveClass() {
     cutAndUploadCurrentPageAsync(prevPageId);
 
     setPage(next);
-    notifyLocalPage(next);
+
+    if (role === "assistant") {
+      notifyLocalPage(next);
+    } else if (role === "student" && followEnabled) {
+      setFollowEnabled(false);
+      sendToggleSync(false);
+    }
+
     announce(`페이지 ${next}로 이동합니다.`);
   };
 
@@ -524,13 +574,25 @@ export default function LiveClass() {
         aria-atomic="true"
       />
 
+      {/* ====== 플로팅 따라가기 토글 (장애학우 전용) ====== */}
+      {role === "student" && (
+        <SyncToggleFloating>
+          <SyncToggleButton
+            type="button"
+            aria-pressed={followEnabled}
+            onClick={handleToggleFollow}
+          >
+            {followEnabled ? "따라가기 ON" : "따라가기 OFF"}
+          </SyncToggleButton>
+        </SyncToggleFloating>
+      )}
+
       <Container>
         <Grid $stack={stackByFont}>
           <DocPane
             mode={mode}
             ocrText={cleanOcr}
             imageUrl={docPage?.image}
-            ocrAudioRef={ocrAudioRef}
             docBodyRef={docBodyRef}
             mainRegionRef={mainRegionRef}
           />
@@ -541,8 +603,6 @@ export default function LiveClass() {
             role={role}
             summary={{
               text: summary?.summary ?? "",
-              ttsUrl: summary?.summary_tts ?? "",
-              sumAudioRef,
               sidePaneRef,
             }}
             memo={{
@@ -577,3 +637,33 @@ export default function LiveClass() {
     </Wrap>
   );
 }
+
+/* ====== 스타일: 제목 텍스트 라인 근처 고정용 플로팅 버튼 ====== */
+const SyncToggleFloating = styled.div`
+  position: fixed;
+  top: 72px;
+  right: 40px;
+  z-index: 50;
+`;
+
+const SyncToggleButton = styled.button`
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.875rem;
+  border: 1px solid #2563eb;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+
+  &[aria-pressed="true"] {
+    background: #2563eb;
+    color: #fff;
+  }
+`;

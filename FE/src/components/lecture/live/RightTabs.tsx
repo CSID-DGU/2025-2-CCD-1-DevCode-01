@@ -16,8 +16,8 @@ type Props = {
   summary: {
     text: string;
     ttsUrl?: string;
-    sumAudioRef: React.RefObject<HTMLAudioElement | null>;
-    sidePaneRef: React.RefObject<HTMLDivElement | null>;
+    sumAudioRef?: React.RefObject<HTMLAudioElement | null>;
+    sidePaneRef?: React.RefObject<HTMLDivElement | null>;
     loading?: boolean;
   };
   memo: {

@@ -11,11 +11,12 @@ import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 type Props = {
   summaryText?: string | null;
   summaryTtsUrl?: string | null;
-  sidePaneRef: React.RefObject<HTMLDivElement | null>;
-  sumAudioRef: React.RefObject<HTMLAudioElement | null>;
+  sidePaneRef?: React.RefObject<HTMLDivElement | null>;
+  sumAudioRef?: React.RefObject<HTMLAudioElement | null>;
   stack: boolean;
   panelHeight?: string;
   loading?: boolean;
+  autoPlayOnFocus?: boolean;
 };
 
 export default function SummaryPane({
@@ -26,27 +27,22 @@ export default function SummaryPane({
   stack,
   panelHeight,
   loading,
+  autoPlayOnFocus = true,
 }: Props) {
   const { soundRate } = useSoundOptions();
 
+  const hasTts = !!summaryTtsUrl && !!sumAudioRef;
+
   /* ----- 요약 TTS 재생 ----- */
   const playSummaryTts = useCallback(async () => {
-    console.log("[SummaryPane] summaryTtsUrl =", summaryTtsUrl);
-    console.log(
-      "[SummaryPane] audio src before play =",
-      sumAudioRef.current?.src
-    );
+    if (!summaryTtsUrl || !sumAudioRef?.current) return;
 
-    if (!summaryTtsUrl) return;
     const audio = sumAudioRef.current;
-    if (!audio) return;
 
-    // src 보정
     if (!audio.src || audio.src !== summaryTtsUrl) {
       audio.src = summaryTtsUrl;
     }
 
-    // 속도 반영
     applyPlaybackRate(audio, soundRate);
 
     audio.currentTime = 0;
@@ -59,7 +55,7 @@ export default function SummaryPane({
 
   const handlePaneFocus = (e: FocusEvent<HTMLElement>) => {
     if (e.currentTarget !== e.target) return;
-    if (!loading && summaryTtsUrl) {
+    if (!loading && hasTts && autoPlayOnFocus) {
       void playSummaryTts();
     }
   };
@@ -79,17 +75,17 @@ export default function SummaryPane({
       <Header>
         <Title>요약</Title>
 
-        <SrOnlyFocusable
-          type="button"
-          onClick={() => {
-            void playSummaryTts();
-          }}
-          aria-label={loading ? "요약을 불러오는 중입니다" : "요약 TTS 재생"}
-        >
-          요약 듣기
-        </SrOnlyFocusable>
+        {hasTts && (
+          <SrOnlyFocusable
+            type="button"
+            onClick={() => {
+              void playSummaryTts();
+            }}
+            aria-label={loading ? "요약을 불러오는 중입니다" : "요약 TTS 재생"}
+          />
+        )}
 
-        {summaryTtsUrl && <audio ref={sumAudioRef} preload="none" />}
+        {hasTts && <audio ref={sumAudioRef} preload="none" />}
       </Header>
 
       <Body>

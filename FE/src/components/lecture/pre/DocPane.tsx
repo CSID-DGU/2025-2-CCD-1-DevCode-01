@@ -10,8 +10,8 @@ type Props = {
   imageUrl?: string | null;
   docBodyRef: React.RefObject<HTMLDivElement | null>;
   mainRegionRef: React.RefObject<HTMLDivElement | null>;
-  onPlayOcrTts: () => void;
-  ocrTtsLoading: boolean;
+  onPlayOcrTts?: () => void;
+  ocrTtsLoading?: boolean;
 };
 
 export default function DocPane({
@@ -33,7 +33,7 @@ export default function DocPane({
       aria-label={mode === "ocr" ? "교안 본문 텍스트" : "교안 원본 이미지"}
       tabIndex={0}
       onFocus={() => {
-        if (mode === "ocr" && !isOcrLoading) {
+        if (onPlayOcrTts && mode === "ocr" && !isOcrLoading) {
           onPlayOcrTts();
         }
       }}
@@ -55,7 +55,7 @@ export default function DocPane({
           )
         ) : (
           <section>
-            {!isOcrLoading && (
+            {onPlayOcrTts && !isOcrLoading && (
               <SrOnlyFocusable
                 type="button"
                 onClick={onPlayOcrTts}
@@ -63,9 +63,7 @@ export default function DocPane({
                 aria-label={
                   ocrTtsLoading ? "본문 음성을 준비 중입니다" : "본문 TTS 재생"
                 }
-              >
-                본문 듣기
-              </SrOnlyFocusable>
+              />
             )}
 
             {isOcrLoading ? (
