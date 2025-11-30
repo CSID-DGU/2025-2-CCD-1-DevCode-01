@@ -143,6 +143,23 @@ class BookmarkDetailView(APIView):
 class NoteView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsLectureMember]
 
+    def get(self, request, pageId):
+        try:
+            page = Page.objects.get(id=pageId)
+        except Page.DoesNotExist:
+            return Response({"error": "해당 페이지를 찾을 수 없습니다."}, status=404)
+
+
+        self.check_object_permissions(request, page)
+
+        user = request.user
+
+        note = Note.objects.filter(page=page, user=user).first()
+        if not note:
+            return Response({"note": None}, status=200)
+
+        return Response(NoteSerializer(note).data, status=200)   
+    
     def post(self, request, pageId):
         try:
             page = Page.objects.get(id=pageId)

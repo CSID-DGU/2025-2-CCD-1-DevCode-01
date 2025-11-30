@@ -33,33 +33,19 @@ def convert_to_wav(input_path: str) -> str:
     os.makedirs(temp_dir, exist_ok=True)
     wav_path = os.path.join(temp_dir, wav_filename)
 
-    try:
-        with open(input_path, "rb") as f:
-            data = f.read()
-    except Exception as e:
-        raise RuntimeError(f"convert_to_wav: 파일 읽기 실패 ({input_path}) | {e}")
+    with open(input_path, "rb") as f:
+        data = f.read()
 
-    try:
-        audio = AudioSegment.from_file(BytesIO(data), format=fmt)
-    except Exception as e:
-        raise RuntimeError(
-            f"[convert_to_wav] AudioSegment 변환 실패: ffmpeg가 webm/m4a/opus 코덱을 지원하지 않거나 "
-            f"파일이 손상됨. | input={input_path} | format={fmt} | error={e}"
-        )
+    audio = AudioSegment.from_file(BytesIO(data), format=fmt)
 
-    try:
-        audio.export(
-            wav_path,
-            format="wav",
-            parameters=["-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000"]
-        )
-    except Exception as e:
-        raise RuntimeError(f"[convert_to_wav] WAV 변환 실패 | output={wav_path} | {e}")
-
-    if not os.path.exists(wav_path):
-        raise RuntimeError(f"convert_to_wav: WAV 파일 생성 실패 ({wav_path})")
+    audio.export(
+        wav_path,
+        format="wav",
+        parameters=["-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000"]
+    )
 
     return wav_path
+
 
 @shared_task
 def run_speech(speech_id, audio_path, page_id, user_id):
@@ -70,16 +56,7 @@ def run_speech(speech_id, audio_path, page_id, user_id):
     wav_path = None
 
     try:
-        if not audio_path:
-            raise ValueError(f"run_speech: audio_path가 None 입니다. (speech_id={speech_id})")
-
-        if not os.path.exists(audio_path):
-            raise FileNotFoundError(f"run_speech: audio 파일이 존재하지 않습니다. ({audio_path})")
-
         wav_path = convert_to_wav(audio_path)
-        if not wav_path:
-            raise RuntimeError(f"run_speech: convert_to_wav() 결과 None (audio_path={audio_path})")
-
 
         stt_text, stt_words = speech_to_text(wav_path)
 
