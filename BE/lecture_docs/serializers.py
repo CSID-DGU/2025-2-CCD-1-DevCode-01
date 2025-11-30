@@ -6,7 +6,7 @@ class DocSerializer(serializers.ModelSerializer):
     docId = serializers.IntegerField(source="id")
     review = serializers.SerializerMethodField()
     createdAt = serializers.SerializerMethodField()
-    timestamp = serializers.SerializerMethodField()  # 🔥 변경됨
+    timestamp = serializers.SerializerMethodField()  
 
     class Meta:
         model = Doc
