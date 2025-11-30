@@ -1,4 +1,3 @@
-// src/components/lecture/live/BoardBox.tsx
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import {
@@ -60,7 +59,7 @@ export default function BoardBox({
     setLoading(false);
   };
   useEffect(() => {
-    load(); /* eslint-disable-line react-hooks/exhaustive-deps */
+    load();
   }, [pageId]);
 
   // 실시간: 수신 처리

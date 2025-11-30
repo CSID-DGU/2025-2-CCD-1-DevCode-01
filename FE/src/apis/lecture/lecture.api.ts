@@ -4,7 +4,7 @@ import type { AxiosError } from "axios";
 export type PageStatus = "processing" | "done";
 
 export type PageTTSResponse = {
-  page_tts?: {
+  tts?: {
     female?: string;
     male?: string;
   };
@@ -69,7 +69,10 @@ export async function fetchDocPage(docId: number, page: number) {
 export type PageSummary = {
   page_id: number;
   summary: string;
-  summary_tts?: string;
+  summary_tts?: {
+    female?: string;
+    male?: string;
+  } | null;
 };
 
 export async function fetchPageSummary(pageId: number) {
@@ -112,15 +115,21 @@ export async function fetchPageTTS(
       body
     );
 
-    const female = data?.page_tts?.female;
-    const male = data?.page_tts?.male;
+    const female = data?.tts?.female ?? "";
+    const male = data?.tts?.male ?? "";
+    console.log("TTS 응답:", data);
 
-    if (!female || !male) {
+    if (!female && !male) {
       throw new Error("TTS 응답 형식이 올바르지 않습니다.");
     }
 
-    const result: PageTTSResult = { female, male };
-    return result;
+    const safeFemale = female || male;
+    const safeMale = male || female;
+
+    return {
+      female: safeFemale!,
+      male: safeMale!,
+    };
   } catch (err: unknown) {
     const status = getHttpStatus(err);
 

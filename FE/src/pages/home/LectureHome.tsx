@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styled from "styled-components";
+import toast from "react-hot-toast";
 
 import {
   fetchLectures,
@@ -8,10 +9,12 @@ import {
 } from "src/entities/lecture/api";
 import type { Lecture } from "src/entities/lecture/types";
 import { fonts } from "@styles/fonts";
-import toast from "react-hot-toast";
 import { LectureCard } from "src/components/home/LectureCard";
 import { copyLectureCode } from "src/utils/home/clipboard";
 import AddLectureDialog from "./AddLectureDialog";
+
+import { useOcrTtsAutoStop } from "src/hooks/useOcrTtsAutoStop";
+import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 
 type Props = {
   uiScale?: 1 | 1.2 | 1.4 | 1.6;
@@ -26,7 +29,25 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
   const [editValue, setEditValue] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // 강의 카드 컨텍스트 메뉴 영역
   const menuRef = useRef<HTMLDivElement | null>(null);
+
+  // 강의 목록 전체 영역 (포커스 이탈 감지용)
+  const mainRef = useRef<HTMLElement | null>(null);
+
+  // 강의 목록용 TTS 오디오 ref
+  const lectureAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // 사운드 옵션 변경 감지
+  const { soundRate, soundVoice } = useSoundOptions();
+
+  /* -------------------- 포커스 이탈 시 강의 TTS 자동 정지 -------------------- */
+  useOcrTtsAutoStop(lectureAudioRef, {
+    areaRef: mainRef as React.RefObject<HTMLElement | null>,
+    stopMessageOnBlur: "강의 음성 재생이 중지되었습니다.",
+  });
+
+  /* -------------------- 외부 클릭 시 메뉴 닫기 -------------------- */
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -39,17 +60,19 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
 
   const columnMin = useMemo(() => `${(14 * uiScale).toFixed(2)}rem`, [uiScale]);
 
+  /* -------------------- 강의 목록 로드 -------------------- */
   const load = async () => {
     setBusy(true);
     const data = await fetchLectures();
     setLectures(data);
     setBusy(false);
   };
+
   useEffect(() => {
     void load();
   }, []);
 
-  // 편집 시작/저장/취소
+  /* -------------------- 강의 타이틀 편집 -------------------- */
   const startEdit = (lec: Lecture) => {
     setEditingId(lec.lecture_id);
     setEditValue(lec.title);
@@ -79,6 +102,7 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
 
   const cancelEdit = () => setEditingId(null);
 
+  /* -------------------- 강의 삭제 -------------------- */
   const onDelete = async (lec: Lecture) => {
     if (!confirm(`정말 삭제할까요? \n[${lec.title}]`)) return;
     setBusy(true);
@@ -91,20 +115,62 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
     setLectures((prev) => prev.filter((x) => x.lecture_id !== lec.lecture_id));
   };
 
+  /* -------------------- 강의 TTS 재생 -------------------- */
+  const playLectureTts = useCallback(
+    async (lec: Lecture) => {
+      const tts = lec.lecture_tts;
+
+      if (!tts) return;
+
+      const femaleUrl = tts.female ?? undefined;
+      const maleUrl = tts.male ?? undefined;
+
+      let url: string | undefined;
+      if (soundVoice === "여성") {
+        url = femaleUrl ?? maleUrl;
+      } else {
+        url = maleUrl ?? femaleUrl;
+      }
+
+      if (!url) return;
+
+      const audio = lectureAudioRef.current;
+      if (!audio) return;
+
+      if (!audio.src || audio.src !== url) {
+        audio.src = url;
+      }
+
+      applyPlaybackRate(audio, soundRate);
+
+      audio.currentTime = 0;
+      try {
+        await audio.play();
+      } catch (err) {
+        console.error("[LectureHome] 강의 TTS 재생 실패:", err);
+      }
+    },
+    [soundRate, soundVoice]
+  );
+
   return (
     <Main
+      ref={mainRef}
       aria-busy={busy}
       aria-label="강의 목록 화면"
       $uiScale={uiScale}
       role="region"
     >
+      {/* 강의 목록용 음성 재생 오디오 */}
+      <audio ref={lectureAudioRef} preload="none" />
+
       <SrOnly as="h1">강의실 홈</SrOnly>
 
       <Grid
         style={{ gridTemplateColumns: `repeat(auto-fill, ${columnMin})` }}
         aria-label="강의 목록 그리드"
       >
-        {/* (+) 강의 추가 */}
+        {/* 강의 추가 타일 */}
         <AddTileBox style={{ width: columnMin }}>
           <AddTile aria-label="강의 추가" onClick={() => setOpen(true)}>
             <AddInner>
@@ -114,7 +180,7 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
           <AddText>강의 추가</AddText>
         </AddTileBox>
 
-        {/* 폴더 타일들 */}
+        {/* 강의 카드들 */}
         {lectures.map((lec) => (
           <LectureCard
             key={lec.lecture_id}
@@ -126,12 +192,20 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
             menuRef={menuRef}
             editValue={editValue}
             setEditValue={setEditValue}
-            onOpen={() => onOpenLecture?.(lec)}
+            onOpen={() => {
+              const audio = lectureAudioRef.current;
+              if (audio && !audio.paused) {
+                audio.pause();
+                audio.currentTime = 0;
+              }
+              onOpenLecture?.(lec);
+            }}
             onStartEdit={() => startEdit(lec)}
             onSaveEdit={() => void saveEdit(lec)}
             onCancelEdit={cancelEdit}
             onDelete={() => void onDelete(lec)}
             onCopyCode={() => void copyLectureCode(lec.code)}
+            onFocus={() => void playLectureTts(lec)}
           />
         ))}
       </Grid>
@@ -146,7 +220,7 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
   );
 }
 
-/* ============================= styled ============================= */
+// style
 const Main = styled.main<{ $uiScale: number }>`
   font-size: ${({ $uiScale }) => `${16 * $uiScale}px`};
   padding: 3rem;

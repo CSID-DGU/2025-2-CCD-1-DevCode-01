@@ -1,16 +1,22 @@
+import { useCallback, type FocusEvent } from "react";
+import styled from "styled-components";
+
 import { PANEL_FIXED_H } from "@pages/class/pre/styles";
 import { fonts } from "@styles/fonts";
 import Spinner from "src/components/common/Spinner";
-import styled from "styled-components";
+
+import { RichOcrContent } from "src/components/common/RichOcrContent";
+import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 
 type Props = {
   summaryText?: string | null;
   summaryTtsUrl?: string | null;
-  sidePaneRef: React.RefObject<HTMLDivElement | null>;
-  sumAudioRef: React.RefObject<HTMLAudioElement | null>;
+  sidePaneRef?: React.RefObject<HTMLDivElement | null>;
+  sumAudioRef?: React.RefObject<HTMLAudioElement | null>;
   stack: boolean;
   panelHeight?: string;
   loading?: boolean;
+  autoPlayOnFocus?: boolean;
 };
 
 export default function SummaryPane({
@@ -21,7 +27,39 @@ export default function SummaryPane({
   stack,
   panelHeight,
   loading,
+  autoPlayOnFocus = true,
 }: Props) {
+  const { soundRate } = useSoundOptions();
+
+  const hasTts = !!summaryTtsUrl && !!sumAudioRef;
+
+  /* ----- 요약 TTS 재생 ----- */
+  const playSummaryTts = useCallback(async () => {
+    if (!summaryTtsUrl || !sumAudioRef?.current) return;
+
+    const audio = sumAudioRef.current;
+
+    if (!audio.src || audio.src !== summaryTtsUrl) {
+      audio.src = summaryTtsUrl;
+    }
+
+    applyPlaybackRate(audio, soundRate);
+
+    audio.currentTime = 0;
+    try {
+      await audio.play();
+    } catch (err) {
+      console.error("[SummaryPane] 요약 TTS 재생 실패:", err);
+    }
+  }, [summaryTtsUrl, sumAudioRef, soundRate]);
+
+  const handlePaneFocus = (e: FocusEvent<HTMLElement>) => {
+    if (e.currentTarget !== e.target) return;
+    if (!loading && hasTts && autoPlayOnFocus) {
+      void playSummaryTts();
+    }
+  };
+
   return (
     <Pane
       ref={sidePaneRef}
@@ -32,25 +70,31 @@ export default function SummaryPane({
       tabIndex={0}
       data-area="summary-pane"
       aria-busy={!!loading}
+      onFocus={handlePaneFocus}
     >
       <Header>
         <Title>요약</Title>
-        <SrOnlyFocusable
-          type="button"
-          onClick={() => sumAudioRef?.current?.play()}
-          aria-label="요약 TTS 재생"
-        >
-          요약 듣기
-        </SrOnlyFocusable>
-        {summaryTtsUrl && (
-          <audio ref={sumAudioRef} preload="none" src={summaryTtsUrl} />
+
+        {hasTts && (
+          <SrOnlyFocusable
+            type="button"
+            onClick={() => {
+              void playSummaryTts();
+            }}
+            aria-label={loading ? "요약을 불러오는 중입니다" : "요약 TTS 재생"}
+          />
         )}
+
+        {hasTts && <audio ref={sumAudioRef} preload="none" />}
       </Header>
+
       <Body>
         {loading ? (
           <Spinner role="status" aria-label="요약을 불러오는 중입니다" />
+        ) : summaryText ? (
+          <RichOcrContent text={summaryText} />
         ) : (
-          <Paragraph>{summaryText ?? "요약이 없습니다."}</Paragraph>
+          <EmptyParagraph>요약이 없습니다.</EmptyParagraph>
         )}
       </Body>
     </Pane>
@@ -69,36 +113,45 @@ const Pane = styled.aside<{ $stack: boolean; $height?: string }>`
   height: ${({ $height }) => $height ?? PANEL_FIXED_H};
   display: flex;
   flex-direction: column;
-  overflow: scroll;
-  ${({ $stack }) => $stack && `order:2;`} @media (max-width:900px) {
+  overflow: hidden;
+
+  ${({ $stack }) => $stack && `order:2;`}
+
+  @media (max-width: 900px) {
     order: 2;
   }
+
   &:focus-visible {
     outline: 2px solid #2563eb;
-    outline-offset: 2px;
+    outline-offset: 10px;
     border-radius: 10px;
   }
 `;
+
 const Header = styled.div`
   padding: 14px 16px 0;
 `;
+
 const Title = styled.h3`
   ${fonts.bold32}
   color: var(--c-black);
   margin: 0;
 `;
+
 const Body = styled.div`
   flex: 1 1 auto;
   overflow: auto;
   padding: 12px 16px 16px;
   overscroll-behavior: contain;
 `;
-const Paragraph = styled.p`
+
+const EmptyParagraph = styled.p`
   white-space: pre-wrap;
   line-height: 1.7;
   ${fonts.medium26}
   color: var(--c-black);
 `;
+
 const SrOnlyFocusable = styled.button`
   position: absolute;
   width: 1px;

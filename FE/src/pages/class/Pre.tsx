@@ -22,19 +22,13 @@ import {
 import { useFocusTTS } from "src/hooks/useFocusTTS";
 import { useLocalTTS } from "src/hooks/useLocalTTS";
 
-import {
-  readRateFromLS,
-  readVoiceFromLS,
-  SOUND_LS_KEYS,
-  type SoundRate,
-  type SoundVoice,
-} from "@shared/a11y/soundOptions";
-
 import { Container, Grid, SrLive, Wrap } from "./pre/styles";
 import DocPane from "src/components/lecture/pre/DocPane";
 import RightTabs from "src/components/lecture/live/RightTabs";
 import BottomToolbar from "src/components/lecture/pre/BottomToolBar";
 import { useTtsTextBuilder } from "src/hooks/useTtsTextBuilder";
+import { useOcrTtsAutoStop } from "src/hooks/useOcrTtsAutoStop";
+import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 
 type RouteParams = { docId?: string; courseId?: string };
 type NavState = { navTitle?: string; totalPage?: number };
@@ -125,7 +119,11 @@ export default function PreClass() {
   const mainRegionRef = useRef<HTMLDivElement | null>(null);
   const docBodyRef = useRef<HTMLDivElement | null>(null);
   const sidePaneRef = useRef<HTMLDivElement | null>(null);
+
+  /** OCR TTS AUDIO REF */
   const ocrAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  /** SUMMARY TTS AUDIO REF */
   const sumAudioRef = useRef<HTMLAudioElement | null>(null);
 
   /* summary */
@@ -133,46 +131,16 @@ export default function PreClass() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryRequested, setSummaryRequested] = useState(false);
 
-  /* local TTS (시간/확인) */
+  /* local TTS */
   const { speak } = useLocalTTS();
 
   /* page TTS */
   const [pageTtsLoading, setPageTtsLoading] = useState(false);
 
-  /* sound options */
-  const [soundRate, setSoundRate] = useState<SoundRate>(() =>
-    readRateFromLS("보통")
-  );
-  const [soundVoice, setSoundVoice] = useState<SoundVoice>(() =>
-    readVoiceFromLS("여성")
-  );
-
   /* SRE 텍스트 빌더 */
   const { buildTtsText } = useTtsTextBuilder();
 
-  /* sound 변경 감지 */
-  useEffect(() => {
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === SOUND_LS_KEYS.rate) setSoundRate(readRateFromLS("보통"));
-      if (e.key === SOUND_LS_KEYS.voice) setSoundVoice(readVoiceFromLS("여성"));
-    };
-
-    const handleSoundChange = () => {
-      setSoundRate(readRateFromLS("보통"));
-      setSoundVoice(readVoiceFromLS("여성"));
-    };
-
-    window.addEventListener("storage", handleStorage);
-    window.addEventListener("sound:change", handleSoundChange as EventListener);
-
-    return () => {
-      window.removeEventListener("storage", handleStorage);
-      window.removeEventListener(
-        "sound:change",
-        handleSoundChange as EventListener
-      );
-    };
-  }, []);
+  const { soundRate, soundVoice } = useSoundOptions();
 
   /* 페이지 로드 */
   useEffect(() => {
@@ -195,6 +163,7 @@ export default function PreClass() {
         }
 
         setDocPage(dp);
+
         if (dp.totalPage) setTotalPage(dp.totalPage);
 
         if (dp.status === "processing") {
@@ -273,14 +242,24 @@ export default function PreClass() {
     announce,
   });
 
-  /* 페이지 전환 시 tts 초기화 */
-  useEffect(() => {
-    if (ocrAudioRef.current) {
-      ocrAudioRef.current.pause();
-      ocrAudioRef.current.removeAttribute("src");
-      ocrAudioRef.current.load();
-    }
-  }, [docPage?.pageId]);
+  useOcrTtsAutoStop(ocrAudioRef, {
+    pageKey: docPage?.pageId,
+    mode,
+    areaRef: docBodyRef as React.RefObject<HTMLElement | null>,
+    announce,
+    stopMessageOnBlur: "본문 음성 재생이 중지되었습니다.",
+    stopMessageOnChange: "페이지 또는 보기 모드 변경으로 음성을 중지합니다.",
+  });
+
+  useOcrTtsAutoStop(sumAudioRef, {
+    pageKey: docPage?.pageId,
+    mode,
+    areaRef: sidePaneRef as React.RefObject<HTMLElement | null>,
+    announce,
+    stopMessageOnBlur: "요약 음성 재생이 중지되었습니다.",
+    stopMessageOnChange:
+      "페이지 또는 보기 모드 변경으로 요약 음성을 중지합니다.",
+  });
 
   const canPrev = page > 1;
   const canNext = totalPage ? page < totalPage : true;
@@ -298,7 +277,7 @@ export default function PreClass() {
     });
   };
 
-  /* 페이지 OCR → SRE → 최종 텍스트 → TTS 생성 API 연결 */
+  /* 페이지 OCR → SRE → TTS 생성 */
   const handlePlayOcrTts = useCallback(async () => {
     if (!docPage?.pageId || !docPage.ocr) {
       toast.error("텍스트가 없어 음성을 생성할 수 없습니다.");
@@ -308,21 +287,16 @@ export default function PreClass() {
     try {
       setPageTtsLoading(true);
 
-      /** 1) OCR 텍스트에서 수식 처리 */
       const finalText = await buildTtsText(docPage.ocr);
 
-      /** 2) 백엔드에 TTS 생성 요청 */
       const { female, male } = await fetchPageTTS(docPage.pageId, finalText);
 
       const url = soundVoice === "여성" ? female : male;
 
-      /** 3) 오디오 재생 */
       if (ocrAudioRef.current) {
         ocrAudioRef.current.src = url;
 
-        // 속도 옵션 적용
-        ocrAudioRef.current.playbackRate =
-          soundRate === "빠름" ? 1.4 : soundRate === "느림" ? 0.85 : 1.0;
+        applyPlaybackRate(ocrAudioRef.current, soundRate);
 
         ocrAudioRef.current.currentTime = 0;
         await ocrAudioRef.current.play();
@@ -361,6 +335,12 @@ export default function PreClass() {
     });
   };
 
+  const summaryTtsUrl = summary?.summary_tts
+    ? soundVoice === "여성"
+      ? summary.summary_tts.female ?? null
+      : summary.summary_tts.male ?? null
+    : null;
+
   return (
     <Wrap aria-busy={loading}>
       <audio ref={ocrAudioRef} preload="none" />
@@ -391,7 +371,7 @@ export default function PreClass() {
               }}
               summary={{
                 text: summary?.summary ?? "",
-                ttsUrl: summary?.summary_tts,
+                ttsUrl: summaryTtsUrl ?? undefined,
                 sumAudioRef,
                 sidePaneRef,
                 loading: summaryLoading,
