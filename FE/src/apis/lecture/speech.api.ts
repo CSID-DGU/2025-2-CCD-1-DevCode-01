@@ -1,4 +1,3 @@
-// src/apis/lecture/speech.api.ts
 import instance from "@apis/instance";
 
 let uploadTail: Promise<void> = Promise.resolve();
@@ -127,7 +126,6 @@ export function registerSpeechBeacon(): void {
   });
 }
 
-/** 업로드: 기본은 '타임아웃 없음'. 아주 긴 hang만 가드(기본 5분). */
 export function uploadSpeechQueued(
   pageId: number,
   blob: Blob,
@@ -151,8 +149,14 @@ export function uploadSpeechQueued(
   const token = localStorage.getItem("access") ?? "";
   const timeStamp = normalizeHHMMSS(hhmmssEnd);
 
-  // ✅ 행 가드(아주 길게): 기본 5분
   const MAX_UPLOAD_DURATION_MS = opts?.maxUploadDurationMs ?? 5 * 60_000;
+
+  console.log("[uploadSpeechQueued] enqueue", {
+    pageId,
+    hhmmssEnd,
+    timeStamp,
+    url,
+  });
 
   void enqueue(async () => {
     if (!navigator.onLine) {
@@ -161,8 +165,7 @@ export function uploadSpeechQueued(
       return;
     }
 
-    // ❗요청 자체는 타임아웃 '없음'
-    const controller = new AbortController(); // 가드/이탈 시에만 abort
+    const controller = new AbortController();
     const fdFactory = () => {
       const fd = new FormData();
       fd.append("audio", file);
@@ -170,11 +173,10 @@ export function uploadSpeechQueued(
       return fd;
     };
 
-    // 행 가드: 일정 시간이 지나면 "실패로 간주"하고 큐를 막지 않음
     let timedOut = false;
     const hangGuard = window.setTimeout(() => {
       timedOut = true;
-      controller.abort(); // 이때만 abort 발생 → 드물게 (canceled) 표시 가능
+      controller.abort();
     }, MAX_UPLOAD_DURATION_MS);
 
     try {
@@ -183,7 +185,6 @@ export function uploadSpeechQueued(
         body: fdFactory(),
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         signal: controller.signal,
-        // keepalive: true  // (64KB 한계가 있어 큰 파일엔 비권장)
       });
       window.clearTimeout(hangGuard);
 

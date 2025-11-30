@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, useReducer } from "react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, useReducer } from "react";
 import toast from "react-hot-toast";
 
 import { fetchDocPage, fetchPageSummary } from "@apis/lecture/lecture.api";
@@ -45,6 +45,7 @@ type RecPersist = {
   startedAt?: number;
   accumulated: number;
 };
+
 const recKey = (docId: number) => `rec:${docId}`;
 
 const loadRec = (docId: number): RecPersist => {
@@ -63,13 +64,17 @@ const loadRec = (docId: number): RecPersist => {
     return { status: "idle", accumulated: 0 };
   }
 };
+
 const saveRec = (docId: number, v: RecPersist) =>
   localStorage.setItem(recKey(docId), JSON.stringify(v));
+
 const clearRec = (docId: number) => localStorage.removeItem(recKey(docId));
 
 export default function LiveClass() {
   const params = useParams<RouteParams>();
   const { state } = useLocation() as { state?: NavState };
+
+  console.log("[LiveClass] received resumeClock =", state?.resumeClock);
 
   const [totalPageNum, setTotalPageNum] = useState<number | null>(
     typeof state?.totalPage === "number" ? state!.totalPage : null
@@ -313,16 +318,18 @@ export default function LiveClass() {
     const dId = Number(docId);
     const persisted = loadRec(dId);
 
+    const hasResumeClock = typeof state?.resumeClock === "string";
     const baseOffsetSec = parseHHMMSSToSec(state?.resumeClock ?? null);
+    const initialAccumulated = hasResumeClock
+      ? baseOffsetSec
+      : persisted.accumulated ?? 0;
+
+    const initialStatus: RecPersist["status"] = hasResumeClock
+      ? "idle"
+      : persisted.status;
 
     if (!startedRef.current) {
-      // 이미 로컬에 녹음 상태가 있으면 그걸 존중하고 만약 없거나 (idle + 0초) 이면 리스트 timestamp를 초기값으로 사용
-      const initialAccumulated =
-        persisted.status === "idle" && (persisted.accumulated ?? 0) === 0
-          ? baseOffsetSec
-          : persisted.accumulated ?? 0;
-
-      if (state?.autoRecord || persisted.status === "recording") {
+      if (state?.autoRecord || initialStatus === "recording") {
         start()
           .then(() => {
             const now = Date.now();
@@ -340,7 +347,7 @@ export default function LiveClass() {
             announce("녹음을 시작하지 못했습니다. 설정을 확인해 주세요.");
           });
         startedRef.current = true;
-      } else if (persisted.status === "paused") {
+      } else if (initialStatus === "paused") {
         saveRec(dId, {
           status: "paused",
           accumulated: initialAccumulated,
@@ -410,6 +417,20 @@ export default function LiveClass() {
   })();
 
   /* ------------------ 북마크: 논리시간 우선 ------------------ */
+
+  // cut 순차 실행용 큐
+  const cutTailRef = useRef<Promise<void>>(Promise.resolve());
+
+  // 마지막 업로드 (pageId + timestamp) 기억해서 중복 방지
+  const lastUploadRef = useRef<{ pageId: number; ts: string } | null>(null);
+
+  const enqueueCut = (prevPageId: number | null) => {
+    cutTailRef.current = cutTailRef.current.then(
+      () => cutAndUploadCurrentPageAsync(prevPageId),
+      () => cutAndUploadCurrentPageAsync(prevPageId)
+    );
+  };
+
   const parseHHMMSSToSec = (hhmmss?: string | null): number => {
     if (!hhmmss) return 0;
     const parts = hhmmss.split(":");
@@ -425,21 +446,22 @@ export default function LiveClass() {
     return h * 3600 + m * 60 + s;
   };
 
-  const getCurrentClock = (): string => {
-    const p = Number.isFinite(docId)
-      ? loadRec(Number(docId))
-      : { status: "idle", accumulated: 0 as number, startedAt: undefined };
-
+  const getLogicalSeconds = (docId: number): number => {
+    const p = loadRec(docId);
     if (p.status === "recording" && p.startedAt) {
-      const sec = p.accumulated + Math.floor((Date.now() - p.startedAt) / 1000);
-      return toHHMMSS(sec);
+      return p.accumulated + Math.floor((Date.now() - p.startedAt) / 1000);
     }
-    if (p.status === "paused") {
-      return toHHMMSS(p.accumulated);
-    }
+    return p.accumulated;
+  };
 
-    if (p.accumulated > 0) {
-      return toHHMMSS(p.accumulated);
+  const getCurrentClock = (): string => {
+    if (Number.isFinite(docId)) {
+      const dId = Number(docId);
+      const sec = getLogicalSeconds(dId);
+
+      if (sec > 0) {
+        return toHHMMSS(sec);
+      }
     }
 
     const t1 = ocrAudioRef.current?.currentTime ?? 0;
@@ -466,52 +488,56 @@ export default function LiveClass() {
   };
 
   /* ------------------ 페이지 전환 업로드: Blob + 끝시각만 ------------------ */
-  const cuttingRef = useRef(false);
 
   const cutAndUploadCurrentPageAsync = async (prevPageId: number | null) => {
     if (!Number.isFinite(docId) || !prevPageId) return;
     const dId = Number(docId);
-    if (cuttingRef.current) return;
-    cuttingRef.current = true;
-    setTimeout(() => (cuttingRef.current = false), 160);
 
     const p = loadRec(dId);
     if (p.status !== "recording" || !p.startedAt) return;
 
-    // 끝시각 계산
-    const endSec =
-      p.accumulated + Math.floor((Date.now() - p.startedAt) / 1000);
+    // 페이지를 떠나는 시점의 논리 시간
+    const endSec = getLogicalSeconds(dId);
     const endHHMMSS = toHHMMSS(endSec);
 
     const blob: Blob = await stop();
     console.log("%c[Recorder.stop#cut]", "color:lightgreen;font-weight:bold", {
-      type: blob.type,
-      size: blob.size,
+      type: blob?.type,
+      size: blob?.size,
       endHHMMSS,
+      prevPageId,
     });
-    if (!blob || blob.size === 0) {
-      saveRec(dId, {
-        status: "paused",
-        accumulated: endSec,
-        startedAt: undefined,
-      });
-      await start().catch(() => {});
-      saveRec(dId, {
-        status: "recording",
-        accumulated: endSec,
-        startedAt: Date.now(),
-      });
-      return;
+
+    // 중복 업로드 방지
+    const key = { pageId: prevPageId, ts: endHHMMSS };
+    if (
+      lastUploadRef.current &&
+      lastUploadRef.current.pageId === key.pageId &&
+      lastUploadRef.current.ts === key.ts
+    ) {
+      console.warn("[cut] duplicated upload skipped", key);
+    } else {
+      lastUploadRef.current = key;
+
+      if (!blob) {
+        console.warn("[cut] empty blob, skip upload", {
+          prevPageId,
+          endHHMMSS,
+        });
+      } else {
+        uploadSpeechQueued(prevPageId, blob, endHHMMSS);
+      }
     }
 
-    uploadSpeechQueued(prevPageId, blob, endHHMMSS);
-
+    // 녹음 상태 갱신 및 재시작
     saveRec(dId, {
       status: "paused",
       accumulated: endSec,
       startedAt: undefined,
     });
-    await start().catch(() => {});
+    await start().catch((err) => {
+      console.warn("[cut] restart recording failed:", err);
+    });
     saveRec(dId, {
       status: "recording",
       accumulated: endSec,
@@ -527,7 +553,7 @@ export default function LiveClass() {
       const pageId = docPage?.pageId;
       if (!pageId) throw new Error("pageId 없음");
 
-      let p = loadRec(dId);
+      const p = loadRec(dId);
       let blob: Blob | null = null;
 
       if (p.status === "recording" && p.startedAt) {
@@ -544,11 +570,7 @@ export default function LiveClass() {
         blob = await stop();
       }
 
-      p = loadRec(dId);
-      const endSec =
-        p.status === "recording" && p.startedAt
-          ? p.accumulated + Math.floor((Date.now() - p.startedAt) / 1000)
-          : p.accumulated;
+      const endSec = getLogicalSeconds(dId);
       const endHHMMSS = toHHMMSS(endSec);
 
       if (blob && blob.size > 0) {
@@ -577,8 +599,8 @@ export default function LiveClass() {
     if (next === page) return;
 
     const prevPageId = docPage?.pageId ?? null;
-
-    cutAndUploadCurrentPageAsync(prevPageId);
+    console.log("[goToPage]", { fromPage: page, toPage: next, prevPageId });
+    enqueueCut(prevPageId);
 
     setPage(next);
 

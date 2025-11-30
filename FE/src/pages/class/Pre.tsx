@@ -31,7 +31,11 @@ import { useOcrTtsAutoStop } from "src/hooks/useOcrTtsAutoStop";
 import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 
 type RouteParams = { docId?: string; courseId?: string };
-type NavState = { navTitle?: string; totalPage?: number };
+type NavState = {
+  navTitle?: string;
+  totalPage?: number;
+  resumeClock?: string | null;
+};
 type UserRole = "assistant" | "student";
 
 function useDocId(params: RouteParams) {
@@ -325,12 +329,16 @@ export default function PreClass() {
       toast.error("문서가 없어 강의를 시작할 수 없어요.");
       return;
     }
+
+    console.log("[PreClass] resumeClock BEFORE NAVIGATE =", state?.resumeClock);
+
     navigate(`/lecture/doc/${docIdNum}/live/`, {
       state: {
         docId: docIdNum,
         totalPage: totalPage ?? null,
         navTitle: state?.navTitle ?? "라이브",
         autoRecord: true,
+        resumeClock: state?.resumeClock ?? null,
       },
     });
   };
