@@ -514,11 +514,21 @@ class PageView(APIView):
                 except Exception as e:
                     print("노트 TTS 생성 중 오류:", e)
 
+        if boards:
+            # board_tts 생성
+            for board in boards:
+                if not board.board_tts:
+                    try:
+                        board.board_tts = text_to_speech(board.text, user)
+                        board.save()
+                    except Exception as e:
+                        print("추가 자료 TTS 생성 중 오류:", e)
+
         response_data = {
             "note": NoteSerializer(note).data if note else None,
             "speeches": SpeechSerializer(speeches, many=True).data,
             "bookmarks": bookmarks,
-            "boards": BoardSerializer(boards, many=True).data,
+            "boards": BoardReviewSerializer(boards, many=True).data,
         }
 
         return Response(response_data, status=200)
