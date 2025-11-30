@@ -8,6 +8,7 @@ export const colors = {
     grayD: "#58616A",
     black: "#000000",
     white: "#FFFFFF",
+    yellowM: "#FFD000",
   },
 
   hc: {
@@ -19,6 +20,7 @@ export const colors = {
     beige: "#EAE6E0",
     white: "#FFFFFF",
     black: "#000000",
+    blueM: "#006CE6",
   },
 } as const;
 
@@ -34,4 +36,5 @@ export const contrastMap: Record<
   grayD: "beige",
   black: "white",
   white: "black",
+  yellowM: "blueM",
 };

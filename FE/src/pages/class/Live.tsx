@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useReducer } from "react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
-import styled from "styled-components";
 import toast from "react-hot-toast";
 
 import { fetchDocPage, fetchPageSummary } from "@apis/lecture/lecture.api";
@@ -19,7 +18,14 @@ import {
   readFontPct,
   readReadOnFocus,
 } from "./pre/ally";
-import { Container, Grid, SrLive, Wrap } from "./pre/styles";
+import {
+  Container,
+  Grid,
+  SrLive,
+  Wrap,
+  DocPaneWrapper,
+  SyncToggleInPane,
+} from "./pre/styles";
 import { postBookmarkClock, toHHMMSS } from "@apis/lecture/bookmark.api";
 import { uploadSpeechQueued } from "@apis/lecture/speech.api";
 import { useAudioRecorder } from "@shared/useAudioRecorder";
@@ -100,7 +106,7 @@ export default function LiveClass() {
   );
 
   // 페이지 따라가기 토글 (장애학우 전용)
-  const [followEnabled, setFollowEnabled] = useState<boolean>(false);
+  const [followEnabled, setFollowEnabled] = useState<boolean>(true);
 
   // ------- refs -------
   const liveRef = useRef<HTMLDivElement | null>(null);
@@ -575,28 +581,40 @@ export default function LiveClass() {
       />
 
       {/* ====== 플로팅 따라가기 토글 (장애학우 전용) ====== */}
-      {role === "student" && (
-        <SyncToggleFloating>
-          <SyncToggleButton
-            type="button"
-            aria-pressed={followEnabled}
-            onClick={handleToggleFollow}
-          >
-            {followEnabled ? "따라가기 ON" : "따라가기 OFF"}
-          </SyncToggleButton>
-        </SyncToggleFloating>
-      )}
 
       <Container>
         <Grid $stack={stackByFont}>
-          <DocPane
-            mode={mode}
-            ocrText={cleanOcr}
-            imageUrl={docPage?.image}
-            docBodyRef={docBodyRef}
-            mainRegionRef={mainRegionRef}
-          />
+          <DocPaneWrapper>
+            {role === "student" && (
+              <SyncToggleInPane
+                type="button"
+                aria-pressed={followEnabled}
+                aria-label={
+                  followEnabled
+                    ? "페이지 따라가기 켜짐. 버튼을 눌러 끌 수 있습니다."
+                    : "페이지 따라가기 꺼짐. 버튼을 눌러 켤 수 있습니다."
+                }
+                onClick={handleToggleFollow}
+                onFocus={() => {
+                  announce(
+                    followEnabled
+                      ? "페이지 따라가기 버튼입니다. 현재 켜져 있습니다."
+                      : "페이지 따라가기 버튼입니다. 현재 꺼져 있습니다."
+                  );
+                }}
+              >
+                {followEnabled ? "따라가기 ON" : "따라가기 OFF"}
+              </SyncToggleInPane>
+            )}
 
+            <DocPane
+              mode={mode}
+              ocrText={cleanOcr}
+              imageUrl={docPage?.image}
+              docBodyRef={docBodyRef}
+              mainRegionRef={mainRegionRef}
+            />
+          </DocPaneWrapper>
           <RightTabs
             stack={stackByFont}
             activeInitial="memo"
@@ -637,33 +655,3 @@ export default function LiveClass() {
     </Wrap>
   );
 }
-
-/* ====== 스타일: 제목 텍스트 라인 근처 고정용 플로팅 버튼 ====== */
-const SyncToggleFloating = styled.div`
-  position: fixed;
-  top: 72px;
-  right: 40px;
-  z-index: 50;
-`;
-
-const SyncToggleButton = styled.button`
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 0.875rem;
-  border: 1px solid #2563eb;
-  background: rgba(37, 99, 235, 0.08);
-  color: #1d4ed8;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
-  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
-
-  &:hover {
-    transform: translateY(-1px);
-  }
-
-  &[aria-pressed="true"] {
-    background: #2563eb;
-    color: #fff;
-  }
-`;
