@@ -130,18 +130,17 @@ export function uploadSpeechQueued(
   pageId: number,
   blob: Blob,
   hhmmssEnd: string,
-  opts?: { maxUploadDurationMs?: number } // 행 가드 상한
+  opts?: { maxUploadDurationMs?: number }
 ): void {
-  const ext = blob.type.includes("ogg")
-    ? "ogg"
-    : blob.type.includes("webm")
+  const mime = blob.type || "";
+  const ext = mime.includes("webm")
     ? "webm"
-    : blob.type.includes("wav")
-    ? "wav"
-    : "webm";
+    : mime.includes("mp4") || mime.includes("m4a")
+    ? "m4a"
+    : "dat";
 
   const file = new File([blob], `lecture-${pageId}.${ext}`, {
-    type: blob.type || `audio/${ext}`,
+    type: mime || `audio/${ext}`,
   });
 
   const base = (instance.defaults.baseURL ?? "").replace(/\/+$/, "");
@@ -156,6 +155,7 @@ export function uploadSpeechQueued(
     hhmmssEnd,
     timeStamp,
     url,
+    mime,
   });
 
   void enqueue(async () => {
