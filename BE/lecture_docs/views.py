@@ -643,7 +643,7 @@ class ExamTTSView(APIView):
         session_key = f"exam_session:{user.id}"
         ocr_key = f"exam_ocr:{user.id}"
 
-        # 시험 종료 여부 확인
+        # 1) 시험 종료 여부 확인
         session_val = redis_client.get(session_key)
         if not session_val:
             return Response({"error": "시험 종료됨"}, status=403)
@@ -655,14 +655,14 @@ class ExamTTSView(APIView):
         if now_kst > end_time_kst:
             return Response({"error": "시험 종료됨"}, status=403)
 
-        # OCR 데이터 로딩
+        # 2) OCR 데이터 불러오기
         cached = redis_client.get(ocr_key)
         if not cached:
             return Response({"error": "OCR 없음"}, status=404)
 
         questions = json.loads(cached)
 
-        # 문제 번호 찾기
+        # 3) 문제 번호 찾기
         try:
             question = next(q for q in questions if q["questionNumber"] == int(question_number))
         except StopIteration:
@@ -673,8 +673,17 @@ class ExamTTSView(APIView):
             return Response({"error": "itemIndex 범위 초과"}, status=400)
 
         item = items[item_index]
-        text = item.get("displayText")
 
+        # 이미 TTS가 존재하면 바로 재사용
+        if "tts" in item and item["tts"]:
+            return Response({
+                "questionNumber": question_number,
+                "itemIndex": item_index,
+                "tts": item["tts"]
+            }, status=200)
+
+        # 4) TTS 생성
+        text = item.get("displayText")
         if not text:
             return Response({"error": "item에 displayText 없음"}, status=400)
 
@@ -698,10 +707,15 @@ class ExamTTSView(APIView):
         except Exception as e:
             return Response({"error": f"TTS 오류: {e}"}, status=500)
 
-        # 응답
+        # 5) 생성된 tts를 Redis 저장 구조에 반영
+        item["tts"] = tts_url
+        redis_client.set(ocr_key, json.dumps(questions))
+
+        # 6) 응답
         return Response({
             "questionNumber": question_number,
             "itemIndex": item_index,
             "tts": tts_url
         }, status=200)
+
 
