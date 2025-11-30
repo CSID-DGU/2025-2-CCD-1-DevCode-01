@@ -1,3 +1,4 @@
+import { fonts } from "@styles/fonts";
 import styled from "styled-components";
 
 export const CONTAINER_MAX = 1200;
@@ -48,5 +49,41 @@ export const Grid = styled.div<{ $stack: boolean }>`
       : `minmax(0,1fr) minmax(${SIDE_MIN}px, clamp(${SIDE_MIN}px, 28vw, ${SIDE_MAX}px))`};
   @media (max-width: 900px) {
     grid-template-columns: 1fr;
+  }
+`;
+
+export const DocPaneWrapper = styled.div`
+  position: relative;
+  height: 100%;
+`;
+
+export const SyncToggleInPane = styled.button`
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  border-radius: 999px;
+  padding: 10px 20px;
+  ${fonts.bold20}
+  /* background-color: var(--c-blue); */
+  border: 2px solid var(--c-blue);
+  color: var(--c-blue);
+
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+
+  &[aria-pressed="true"] {
+    background-color: var(--c-blue);
+    color: var(--c-white);
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--c-yellowM);
+    outline-offset: 2px;
   }
 `;

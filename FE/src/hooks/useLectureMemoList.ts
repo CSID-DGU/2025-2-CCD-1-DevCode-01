@@ -5,8 +5,15 @@ import {
   type LectureNote,
 } from "@apis/lecture/memo.api";
 
-type Role = "student" | "assistant" | string;
-type Item = { text: string; role: Role; createdAt: string };
+export type Role = "student" | "assistant" | string;
+
+export type MemoItem = {
+  text: string;
+  role: Role;
+  createdAt: string;
+  note: LectureNote;
+};
+
 type State = { loading: boolean; error: string | null; notes: LectureNote[] };
 
 const STRIP_ICON_RE = /^[\s•]*(🐰|🐣)\s*/u;
@@ -20,7 +27,7 @@ const normalizeLines = (s: string) =>
 
 const stripIcon = (l: string) => l.replace(STRIP_ICON_RE, "").trim();
 
-const iconOf = (role: Role) => (role === "assistant" ? "🐣" : "🐰");
+const iconOfRole = (role: Role) => (role === "assistant" ? "🐣" : "🐰");
 
 export function useLectureMemoList(lectureId: number | null) {
   const [state, setState] = useState<State>({
@@ -58,7 +65,9 @@ export function useLectureMemoList(lectureId: number | null) {
     const sorted = [...state.notes].sort(
       (a, b) => +new Date(b.created_at) - +new Date(a.created_at)
     );
-    const map = new Map<string, Item>();
+
+    const map = new Map<string, MemoItem>();
+
     for (const n of sorted) {
       for (const raw of normalizeLines(n.content)) {
         const key = stripIcon(raw);
@@ -68,16 +77,18 @@ export function useLectureMemoList(lectureId: number | null) {
             text: key,
             role: n.user_role,
             createdAt: n.created_at,
+            note: n,
           });
         }
       }
     }
+
     return map;
   }, [state.notes]);
 
   const existingSet = useMemo(() => new Set([...lineMap.keys()]), [lineMap]);
 
-  const items: Item[] = useMemo(() => {
+  const items: MemoItem[] = useMemo(() => {
     const toTime = (iso?: string) => (iso ? new Date(iso).getTime() : 0);
     return [...lineMap.values()].sort(
       (a, b) => toTime(a.createdAt) - toTime(b.createdAt)
@@ -87,14 +98,17 @@ export function useLectureMemoList(lectureId: number | null) {
   const saveAll = useCallback(
     async (nextItems: { text: string; role?: Role }[]) => {
       if (!lectureId) return;
-      const nextSet = new Set(nextItems.map((i) => stripIcon(i.text)));
+      const nextSet = new Set(
+        nextItems.map((i) => stripIcon(i.text)).filter(Boolean)
+      );
       const newOnes = [...nextSet].filter((t) => t && !existingSet.has(t));
+
       for (const t of newOnes) {
-        await postLecturesMemo(lectureId, `${iconOf(currentRole)} ${t}`);
+        await postLecturesMemo(lectureId, t);
       }
       await load();
     },
-    [lectureId, currentRole, existingSet, load]
+    [lectureId, existingSet, load]
   );
 
   return {
@@ -104,6 +118,6 @@ export function useLectureMemoList(lectureId: number | null) {
     saveAll,
     reload: load,
     currentRole,
-    iconOf,
+    iconOf: iconOfRole,
   };
 }

@@ -17,7 +17,7 @@ from rest_framework import status,permissions
 from rest_framework.response import Response
 from classes.models import Bookmark, Note, Speech
 from classes.models import Bookmark, Note, Speech
-from classes.utils import preprocess_code, text_to_speech
+from classes.utils import preprocess_text, text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
 from .utils import  *
@@ -135,22 +135,14 @@ class PageTTSView(APIView):
             return Response({"error": "OCR이 완료되지 않았습니다."}, status=400)
         
         if page.page_tts:
-            return Response({"tts": page.page_tts}, status=200)
+            return Response({"page_tts": page.page_tts}, status=200)
 
         # 수식 전처리된 OCR 텍스트
         # 없으면 원본 OCR 사용
         processed_math = request.data.get("ocr_text", page.ocr)
-        
-        # 1️⃣ <코드> ... </코드> 부분 추출
-        code_pattern = re.compile(r"<코드>(.*?)</코드>", re.DOTALL)
-        
-        def replace_code(match):
-            code_text = match.group(1)
-            # 2️⃣ 코드 전처리
-            processed_code = preprocess_code(code_text)
-            return f"<코드>{processed_code}</코드>"
 
-        preprocessed_text = code_pattern.sub(replace_code, processed_math)
+        # 최종 전처리 텍스트
+        preprocessed_text = preprocess_text(processed_math)
         
         try:
             tts_url = text_to_speech(
@@ -179,8 +171,7 @@ class PageSummaryView(APIView):
 
         if page.summary:
             return Response({
-                "summary": page.summary,
-                "summary_tts": page.summary_tts
+                "summary": page.summary
             }, status=200)
 
         try:
@@ -188,24 +179,45 @@ class PageSummaryView(APIView):
         except Exception as e:
             return Response({"error": f"요약 생성 실패: {e}"}, status=500)
 
-        try:
-            summary_tts = text_to_speech(
-                summary,
-                user=request.user,
-                s3_folder="tts/page_summary/"
-            )
-        except Exception:
-            summary_tts = None
 
         page.summary = summary
-        page.summary_tts = summary_tts
-        page.save(update_fields=["summary", "summary_tts"])
+        page.save(update_fields=["summary"])
 
         return Response({
             "summary": page.summary,
-            "summary_tts": page.summary_tts
         }, status=201)
+    
+# 교안 OCR 요약 TTS
+class PageSummaryTTSView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
 
+    def post(self, request, pageId):
+        page = get_object_or_404(Page, id=pageId)
+
+        if not page.summary:
+            return Response({"error": "요약문이 존재하지 않습니다."}, status=400)
+
+        if page.summary_tts:
+            return Response({"summary_tts": page.summary_tts}, status=200)
+        
+        processed_math = request.data.get("summary_text", page.summary)
+
+        # 최종 전처리 텍스트
+        preprocessed_text = preprocess_text(processed_math)
+
+        try:
+            tts_url = text_to_speech(
+                preprocessed_text,
+                user=request.user,
+                s3_folder="tts/page_summary/"
+            )
+        except Exception as e:
+            return Response({"error": f"TTS 오류: {e}"}, status=500)
+
+        page.summary_tts = tts_url
+        page.save(update_fields=["summary_tts"])
+
+        return Response({"summary_tts": page.summary_tts}, status=201)
 
 #교안 수정 삭제
 class DocDetailView(APIView):
@@ -507,6 +519,7 @@ class PageView(APIView):
             Bookmark.objects.filter(page=page, user=user).order_by("-created_at"),
             many=True
         ).data
+        boards = Board.objects.filter(page=page).order_by("-created_at")
 
         if note:
             # note_tts 생성
@@ -524,10 +537,21 @@ class PageView(APIView):
         else:
             note_data = None
 
+        if boards:
+            # board_tts 생성
+            for board in boards:
+                if not board.board_tts:
+                    try:
+                        board.board_tts = text_to_speech(board.text, user)
+                        board.save()
+                    except Exception as e:
+                        print("추가 자료 TTS 생성 중 오류:", e)
+
         response_data = {
             "note": note_data,
             "speeches": SpeechSerializer(speeches, many=True).data,
             "bookmarks": bookmarks,
+            "boards": BoardReviewSerializer(boards, many=True).data,
         }
 
         return Response(response_data, status=200)
@@ -710,15 +734,7 @@ class ExamTTSView(APIView):
         if not text:
             return Response({"error": "item에 displayText 없음"}, status=400)
 
-        # <코드> ... </코드> 전처리
-        code_pattern = re.compile(r"<코드>(.*?)</코드>", re.DOTALL)
-
-        def replace_code(match):
-            code_text = match.group(1)
-            processed_code = preprocess_code(code_text)
-            return f"<코드>{processed_code}</코드>"
-
-        processed_text = code_pattern.sub(replace_code, text)
+        processed_text = preprocess_text(text)
 
         # TTS 생성
         try:
