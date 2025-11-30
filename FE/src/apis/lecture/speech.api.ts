@@ -23,7 +23,7 @@ export function normalizeHHMMSS(hhmmss: string): string {
 interface PersistItem {
   url: string;
   token?: string;
-  timestamp: string;
+  timeStamp: string;
   audioBuf: ArrayBuffer;
   mime: string;
   filename: string;
@@ -47,13 +47,13 @@ async function persistJob(
   url: string,
   token: string | undefined,
   file: File,
-  timestamp: string
+  timeStamp: string
 ): Promise<void> {
   const audioBuf = await file.arrayBuffer();
   const item: PersistItem = {
     url,
     token,
-    timestamp,
+    timeStamp,
     audioBuf,
     mime: file.type || "audio/webm",
     filename: file.name,
@@ -78,7 +78,7 @@ export async function drainSpeechQueue(): Promise<void> {
         "audio",
         new File([it.audioBuf], it.filename, { type: it.mime })
       );
-      fd.append("timestamp", it.timestamp);
+      fd.append("timestamp", it.timeStamp);
       const res = await fetch(it.url, {
         method: "POST",
         body: fd,
@@ -104,7 +104,7 @@ export function registerSpeechBeacon(): void {
           "audio",
           new File([it.audioBuf], it.filename, { type: it.mime })
         );
-        fd.append("timestamp", it.timestamp);
+        fd.append("timestamp", it.timeStamp);
         const url = token
           ? `${it.url}?beacon=1&token=${encodeURIComponent(token)}`
           : `${it.url}?beacon=1`;
@@ -149,14 +149,14 @@ export function uploadSpeechQueued(
   const base = (instance.defaults.baseURL ?? "").replace(/\/+$/, "");
   const url = `${base}/class/speech/${pageId}/`;
   const token = localStorage.getItem("access") ?? "";
-  const timestamp = normalizeHHMMSS(hhmmssEnd);
+  const timeStamp = normalizeHHMMSS(hhmmssEnd);
 
   // ✅ 행 가드(아주 길게): 기본 5분
   const MAX_UPLOAD_DURATION_MS = opts?.maxUploadDurationMs ?? 5 * 60_000;
 
   void enqueue(async () => {
     if (!navigator.onLine) {
-      await persistJob(url, token || undefined, file, timestamp);
+      await persistJob(url, token || undefined, file, timeStamp);
       console.log("[uploadQueued] offline → persisted");
       return;
     }
@@ -166,7 +166,7 @@ export function uploadSpeechQueued(
     const fdFactory = () => {
       const fd = new FormData();
       fd.append("audio", file);
-      fd.append("timestamp", timestamp);
+      fd.append("timestamp", timeStamp);
       return fd;
     };
 
@@ -193,7 +193,7 @@ export function uploadSpeechQueued(
       }
       const msg = await res.text().catch(() => "");
       console.warn(`[uploadQueued] non-OK ${res.status}`, msg);
-      await persistJob(url, token || undefined, file, timestamp);
+      await persistJob(url, token || undefined, file, timeStamp);
     } catch (err) {
       window.clearTimeout(hangGuard);
       if (
@@ -202,11 +202,11 @@ export function uploadSpeechQueued(
         timedOut
       ) {
         console.warn(`[uploadQueued] ⏳ hang-guard abort → persist`);
-        await persistJob(url, token || undefined, file, timestamp);
+        await persistJob(url, token || undefined, file, timeStamp);
         return;
       }
       console.warn("[uploadQueued] error → persist", (err as Error).message);
-      await persistJob(url, token || undefined, file, timestamp);
+      await persistJob(url, token || undefined, file, timeStamp);
     }
   });
 }
