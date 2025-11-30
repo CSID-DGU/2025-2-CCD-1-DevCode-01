@@ -160,7 +160,7 @@ const Tab = styled.button`
 
   &[aria-selected="true"] {
     background: var(--c-blue);
-    color: black;
+    color: var(--c-white);
     border: 2px solid var(--c-blue);
   }
 
