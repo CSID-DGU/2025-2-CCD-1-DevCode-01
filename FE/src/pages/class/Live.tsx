@@ -393,7 +393,7 @@ export default function LiveClass() {
   const pauseLabel = (() => {
     if (!Number.isFinite(docId)) return "중지";
     const p = loadRec(Number(docId));
-    return p.status === "paused" ? "녹음 다시 시작" : "중지";
+    return p.status === "paused" ? "녹음 다시 시작" : "일시정지";
   })();
 
   /* ------------------ 북마크: 논리시간 우선 ------------------ */
