@@ -37,7 +37,6 @@ class PageSerializer(serializers.ModelSerializer):
     pagId = serializers.IntegerField(source="id")
     totalPage = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
-    timestamp = serializers.SerializerMethodField()
 
     class Meta:
         model = Page
