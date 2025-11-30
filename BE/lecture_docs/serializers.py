@@ -68,6 +68,14 @@ class BoardSerializer(serializers.ModelSerializer):
         model = Board
         fields = ["boardId", "image", "text"]
 
+class BoardReviewSerializer(serializers.ModelSerializer):
+    boardId = serializers.IntegerField(source='id')
+    board_tts = serializers.JSONField(read_only=True)
+
+    class Meta:
+        model = Board
+        fields = ["boardId", "image", "text", "board_tts"]
+
 class SpeechSummaryListSerializer(serializers.ModelSerializer):
     speechSummaryId = serializers.IntegerField(source="id")
     createdAt = serializers.SerializerMethodField()

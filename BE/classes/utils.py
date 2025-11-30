@@ -49,6 +49,7 @@ symbol_map = {
 }
 
 symbol_pattern = re.compile("|".join(re.escape(k) for k in symbol_map.keys()))
+code_pattern = re.compile(r"<코드>(.*?)</코드>", re.DOTALL)
 
 def upload_to_gcs(file_bytes: bytes, filename: str, bucket_name: str) -> str:
     """GCS 버킷에 파일 업로드 후 URI 반환"""
@@ -252,6 +253,17 @@ def preprocess_code(code_text: str) -> str:
     # 5) 줄바꿈 처리
     return " 줄바꿈 ".join(processed_lines)
 
+def preprocess_text(processed_math):
+    
+    def replace_code(match):
+        code_text = match.group(1)
+        # 코드 전처리
+        processed_code = preprocess_code(code_text)
+        return f"<코드>{processed_code}</코드>"
+
+    # 최종 전처리 텍스트
+    return code_pattern.sub(replace_code, processed_math)
+    
 def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     
     if not text or text.strip() == "":
