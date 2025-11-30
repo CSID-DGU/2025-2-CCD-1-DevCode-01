@@ -21,6 +21,20 @@ import RightTabsPost from "src/components/lecture/post/RightTabPost";
 type RouteParams = { courseId?: string; docId?: string };
 type NavState = { navTitle?: string; totalPage?: number; docId?: number };
 
+function useDocIdFromParamsAndState(params: RouteParams, state?: NavState) {
+  return useMemo(() => {
+    // 1순위: location state에 docId가 있으면 그거
+    if (typeof state?.docId === "number" && Number.isFinite(state.docId)) {
+      return state.docId;
+    }
+
+    // 2순위: URL 파라미터 (docId > courseId)
+    const raw = params.docId ?? params.courseId;
+    const n = parseInt(raw ?? "", 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [params.docId, params.courseId, state?.docId]);
+}
+
 export default function PostClass() {
   const params = useParams<RouteParams>();
   const { state } = useLocation() as { state?: NavState };
@@ -28,9 +42,8 @@ export default function PostClass() {
   const role = (localStorage.getItem("role") || "student") as
     | "assistant"
     | "student";
-  const parsedParamId = Number(params.docId);
-  const docId =
-    state?.docId ?? (Number.isFinite(parsedParamId) ? parsedParamId : NaN);
+
+  const docId = useDocIdFromParamsAndState(params, state);
   const totalPage = state?.totalPage ?? null;
 
   const [page, setPage] = useState<number>(1);
@@ -177,7 +190,7 @@ export default function PostClass() {
             mode={mode}
             ocrText={cleanOcr}
             imageUrl={docPage?.image}
-            ocrAudioRef={ocrAudioRef}
+            // ocrAudioRef={ocrAudioRef}
             docBodyRef={docBodyRef}
             mainRegionRef={mainRegionRef}
           />
@@ -188,7 +201,7 @@ export default function PostClass() {
             review={review}
             summary={{
               text: summary?.summary ?? "",
-              ttsUrl: summary?.summary_tts ?? "",
+              // ttsUrl: summary?.summary_tts ?? "",
               sumAudioRef,
               sidePaneRef,
             }}
