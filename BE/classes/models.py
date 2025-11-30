@@ -13,7 +13,10 @@ class Speech(models.Model):
     end_time_sec = models.FloatField(default=0.0)  # 계산용
     duration_sec = models.FloatField(default=0.0)
     created_at = models.DateTimeField(auto_now_add=True)
-
+    @property
+    def lecture(self):
+        return self.page.doc.lecture
+        
 #노트
 class Note(models.Model):
     page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name='notes', null=True, blank=True)
@@ -21,7 +24,9 @@ class Note(models.Model):
     content = models.TextField()
     note_tts =  models.JSONField(blank=True, null=True) 
     created_at = models.DateTimeField(auto_now_add=True)
-
+    @property
+    def lecture(self):
+        return self.page.doc.lecture
 #북마크
 class Bookmark(models.Model):
     page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name='bookmarks', null=True, blank=True)
@@ -31,4 +36,7 @@ class Bookmark(models.Model):
     relative_time = models.FloatField(default=0.0, null=True, blank=True)
     text = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
+    @property
+    def lecture(self):
+        return self.page.doc.lecture
+    

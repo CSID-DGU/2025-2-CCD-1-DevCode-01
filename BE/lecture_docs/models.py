@@ -41,7 +41,9 @@ class Board(models.Model):
     board_tts =  models.JSONField(blank=True, null=True) 
     image = models.URLField(blank=True, null=True) #판서이미지
     created_at = models.DateTimeField(auto_now_add=True)
-
+    @property
+    def lecture(self):
+        return self.page.doc.lecture
 
 # 발화 요약
 class SpeechSummary(models.Model):
@@ -50,3 +52,7 @@ class SpeechSummary(models.Model):
     summary = models.TextField(blank=True, null=True)
     summary_tts =  models.JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    @property
+    def lecture(self):
+        return self.doc.lecture
+        
