@@ -262,9 +262,7 @@ class PageDetailView(APIView):
         except Doc.DoesNotExist:
             return Response({"detail": "문서를 찾을 수 없습니다."},
                             status=status.HTTP_404_NOT_FOUND)
-
         self.check_object_permissions(request, doc)
-
         page = doc.pages.get(page_number=pageNumber)
         data = PageSerializer(page).data
 
