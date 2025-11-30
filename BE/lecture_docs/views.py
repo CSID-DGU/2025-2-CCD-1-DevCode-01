@@ -492,17 +492,20 @@ class PageView(APIView):
             # note_tts 생성
             if not note.note_tts:
                 try:
-                    # note.content → TTS 생성
-                    tts_url = text_to_speech(note.content, user)
-
-                    # JSONField는 문자열 단독 저장 불가 → dict로 저장
-                    note.note_tts = {"url": tts_url}
-                    note.save()
+                    tts_url = text_to_speech(note.content,user=user,s3_folder="tts/notes/")
+                    note.note_tts = tts_url
+                    note.save(update_fields=["note_tts"])
                 except Exception as e:
                     print("노트 TTS 생성 중 오류:", e)
+        
+        if note:
+            note_data = NoteSerializer(note).data
+            note_data["note_tts"] = note.note_tts
+        else:
+            note_data = None
 
         response_data = {
-            "note": NoteSerializer(note).data if note else None,
+            "note": note_data,
             "speeches": SpeechSerializer(speeches, many=True).data,
             "bookmarks": bookmarks,
         }
