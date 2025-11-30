@@ -10,6 +10,7 @@ urlpatterns = [
     path('page/<int:pageId>/tts/', PageTTSView.as_view(), name='tts-upload'),
     path('page/<int:pageId>/board/', BoardView.as_view(), name='board-upload'),
     path("page/<int:pageId>/summary/", PageSummaryView.as_view(), name="doc-summary"),
+    path("page/<int:pageId>/summary/tts/", PageSummaryTTSView.as_view(), name="doc-summary-tts"),
     
     path('page/<int:pageId>/review/', PageView.as_view(), name='page-review'),
     path('board/<int:boardId>/', BoardView.as_view(), name="board-detail"),
