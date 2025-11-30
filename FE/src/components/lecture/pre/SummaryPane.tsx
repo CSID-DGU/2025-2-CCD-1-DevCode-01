@@ -1,4 +1,4 @@
-import { useCallback, type FocusEvent } from "react";
+import { type FocusEvent } from "react";
 import styled from "styled-components";
 
 import { PANEL_FIXED_H } from "@pages/class/pre/styles";
@@ -6,7 +6,6 @@ import { fonts } from "@styles/fonts";
 import Spinner from "src/components/common/Spinner";
 
 import { RichOcrContent } from "src/components/common/RichOcrContent";
-import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 
 type Props = {
   summaryText?: string | null;
@@ -17,48 +16,27 @@ type Props = {
   panelHeight?: string;
   loading?: boolean;
   autoPlayOnFocus?: boolean;
+  onPlaySummaryTts?: () => void;
 };
 
 export default function SummaryPane({
   summaryText,
   summaryTtsUrl,
   sidePaneRef,
-  sumAudioRef,
   stack,
   panelHeight,
   loading,
   autoPlayOnFocus = true,
+  onPlaySummaryTts,
 }: Props) {
-  const { soundRate } = useSoundOptions();
-
-  const hasTts = !!summaryTtsUrl && !!sumAudioRef;
-
-  /* ----- 요약 TTS 재생 ----- */
-  const playSummaryTts = useCallback(async () => {
-    if (!summaryTtsUrl || !sumAudioRef?.current) return;
-
-    const audio = sumAudioRef.current;
-
-    if (!audio.src || audio.src !== summaryTtsUrl) {
-      audio.src = summaryTtsUrl;
-    }
-
-    applyPlaybackRate(audio, soundRate);
-
-    audio.currentTime = 0;
-    try {
-      await audio.play();
-    } catch (err) {
-      console.error("[SummaryPane] 요약 TTS 재생 실패:", err);
-    }
-  }, [summaryTtsUrl, sumAudioRef, soundRate]);
-
   const handlePaneFocus = (e: FocusEvent<HTMLElement>) => {
     if (e.currentTarget !== e.target) return;
-    if (!loading && hasTts && autoPlayOnFocus) {
-      void playSummaryTts();
+    if (!loading && autoPlayOnFocus && onPlaySummaryTts) {
+      onPlaySummaryTts();
     }
   };
+
+  const hasUrl = !!summaryTtsUrl;
 
   return (
     <Pane
@@ -75,17 +53,19 @@ export default function SummaryPane({
       <Header>
         <Title>요약</Title>
 
-        {hasTts && (
+        {onPlaySummaryTts && (
           <SrOnlyFocusable
             type="button"
-            onClick={() => {
-              void playSummaryTts();
-            }}
-            aria-label={loading ? "요약을 불러오는 중입니다" : "요약 TTS 재생"}
+            onClick={onPlaySummaryTts}
+            aria-label={
+              loading
+                ? "요약을 불러오는 중입니다"
+                : hasUrl
+                ? "요약 TTS 재생"
+                : "요약 TTS 생성 후 재생"
+            }
           />
         )}
-
-        {hasTts && <audio ref={sumAudioRef} preload="none" />}
       </Header>
 
       <Body>
@@ -122,9 +102,8 @@ const Pane = styled.aside<{ $stack: boolean; $height?: string }>`
   }
 
   &:focus-visible {
-    outline: 2px solid #2563eb;
+    border: 3px solid var(--c-blue);
     outline-offset: 10px;
-    border-radius: 10px;
   }
 `;
 
@@ -152,16 +131,17 @@ const EmptyParagraph = styled.p`
   color: var(--c-black);
 `;
 
-const SrOnlyFocusable = styled.button`
+const SrOnlyFocusable = styled.button.attrs({ tabIndex: -1 })`
   position: absolute;
   width: 1px;
   height: 1px;
   margin: -1px;
   padding: 0;
   border: 0;
-  clip: rect(0 0 0 0);
+  clip: rect(0, 0, 0, 0);
   clip-path: inset(50%);
   overflow: hidden;
+
   &:focus {
     outline: none;
   }

@@ -18,6 +18,7 @@ import Step4Credentials from "@pages/auth/steps/Step4Credentials";
 import FoldersRoute from "./FoldersRoute";
 import LectureDocs from "@pages/lecture/LectureDocs";
 import ScrollToTop from "src/hooks/ScrollToTop";
+import ExamTake from "@pages/exam/ExamLive";
 
 const router = createBrowserRouter([
   {
@@ -93,13 +94,17 @@ const router = createBrowserRouter([
             handle: {
               nav: {
                 variant: "post",
-                title: ({ courseId }) => `${courseId} - 수업 후`,
               } as NavMeta,
             },
           },
           {
             path: "/exam",
             element: <Exam />,
+            handle: { nav: { variant: "exam", title: "시험" } as NavMeta },
+          },
+          {
+            path: "/exam/take",
+            element: <ExamTake />,
             handle: { nav: { variant: "exam", title: "시험" } as NavMeta },
           },
         ],

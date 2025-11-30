@@ -137,7 +137,7 @@ const LoadingBox = styled.div`
   }
 `;
 
-const SrOnlyFocusable = styled.button`
+const SrOnlyFocusable = styled.button.attrs({ tabIndex: -1 })`
   position: absolute;
   width: 1px;
   height: 1px;
