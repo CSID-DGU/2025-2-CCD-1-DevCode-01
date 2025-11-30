@@ -12,6 +12,7 @@ import {
 } from "@apis/exam/exam.api";
 import { DUMMY_EXAM_RESULT } from "@apis/exam/exam.dummy";
 import { useTtsTextBuilder } from "src/hooks/useTtsTextBuilder";
+import { fonts } from "@styles/fonts";
 
 type LocationState = {
   exam?: ExamResultResponse;
@@ -27,12 +28,10 @@ const ExamTake = () => {
   );
   const [loading, setLoading] = useState(!state?.exam);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [viewMode, setViewMode] = useState<"detail" | "page">("detail"); // 텍스트/원본 전환
-  const [previewImage, setPreviewImage] = useState<string | null>(null); // chart/table 확대
+  const [viewMode, setViewMode] = useState<"detail" | "page">("detail");
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
-  /* ---------- 1) 진입 시 진행 중 시험 조회 (/exam/result/) ---------- */
   useEffect(() => {
-    // /exam/start 에서 state로 exam을 넘겨준 경우 → 그대로 사용
     if (state?.exam) {
       return;
     }
@@ -67,7 +66,6 @@ const ExamTake = () => {
 
   const currentQuestion: ExamQuestion | null = questions[currentIndex] ?? null;
 
-  // 시험 종료 시간 텍스트 (간단 포맷)
   const endTimeText = useMemo(() => {
     if (!exam?.endTime) return null;
     const d = new Date(exam.endTime);
@@ -80,7 +78,6 @@ const ExamTake = () => {
 
   const handleClickThumbnail = (index: number) => {
     setCurrentIndex(index);
-    // 문제 바뀔 때 텍스트 모드로 초기화
     setViewMode("detail");
   };
 
@@ -114,7 +111,6 @@ const ExamTake = () => {
   const isFirst = currentIndex === 0;
   const isLast = questions.length > 0 && currentIndex === questions.length - 1;
 
-  // 진입 직후, 아직 exam도 없고 응답도 안 온 상태 → 전체 스피너
   if (loading && !exam) {
     return (
       <FullPageCenter>
@@ -157,7 +153,6 @@ const ExamTake = () => {
 
       {/* 메인 레이아웃: 문제 영역 + 썸네일 영역 */}
       <MainLayout>
-        {/* 썸네일 목록 */}
         <ThumbnailPane>
           <ThumbnailTitle>문제 목록</ThumbnailTitle>
           <ThumbnailList>
@@ -173,11 +168,8 @@ const ExamTake = () => {
                     src={q.questionImagePath}
                     alt={`문제 ${q.questionNumber} 원본 이미지 미리보기`}
                   />
-                  <ThumbMeta>
+                  <ThumbMeta $active={isActive}>
                     <p className="label">문제 {q.questionNumber}</p>
-                    <p className="sub">
-                      {isActive ? "현재 문제" : "눌러서 이동"}
-                    </p>
                   </ThumbMeta>
                 </ThumbnailItem>
               );
@@ -217,7 +209,6 @@ const ExamTake = () => {
                 <p>표시할 문제가 없습니다.</p>
               </NoQuestionBox>
             ) : viewMode === "page" ? (
-              // ✅ 시험지 전체 페이지 보기 모드
               <QuestionImageWrapper>
                 <QuestionImage
                   src={currentQuestion.questionImagePath}
@@ -225,7 +216,7 @@ const ExamTake = () => {
                 />
               </QuestionImageWrapper>
             ) : (
-              // ✅ 상세 모드: items 순서대로 (텍스트/차트/테이블)
+              // 상세 모드: items 순서대로 (텍스트/차트/테이블)
               <ItemsWrapper>
                 {currentQuestion.items.map((item, idx) => (
                   <ItemBlock key={idx} $kind={item.kind}>
@@ -257,7 +248,7 @@ const ExamTake = () => {
         </QuestionPane>
       </MainLayout>
 
-      {/* ✅ chart/table 확대 모달 */}
+      {/* chart/table 확대 모달 */}
       {previewImage && (
         <ModalBackdrop onClick={() => setPreviewImage(null)}>
           <ModalContent onClick={(e) => e.stopPropagation()}>
@@ -330,7 +321,7 @@ function ItemTextContent({ item }: { item: ExamItem }) {
 
 const PageContainer = styled.div`
   width: 100%;
-  background: #f5f5f7;
+  background: var(--c-grayL);
   display: flex;
   flex-direction: column;
   padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
@@ -366,21 +357,20 @@ const ToolbarLeft = styled.div`
 `;
 
 const ToolbarTitle = styled.h1`
-  font-size: 1.1rem;
-  font-weight: 700;
+  ${fonts.medium24};
 
   @media (min-width: 768px) {
-    font-size: 1.25rem;
+    ${fonts.bold32};
   }
 `;
 
 const ToolbarInfo = styled.span`
   margin-top: 2px;
-  font-size: 0.8rem;
-  color: #6b7280;
+  ${fonts.regular20};
+  color: var(--c-grayD);
 
   @media (min-width: 768px) {
-    font-size: 0.85rem;
+    ${fonts.bold20};
   }
 `;
 
@@ -395,8 +385,7 @@ const ToolbarButton = styled.button`
   border-radius: 999px;
   border: 1px solid #d1d5db;
   background: #ffffff;
-  font-size: 0.85rem;
-  font-weight: 500;
+  ${fonts.regular17};
   cursor: pointer;
 
   &:hover {
@@ -405,7 +394,7 @@ const ToolbarButton = styled.button`
 
   @media (min-width: 768px) {
     padding: 9px 14px;
-    font-size: 0.9rem;
+    ${fonts.medium24};
   }
 `;
 
@@ -415,8 +404,7 @@ const EndButton = styled.button`
   border: none;
   background: #ef4444;
   color: #ffffff;
-  font-size: 0.85rem;
-  font-weight: 600;
+  ${fonts.regular17};
   cursor: pointer;
 
   &:hover {
@@ -425,7 +413,7 @@ const EndButton = styled.button`
 
   @media (min-width: 768px) {
     padding: 9px 14px;
-    font-size: 0.9rem;
+    ${fonts.medium24};
   }
 `;
 
@@ -464,7 +452,7 @@ const QuestionPane = styled.section`
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: #ffffff;
+  background: var(--c-white);
   border-radius: 16px;
   padding: 12px;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
@@ -475,13 +463,12 @@ const QuestionPane = styled.section`
 `;
 
 const ThumbnailTitle = styled.h2`
-  font-size: 0.9rem;
-  font-weight: 600;
+  ${fonts.regular17};
   margin-bottom: 6px;
-  color: #374151;
+  color: var(--c-grayD);
 
   @media (min-width: 900px) {
-    font-size: 0.95rem;
+    ${fonts.bold20};
   }
 `;
 
@@ -509,8 +496,10 @@ const ThumbnailItem = styled.li<{ $active: boolean }>`
   gap: 8px;
   padding: 6px;
   border-radius: 12px;
-  background: ${({ $active }) => ($active ? "#e0f2fe" : "#f9fafb")};
-  border: 1px solid ${({ $active }) => ($active ? "#38bdf8" : "#e5e7eb")};
+  background: ${({ $active }) =>
+    $active ? "var(--c-blue)" : "var(--c-white)"};
+  border: 2px solid
+    ${({ $active }) => ($active ? "var(--c-blue)" : "var(--c-white)")};
   cursor: pointer;
 
   @media (min-width: 900px) {
@@ -526,23 +515,16 @@ const ThumbImage = styled.img`
   flex-shrink: 0;
 `;
 
-const ThumbMeta = styled.div`
+const ThumbMeta = styled.div<{ $active: boolean }>`
   flex: 1;
   min-width: 0;
 
   .label {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #111827;
+    ${fonts.bold20};
+    color: ${({ $active }) => ($active ? "var(--c-white)" : "var(--c-black)")};
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .sub {
-    font-size: 0.75rem;
-    color: #6b7280;
-    margin-top: 2px;
   }
 `;
 
@@ -555,22 +537,24 @@ const QuestionHeader = styled.div`
 
 const NavButton = styled.button`
   padding: 6px 10px;
-  font-size: 0.85rem;
+  ${fonts.bold20}
   border-radius: 999px;
-  border: 1px solid #d1d5db;
-  background: #f9fafb;
+  border: 2px solid var(--c-black);
+  background: var(--c-white);
   cursor: pointer;
+  color: var(--c-black);
 
   &:disabled {
     background: #e5e7eb;
     color: #9ca3af;
     cursor: not-allowed;
+    border: none;
   }
 `;
 
 const QuestionIndicator = styled.span`
-  font-size: 0.85rem;
-  color: #4b5563;
+  ${fonts.bold20}
+  color: var(--c-grayD)
 `;
 
 const QuestionContent = styled.div`
@@ -584,7 +568,7 @@ const QuestionContent = styled.div`
 
 const QuestionImageWrapper = styled.div`
   width: 100%;
-  background: #111827;
+  background: var(--c-black);
   border-radius: 12px;
   overflow: hidden;
 `;
@@ -594,7 +578,7 @@ const QuestionImage = styled.img`
   max-height: 260px;
   object-fit: contain;
   display: block;
-  background: #111827;
+  background: var(--c-black);
 `;
 
 const ItemsWrapper = styled.div`
@@ -604,12 +588,10 @@ const ItemsWrapper = styled.div`
   overflow-y: auto;
 `;
 
-// kind별 텍스트 스타일
 const ItemText = styled.p<{ $kind: ExamItem["kind"] }>`
-  font-size: 0.9rem;
-  line-height: 1.6;
+  ${fonts.regular20};
   white-space: pre-wrap;
-  color: #111827;
+  color: var(--c-black);
 
   ${({ $kind }) =>
     $kind === "qnum" &&
@@ -623,8 +605,8 @@ const ItemText = styled.p<{ $kind: ExamItem["kind"] }>`
     `
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
       "Liberation Mono", "Courier New", monospace;
-    background: #111827;
-    color: #e5e7eb;
+    background: var(--c-black);
+    color: var(--c-white);
     padding: 8px 10px;
     border-radius: 8px;
     overflow-x: auto;
@@ -633,9 +615,9 @@ const ItemText = styled.p<{ $kind: ExamItem["kind"] }>`
 
 const ItemSubText = styled.p`
   margin-top: 4px;
-  font-size: 0.8rem;
+  ${fonts.regular17};
   line-height: 1.5;
-  color: #4b5563;
+  color: var(--c-grayD);
 `;
 
 const ItemBlock = styled.div<{ $kind: ExamItem["kind"] }>`
@@ -708,15 +690,15 @@ const ModalImage = styled.img`
 
 const ModalCloseButton = styled.button`
   position: absolute;
-  top: 6px;
-  right: 8px;
+  top: 15px;
+  right: 15px;
   border: none;
   background: rgba(15, 23, 42, 0.8);
   color: #e5e7eb;
-  padding: 4px 8px;
+  padding: 8px 10px;
   border-radius: 999px;
   cursor: pointer;
-  font-size: 0.8rem;
+  ${fonts.regular17};
 `;
 
 const NoQuestionBox = styled.div`
