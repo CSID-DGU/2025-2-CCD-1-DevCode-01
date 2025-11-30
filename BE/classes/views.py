@@ -180,3 +180,4 @@ class NoteDetailView(APIView):
 
         return Response(NoteSerializer(note).data, status=200)
     
+

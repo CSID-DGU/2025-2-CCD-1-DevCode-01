@@ -509,25 +509,9 @@ class PageView(APIView):
 
         return Response(response_data, status=200)
 
-
 #시험 OCR
 load_dotenv()
 redis_client = redis.Redis.from_url(os.getenv("EXAM_REDIS_URL"))
-
-class ExamTTSView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        text = request.query_params.get("text")
-        if not text:
-            return Response({"error": "text 파라미터 필요"}, status=400)
-
-        decoded_text = unquote(text)
-        audio_bytes = exam_tts(decoded_text, request.user)
-
-        response = HttpResponse(audio_bytes, content_type="audio/mp3")
-        response["Content-Disposition"] = 'inline; filename="tts.mp3"'
-        return response
 
 #시험 시작
 kst = timezone(timedelta(hours=9))  # 한국 시간대
@@ -638,3 +622,86 @@ class ExamEndView(APIView):
         redis_client.delete(ocr_key)
 
         return Response({"message": "시험 종료됨"}, status=200)
+
+#시험 tts
+class ExamTTSView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        
+        question_number = request.data.get("questionNumber")
+        item_index = request.data.get("itemIndex")
+
+        if question_number is None:
+            return Response({"error": "questionNumber 필요"}, status=400)
+        if item_index is None:
+            return Response({"error": "itemIndex 필요"}, status=400)
+
+        item_index = int(item_index)
+
+        session_key = f"exam_session:{user.id}"
+        ocr_key = f"exam_ocr:{user.id}"
+
+        # 시험 종료 여부 확인
+        session_val = redis_client.get(session_key)
+        if not session_val:
+            return Response({"error": "시험 종료됨"}, status=403)
+
+        session = json.loads(session_val)
+        end_time_kst = datetime.fromisoformat(session["endTime"])
+        now_kst = datetime.now(kst)
+
+        if now_kst > end_time_kst:
+            return Response({"error": "시험 종료됨"}, status=403)
+
+        # OCR 데이터 로딩
+        cached = redis_client.get(ocr_key)
+        if not cached:
+            return Response({"error": "OCR 없음"}, status=404)
+
+        questions = json.loads(cached)
+
+        # 문제 번호 찾기
+        try:
+            question = next(q for q in questions if q["questionNumber"] == int(question_number))
+        except StopIteration:
+            return Response({"error": "해당 questionNumber 없음"}, status=404)
+
+        items = question.get("items", [])
+        if item_index < 0 or item_index >= len(items):
+            return Response({"error": "itemIndex 범위 초과"}, status=400)
+
+        item = items[item_index]
+        text = item.get("displayText")
+
+        if not text:
+            return Response({"error": "item에 displayText 없음"}, status=400)
+
+        # <코드> ... </코드> 전처리
+        code_pattern = re.compile(r"<코드>(.*?)</코드>", re.DOTALL)
+
+        def replace_code(match):
+            code_text = match.group(1)
+            processed_code = preprocess_code(code_text)
+            return f"<코드>{processed_code}</코드>"
+
+        processed_text = code_pattern.sub(replace_code, text)
+
+        # TTS 생성
+        try:
+            tts_url = text_to_speech(
+                processed_text,
+                user=user,
+                s3_folder="tts/exam_items/"
+            )
+        except Exception as e:
+            return Response({"error": f"TTS 오류: {e}"}, status=500)
+
+        # 응답
+        return Response({
+            "questionNumber": question_number,
+            "itemIndex": item_index,
+            "tts": tts_url
+        }, status=200)
+
