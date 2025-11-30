@@ -7,6 +7,7 @@ import {
   fetchPageSummary,
   fetchPageTTS,
   type PageSummary,
+  fetchSummaryTTS,
 } from "@apis/lecture/lecture.api";
 import { fetchPageReview, type PageReview } from "@apis/lecture/review.api";
 import { formatOcr } from "@shared/formatOcr";
@@ -114,6 +115,11 @@ export default function PostClass() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [review, setReview] = useState<PageReview | null>(null);
 
+  const [summaryTts, setSummaryTts] = useState<{
+    female?: string;
+    male?: string;
+  } | null>(null);
+
   const { fontPct, readOnFocus } = useA11ySettings();
   const stackByFont = fontPct >= 175;
 
@@ -128,7 +134,6 @@ export default function PostClass() {
   const sidePaneRef = useRef<HTMLDivElement | null>(null);
 
   const ocrAudioRef = useRef<HTMLAudioElement | null>(null);
-
   const sumAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const cleanOcr = useMemo(() => formatOcr(docPage?.ocr ?? ""), [docPage?.ocr]);
@@ -148,6 +153,7 @@ export default function PostClass() {
     announce,
   });
 
+  /* ---------------- 페이지 로드 + 요약/리뷰/요약TTS ---------------- */
   useEffect(() => {
     if (!docId) return;
 
@@ -163,6 +169,7 @@ export default function PostClass() {
         if (!dp) {
           setDocPage(null);
           setSummary(null);
+          setSummaryTts(null);
           setReview(null);
           toast.error("페이지 로드 실패");
           return;
@@ -171,15 +178,42 @@ export default function PostClass() {
         setDocPage(dp);
         setTotalPage(dp.totalPage ?? null);
 
+        // 새 페이지 로드시 항상 요약/TTS 초기화
+        setSummary(null);
+        setSummaryTts(null);
+
         if (dp.pageId) {
           setSummaryLoading(true);
           try {
-            // 1) 요약은 기존처럼 한 번만
-            const sumPromise = fetchPageSummary(dp.pageId);
+            // 1) 요약 불러오기
+            const sumPromise = (async () => {
+              const s = await fetchPageSummary(dp.pageId);
+              if (cancelled) return null;
+              setSummary(s ?? null);
 
-            // 2) 리뷰는 폴링
+              // 1-2) 요약 TTS 생성
+              if (s?.summary) {
+                try {
+                  const { female, male } = await fetchSummaryTTS(
+                    dp.pageId,
+                    s.summary
+                  );
+                  if (!cancelled) {
+                    setSummaryTts({ female, male });
+                  }
+                } catch (err) {
+                  console.error("[PostClass] 요약 TTS 생성 실패:", err);
+                  if (!cancelled) {
+                    setSummaryTts(null);
+                    announce("요약 음성을 불러오지 못했습니다.");
+                  }
+                }
+              }
+              return s;
+            })();
+
             const reviewPromise = (async (): Promise<PageReview | null> => {
-              const MAX_ATTEMPTS = 20; // 3s × 20 = 최대 60초
+              const MAX_ATTEMPTS = 20;
               let attempt = 0;
 
               while (!cancelled && attempt < MAX_ATTEMPTS) {
@@ -192,13 +226,12 @@ export default function PostClass() {
                   (res.bookmarks && res.bookmarks.length > 0) ||
                   (res.boards && res.boards.length > 0);
 
-                const isDone = res.status === "done" || hasData; // status 없으면 데이터 존재 여부로 done 판단
+                const isDone = res.status === "done" || hasData;
 
                 if (isDone) {
                   return res;
                 }
 
-                // 아직 처리 중인 경우
                 await new Promise((r) => setTimeout(r, 3000));
                 attempt += 1;
               }
@@ -207,9 +240,8 @@ export default function PostClass() {
               return null;
             })();
 
-            const [sum, rev] = await Promise.all([sumPromise, reviewPromise]);
+            const [, rev] = await Promise.all([sumPromise, reviewPromise]);
             if (!cancelled) {
-              setSummary(sum ?? null);
               setReview(rev ?? null);
             }
           } finally {
@@ -217,6 +249,7 @@ export default function PostClass() {
           }
         } else {
           setSummary(null);
+          setSummaryTts(null);
           setReview(null);
           setSummaryLoading(false);
         }
@@ -235,6 +268,7 @@ export default function PostClass() {
           toast.error("데이터 로드 중 오류가 발생했습니다.");
           setDocPage(null);
           setSummary(null);
+          setSummaryTts(null);
           setReview(null);
           console.log(e);
         }
@@ -318,13 +352,12 @@ export default function PostClass() {
     announce,
   ]);
 
+  /** 요약 TTS URL 선택 (여/남성 음성) */
   const summaryTtsUrl =
-    summary?.summary_tts && typeof summary.summary_tts === "object"
+    summaryTts && (summaryTts.female || summaryTts.male)
       ? soundVoice === "여성"
-        ? summary.summary_tts.female ?? null
-        : summary.summary_tts.male ?? null
-      : typeof summary?.summary_tts === "string"
-      ? summary.summary_tts
+        ? summaryTts.female ?? summaryTts.male ?? null
+        : summaryTts.male ?? summaryTts.female ?? null
       : null;
 
   const clampPage = (n: number) =>

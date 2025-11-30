@@ -24,6 +24,8 @@ type Props = {
   };
   memo: { docId: number; pageId?: number | null };
   board: { docId: number; pageId?: number | null; page: number };
+  onSummaryTtsPlay?: () => void;
+  summaryTtsLoading?: boolean;
 };
 
 export default function RightTabsPost({
@@ -33,6 +35,8 @@ export default function RightTabsPost({
   memo,
   board,
   summary,
+  onSummaryTtsPlay,
+  summaryTtsLoading,
 }: Props) {
   const [tab, setTab] = useState<TabKey>("class");
   const baseId = useId();
@@ -120,10 +124,12 @@ export default function RightTabsPost({
           summaryText={summary.text ?? null}
           summaryTtsUrl={summary.ttsUrl ?? null}
           sumAudioRef={summary.sumAudioRef}
-          // sidePaneRef={summary.sidePaneRef}
+          sidePaneRef={summary.sidePaneRef}
           stack={stack}
           panelHeight={PANEL_FIXED_H_LIVE}
-          loading={summary.loading}
+          loading={summary.loading || summaryTtsLoading}
+          autoPlayOnFocus
+          onPlaySummaryTts={onSummaryTtsPlay}
         />
       </Panel>
     </Aside>

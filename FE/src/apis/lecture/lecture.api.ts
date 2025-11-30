@@ -73,12 +73,7 @@ export async function fetchDocPage(docId: number, page: number) {
 }
 
 export type PageSummary = {
-  page_id: number;
   summary: string;
-  summary_tts?: {
-    female?: string;
-    male?: string;
-  } | null;
 };
 
 export async function fetchPageSummary(pageId: number) {
@@ -184,6 +179,76 @@ export async function fetchPageTTS(
     ) {
       await new Promise((r) => setTimeout(r, 800));
       return fetchPageTTS(pageId, ocrText, retry - 1);
+    }
+
+    throw err;
+  }
+}
+
+// ---------- ✅ 새로 추가: 요약 TTS API ----------
+
+export type SummaryTTSRequestBody = {
+  summary_text: string;
+};
+
+export type SummaryTTSResponse = {
+  summary_tts?: {
+    female?: string;
+    male?: string;
+  } | null;
+};
+
+export type SummaryTTSResult = {
+  female: string;
+  male: string;
+};
+
+export async function fetchSummaryTTS(
+  pageId: number,
+  summaryText: string,
+  retry = 3
+): Promise<SummaryTTSResult> {
+  try {
+    const body: SummaryTTSRequestBody = { summary_text: summaryText };
+
+    const data = await postResponse<SummaryTTSRequestBody, SummaryTTSResponse>(
+      `/api/page/${pageId}/summary/tts/`,
+      body
+    );
+
+    if (!data || !data.summary_tts) {
+      if (retry > 0) {
+        await new Promise((r) => setTimeout(r, 800));
+        return fetchSummaryTTS(pageId, summaryText, retry - 1);
+      }
+      throw new Error("요약 TTS 응답이 비어 있습니다.");
+    }
+
+    const female = data.summary_tts.female ?? "";
+    const male = data.summary_tts.male ?? "";
+
+    if (!female && !male) {
+      if (retry > 0) {
+        await new Promise((r) => setTimeout(r, 800));
+        return fetchSummaryTTS(pageId, summaryText, retry - 1);
+      }
+      throw new Error("요약 TTS에 유효한 URL이 없습니다.");
+    }
+
+    return {
+      female: female || male,
+      male: male || female,
+    };
+  } catch (err: unknown) {
+    const status = getHttpStatus(err);
+
+    if (
+      status !== null &&
+      retry > 0 &&
+      (status === 404 || status === 409 || status === 500)
+    ) {
+      await new Promise((r) => setTimeout(r, 800));
+      return fetchSummaryTTS(pageId, summaryText, retry - 1);
     }
 
     throw err;

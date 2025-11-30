@@ -8,6 +8,7 @@ import {
   type DocPage,
   type PageSummary,
   fetchPageTTS,
+  fetchSummaryTTS,
 } from "@apis/lecture/lecture.api";
 
 import { formatOcr } from "@shared/formatOcr";
@@ -135,6 +136,11 @@ export default function PreClass() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryRequested, setSummaryRequested] = useState(false);
 
+  const [summaryTts, setSummaryTts] = useState<{
+    female?: string;
+    male?: string;
+  } | null>(null);
+
   /* local TTS */
   const { speak } = useLocalTTS();
 
@@ -180,6 +186,7 @@ export default function PreClass() {
         setSummary(null);
         setSummaryRequested(false);
         setSummaryLoading(false);
+        setSummaryTts(null);
 
         setMode(isAssistant ? "image" : "ocr");
 
@@ -202,6 +209,7 @@ export default function PreClass() {
   }, [docIdNum, page, isAssistant, announce]);
 
   /* 요약 로드 */
+  /* 요약 로드 + 요약 TTS 생성 */
   useEffect(() => {
     if (!docIdNum) return;
     if (!docPage?.pageId) return;
@@ -209,19 +217,41 @@ export default function PreClass() {
 
     let cancelled = false;
 
-    const loadSummary = async () => {
+    const loadSummaryAndTts = async () => {
       try {
         setSummaryLoading(true);
+
+        // 1) 요약 텍스트
         const s = await fetchPageSummary(docPage.pageId);
-        if (!cancelled) setSummary(s);
-      } catch {
-        announce("요약을 불러오지 못했습니다.");
+        if (cancelled) return;
+        setSummary(s);
+
+        // 2) 요약 TTS 생성 요청
+        try {
+          const { female, male } = await fetchSummaryTTS(
+            docPage.pageId,
+            s.summary
+          );
+          if (cancelled) return;
+          setSummaryTts({ female, male });
+        } catch (e) {
+          console.error("[PreClass] 요약 TTS 생성 실패:", e);
+          if (!cancelled) {
+            setSummaryTts(null);
+            announce("요약 음성을 불러오지 못했습니다.");
+          }
+        }
+      } catch (e) {
+        console.error("[PreClass] 요약 불러오기 실패:", e);
+        if (!cancelled) {
+          announce("요약을 불러오지 못했습니다.");
+        }
       } finally {
         if (!cancelled) setSummaryLoading(false);
       }
     };
 
-    loadSummary();
+    loadSummaryAndTts();
 
     return () => {
       cancelled = true;
@@ -343,11 +373,12 @@ export default function PreClass() {
     });
   };
 
-  const summaryTtsUrl = summary?.summary_tts
-    ? soundVoice === "여성"
-      ? summary.summary_tts.female ?? null
-      : summary.summary_tts.male ?? null
-    : null;
+  const summaryTtsUrl =
+    summaryTts && (summaryTts.female || summaryTts.male)
+      ? soundVoice === "여성"
+        ? summaryTts.female ?? summaryTts.male ?? null
+        : summaryTts.male ?? summaryTts.female ?? null
+      : null;
 
   return (
     <Wrap aria-busy={loading}>
