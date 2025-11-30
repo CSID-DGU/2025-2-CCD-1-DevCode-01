@@ -10,6 +10,7 @@ import {
   startExam,
   type ExamResultResponse,
 } from "@apis/exam/exam.api";
+import { fonts } from "@styles/fonts";
 
 type CaptureMode = "camera" | "file";
 
@@ -95,7 +96,10 @@ const Exam = () => {
     <PageContainer>
       {isLoading && (
         <Overlay>
-          <Spinner />
+          <SpinnerWrapper>
+            <Spinner />
+            <p>시험지를 분석하는 중입니다.</p>
+          </SpinnerWrapper>
         </Overlay>
       )}
 
@@ -219,10 +223,19 @@ const Exam = () => {
 
 export default Exam;
 
+const SpinnerWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  ${fonts.bold26}
+  color: var(--c-white);
+`;
+
 const PageContainer = styled.div`
   width: 100%;
   padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
-  background: #f5f5f7;
+  background: var(--c-white);
   display: flex;
   flex-direction: column;
 `;

@@ -1,4 +1,4 @@
-import { getResponse, postResponse } from "@apis/instance";
+import { getResponse, postNoResponse, postResponse } from "@apis/instance";
 
 export type ExamItemKind =
   | "qnum"
@@ -47,4 +47,8 @@ export async function startExam(
     formData
   );
   return res;
+}
+
+export async function endExam(): Promise<boolean> {
+  return await postNoResponse("/exam/end/", null);
 }
