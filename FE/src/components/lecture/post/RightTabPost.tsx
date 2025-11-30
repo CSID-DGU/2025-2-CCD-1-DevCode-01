@@ -20,6 +20,7 @@ type Props = {
     ttsUrl?: string | null;
     sumAudioRef: React.RefObject<HTMLAudioElement | null>;
     sidePaneRef: React.RefObject<HTMLDivElement | null>;
+    loading?: boolean;
   };
   memo: { docId: number; pageId?: number | null };
   board: { docId: number; pageId?: number | null; page: number };
@@ -115,6 +116,7 @@ export default function RightTabsPost({
           sidePaneRef={summary.sidePaneRef}
           stack={stack}
           panelHeight={PANEL_FIXED_H_LIVE}
+          loading={summary.loading}
         />
       </Panel>
     </Aside>
@@ -155,12 +157,29 @@ const Tab = styled.button`
   background: #fff;
   cursor: pointer;
   ${fonts.regular20};
+
   &[aria-selected="true"] {
-    background: var(--c-blue, #2563eb);
-    color: #fff;
-    border-color: var(--c-blue, #2563eb);
+    background: var(--c-blue);
+    color: black;
+    border: 2px solid var(--c-blue);
+  }
+
+  &:focus-visible {
+    outline: none;
+    border: 2px solid var(--c-blue);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:hover:not([aria-selected="true"]) {
+    background: #f5faff;
+    border-color: #d0e2ff;
   }
 `;
+
 const Panel = styled.section`
   display: grid;
   gap: 10px;
