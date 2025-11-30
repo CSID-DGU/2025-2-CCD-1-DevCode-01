@@ -45,12 +45,21 @@ export default function RightTabsPost({
     panel: `${baseId}-panel-${k}`,
   });
 
+  const handleTabClick = (k: TabKey) => {
+    console.log(summary.sidePaneRef.current);
+    setTab(k);
+
+    if (k === "summary") {
+      setTimeout(() => {
+        summary.sidePaneRef.current?.focus();
+      }, 0);
+    }
+  };
+
   return (
     <Aside
       $stack={stack}
       aria-label="수업/메모/판서/요약 패널"
-      ref={summary.sidePaneRef}
-      tabIndex={0}
       data-area="review-pane"
     >
       <Tablist role="tablist" aria-label="우측 기능">
@@ -62,7 +71,7 @@ export default function RightTabsPost({
             aria-selected={tab === k}
             aria-controls={id(k).panel}
             type="button"
-            onClick={() => setTab(k)}
+            onClick={() => handleTabClick(k)}
           >
             {label(k)}
           </Tab>

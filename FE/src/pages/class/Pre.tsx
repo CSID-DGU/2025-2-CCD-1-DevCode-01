@@ -209,7 +209,6 @@ export default function PreClass() {
   }, [docIdNum, page, isAssistant, announce]);
 
   /* 요약 로드 */
-  /* 요약 로드 + 요약 TTS 생성 */
   useEffect(() => {
     if (!docIdNum) return;
     if (!docPage?.pageId) return;
@@ -353,6 +352,60 @@ export default function PreClass() {
     announce,
   ]);
 
+  /* 요약 TTS 재생 */
+  const handlePlaySummaryTts = useCallback(async () => {
+    if (!docPage?.pageId) {
+      toast.error("페이지 정보가 없어 요약 음성을 재생할 수 없습니다.");
+      return;
+    }
+    if (!summary?.summary) {
+      toast.error("요약이 없어 음성을 재생할 수 없습니다.");
+      return;
+    }
+
+    try {
+      if (!summaryTts || (!summaryTts.female && !summaryTts.male)) {
+        setSummaryRequested(true);
+        toast("요약 음성을 준비하는 중입니다...");
+        return;
+      }
+
+      const url =
+        soundVoice === "여성"
+          ? summaryTts.female ?? summaryTts.male ?? null
+          : summaryTts.male ?? summaryTts.female ?? null;
+
+      if (!url) {
+        toast.error("생성된 요약 음성이 없습니다.");
+        return;
+      }
+
+      const audio = sumAudioRef.current;
+      if (!audio) return;
+
+      if (!audio.src || audio.src !== url) {
+        audio.src = url;
+      }
+
+      applyPlaybackRate(audio, soundRate);
+      audio.currentTime = 0;
+      await audio.play();
+
+      announce("요약 음성을 재생합니다.");
+    } catch (e) {
+      console.error(e);
+      toast.error("요약 음성 재생에 실패했습니다.");
+      announce("요약 음성을 불러오지 못했습니다.");
+    }
+  }, [
+    docPage?.pageId,
+    summary?.summary,
+    summaryTts,
+    soundVoice,
+    soundRate,
+    announce,
+  ]);
+
   /* 강의 시작 */
   const onStartClass = () => {
     if (!docIdNum) {
@@ -383,6 +436,7 @@ export default function PreClass() {
   return (
     <Wrap aria-busy={loading}>
       <audio ref={ocrAudioRef} preload="none" />
+      <audio ref={sumAudioRef} preload="none" />
       <SrLive ref={liveRef} aria-live="polite" aria-atomic="true" />
 
       <Container>
@@ -416,6 +470,7 @@ export default function PreClass() {
                 loading: summaryLoading,
               }}
               onSummaryOpen={() => setSummaryRequested(true)}
+              onSummaryTtsPlay={handlePlaySummaryTts}
             />
           )}
         </Grid>

@@ -120,6 +120,8 @@ export default function PostClass() {
     male?: string;
   } | null>(null);
 
+  const [summaryTtsLoading, setSummaryTtsLoading] = useState(false);
+
   const { fontPct, readOnFocus } = useA11ySettings();
   const stackByFont = fontPct >= 175;
 
@@ -171,6 +173,7 @@ export default function PostClass() {
           setSummary(null);
           setSummaryTts(null);
           setReview(null);
+          setSummaryLoading(false);
           toast.error("페이지 로드 실패");
           return;
         }
@@ -178,20 +181,19 @@ export default function PostClass() {
         setDocPage(dp);
         setTotalPage(dp.totalPage ?? null);
 
-        // 새 페이지 로드시 항상 요약/TTS 초기화
         setSummary(null);
         setSummaryTts(null);
+        setSummaryLoading(false);
+        setReview(null);
 
         if (dp.pageId) {
           setSummaryLoading(true);
           try {
-            // 1) 요약 불러오기
             const sumPromise = (async () => {
               const s = await fetchPageSummary(dp.pageId);
               if (cancelled) return null;
               setSummary(s ?? null);
 
-              // 1-2) 요약 TTS 생성
               if (s?.summary) {
                 try {
                   const { female, male } = await fetchSummaryTTS(
@@ -352,7 +354,69 @@ export default function PostClass() {
     announce,
   ]);
 
-  /** 요약 TTS URL 선택 (여/남성 음성) */
+  const handlePlaySummaryTts = useCallback(async () => {
+    if (!docPage?.pageId) {
+      toast.error("페이지 정보가 없어 요약 음성을 재생할 수 없습니다.");
+      return;
+    }
+    if (!summary?.summary) {
+      toast.error("요약 텍스트가 없습니다.");
+      return;
+    }
+    if (!sumAudioRef.current) {
+      console.warn("[PostClass] sumAudioRef.current가 없습니다.");
+      return;
+    }
+
+    try {
+      setSummaryTtsLoading(true);
+      let female = summaryTts?.female;
+      let male = summaryTts?.male;
+
+      if (!female && !male) {
+        const tts = await fetchSummaryTTS(docPage.pageId, summary.summary);
+        female = tts.female;
+        male = tts.male;
+        setSummaryTts(tts);
+      }
+
+      const url =
+        soundVoice === "여성" ? female || male || null : male || female || null;
+
+      if (!url) {
+        toast.error("생성된 요약 음성이 없습니다.");
+        return;
+      }
+
+      const audio = sumAudioRef.current;
+      if (!audio) return;
+
+      if (audio.src !== url) {
+        audio.src = url;
+      }
+
+      applyPlaybackRate(audio, soundRate);
+      audio.currentTime = 0;
+
+      await audio.play();
+      announce("요약 음성을 재생합니다.");
+    } catch (e) {
+      console.error("[PostClass] 요약 TTS 재생 실패:", e);
+      toast.error("요약 음성 재생에 실패했습니다.");
+      announce("요약 음성을 불러오지 못했습니다.");
+    } finally {
+      setSummaryTtsLoading(false);
+    }
+  }, [
+    docPage?.pageId,
+    summary?.summary,
+    summaryTts?.female,
+    summaryTts?.male,
+    soundVoice,
+    soundRate,
+    announce,
+  ]);
+
   const summaryTtsUrl =
     summaryTts && (summaryTts.female || summaryTts.male)
       ? soundVoice === "여성"
@@ -425,6 +489,8 @@ export default function PostClass() {
               page,
               pageId: docPage?.pageId ?? null,
             }}
+            onSummaryTtsPlay={handlePlaySummaryTts}
+            summaryTtsLoading={summaryTtsLoading}
           />
         </Grid>
       </Container>

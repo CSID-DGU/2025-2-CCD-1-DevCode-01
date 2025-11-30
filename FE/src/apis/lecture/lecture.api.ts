@@ -212,7 +212,7 @@ export async function fetchSummaryTTS(
     const body: SummaryTTSRequestBody = { summary_text: summaryText };
 
     const data = await postResponse<SummaryTTSRequestBody, SummaryTTSResponse>(
-      `/api/page/${pageId}/summary/tts/`,
+      `/page/${pageId}/summary/tts/`,
       body
     );
 
