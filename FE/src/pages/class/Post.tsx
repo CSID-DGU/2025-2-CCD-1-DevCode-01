@@ -26,6 +26,7 @@ import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 
 import BottomToolbar from "src/components/lecture/pre/BottomToolBar";
 import RightTabsPost from "src/components/lecture/post/RightTabPost";
+import { useFocusTTS } from "src/hooks/useFocusTTS";
 
 type RouteParams = { courseId?: string; docId?: string };
 type NavState = { navTitle?: string; docId?: number };
@@ -113,7 +114,7 @@ export default function PostClass() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [review, setReview] = useState<PageReview | null>(null);
 
-  const { fontPct } = useA11ySettings();
+  const { fontPct, readOnFocus } = useA11ySettings();
   const stackByFont = fontPct >= 175;
 
   const [mode, setMode] = useState<"ocr" | "image">(
@@ -135,6 +136,17 @@ export default function PostClass() {
   const { buildTtsText } = useTtsTextBuilder();
   const { soundRate, soundVoice } = useSoundOptions();
   const [pageTtsLoading, setPageTtsLoading] = useState(false);
+
+  useFocusTTS({
+    enabled: readOnFocus,
+    mode,
+    page,
+    docContainerRef: docBodyRef,
+    sumContainerRef: sidePaneRef,
+    ocrAudioRef,
+    sumAudioRef,
+    announce,
+  });
 
   useEffect(() => {
     if (!docId) return;

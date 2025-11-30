@@ -5,7 +5,7 @@ export type PageStatus = "processing" | "done";
 
 export type PageTTSResponse = {
   status?: "processing" | "done";
-  tts?:
+  page_tts?:
     | string
     | {
         female?: string;
@@ -133,14 +133,14 @@ export async function fetchPageTTS(
     let female = "";
     let male = "";
 
-    if (typeof data.tts === "string") {
-      female = data.tts;
-      male = data.tts;
+    if (typeof data.page_tts === "string") {
+      female = data.page_tts;
+      male = data.page_tts;
     }
     // case B: tts가 객체 { female, male }
-    else if (data.tts && typeof data.tts === "object") {
-      female = data.tts.female ?? "";
-      male = data.tts.male ?? "";
+    else if (data.page_tts && typeof data.page_tts === "object") {
+      female = data.page_tts.female ?? "";
+      male = data.page_tts.male ?? "";
     }
     // top-level female/male 필드로 오는 경우
     else {

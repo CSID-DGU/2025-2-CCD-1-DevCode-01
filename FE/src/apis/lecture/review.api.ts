@@ -1,5 +1,3 @@
-// import { postResponse } from "@apis/instance";
-
 import { getResponse } from "@apis/instance";
 
 export type TtsGenderSet = {
@@ -8,7 +6,6 @@ export type TtsGenderSet = {
 } | null;
 
 export type PageReview = {
-  // 선택: 백엔드가 status를 넣어줄 수도 있으니 여유롭게 열어둠
   status?: "processing" | "done";
 
   note?: {
@@ -23,7 +20,7 @@ export type PageReview = {
     stt_tts?: TtsGenderSet;
     end_time?: string;
     duration?: string;
-    status?: string; // "done" 등
+    status?: string;
   }>;
 
   bookmarks?: Array<{
@@ -42,11 +39,7 @@ export type PageReview = {
 export async function fetchPageReview(
   pageId: number
 ): Promise<PageReview | null> {
-  // const raw = await postResponse<null, PageReview>(
-  const raw = await getResponse<PageReview>(
-    `/page/${pageId}/review/`
-    // null
-  );
+  const raw = await getResponse<PageReview>(`/page/${pageId}/review/`);
   if (!raw) return null;
 
   const base = import.meta.env.VITE_BASE_URL?.replace(/\/$/, "") ?? "";

@@ -67,10 +67,10 @@ export default function SummaryPane({
       $height={panelHeight}
       role="complementary"
       aria-label="요약"
-      tabIndex={0}
       data-area="summary-pane"
       aria-busy={!!loading}
       onFocus={handlePaneFocus}
+      tabIndex={0}
     >
       <Header>
         <Title>요약</Title>
@@ -122,9 +122,7 @@ const Pane = styled.aside<{ $stack: boolean; $height?: string }>`
   }
 
   &:focus-visible {
-    outline: 2px solid #2563eb;
-    outline-offset: 10px;
-    border-radius: 10px;
+    border: 2px solid #2563eb;
   }
 `;
 
@@ -143,6 +141,11 @@ const Body = styled.div`
   overflow: auto;
   padding: 12px 16px 16px;
   overscroll-behavior: contain;
+
+  &:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 10px;
+  }
 `;
 
 const EmptyParagraph = styled.p`

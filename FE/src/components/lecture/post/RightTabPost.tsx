@@ -42,7 +42,13 @@ export default function RightTabsPost({
   });
 
   return (
-    <Aside $stack={stack} aria-label="수업/메모/판서/요약 패널">
+    <Aside
+      $stack={stack}
+      aria-label="수업/메모/판서/요약 패널"
+      ref={summary.sidePaneRef}
+      tabIndex={0}
+      data-area="review-pane"
+    >
       <Tablist role="tablist" aria-label="우측 기능">
         {(["class", "memo", "board", "summary"] as TabKey[]).map((k) => (
           <Tab
@@ -65,6 +71,7 @@ export default function RightTabsPost({
         role="tabpanel"
         aria-labelledby={id("class").tab}
         hidden={tab !== "class"}
+        tabIndex={0}
       >
         <ClassPane review={review} isActive={tab === "class"} />
       </Panel>
@@ -113,7 +120,7 @@ export default function RightTabsPost({
           summaryText={summary.text ?? null}
           summaryTtsUrl={summary.ttsUrl ?? null}
           sumAudioRef={summary.sumAudioRef}
-          sidePaneRef={summary.sidePaneRef}
+          // sidePaneRef={summary.sidePaneRef}
           stack={stack}
           panelHeight={PANEL_FIXED_H_LIVE}
           loading={summary.loading}
@@ -187,7 +194,14 @@ const Panel = styled.section`
     display: none !important;
   }
   overflow: scroll;
+
+  &:focus-visible {
+    outline: none;
+    border: 2px solid var(--c-blue);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4);
+  }
 `;
+
 const Empty = styled.p`
   margin: 0;
   color: var(--c-gray9, #666);
