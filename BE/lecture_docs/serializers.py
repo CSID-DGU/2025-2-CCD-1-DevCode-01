@@ -37,6 +37,7 @@ class PageSerializer(serializers.ModelSerializer):
     pagId = serializers.IntegerField(source="id")
     totalPage = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
+    timestamp = serializers.SerializerMethodField()
 
     class Meta:
         model = Page
@@ -47,7 +48,7 @@ class PageSerializer(serializers.ModelSerializer):
             "pagId",
             "image",
             "ocr",
-            "status",
+            "status"
         ]
 
     def get_totalPage(self, obj):
@@ -55,6 +56,7 @@ class PageSerializer(serializers.ModelSerializer):
 
     def get_status(self, obj):
         return "done" if obj.ocr else "processing"
+
 
 
 class BoardCreateSerializer(serializers.Serializer):
