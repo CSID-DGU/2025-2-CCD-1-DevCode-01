@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type React from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import Spinner from "src/components/common/Spinner";
@@ -13,6 +14,7 @@ import {
 import { DUMMY_EXAM_RESULT } from "@apis/exam/exam.dummy";
 import { useTtsTextBuilder } from "src/hooks/useTtsTextBuilder";
 import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
+import { useLocalTTS } from "src/hooks/useLocalTTS";
 
 import * as S from "./ExamLive.styles";
 
@@ -33,184 +35,139 @@ const ExamTake = () => {
   const [viewMode, setViewMode] = useState<"detail" | "page">("detail");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
+  // 서버 TTS (mp3) 재생 옵션
   const { soundRate, soundVoice } = useSoundOptions();
+
+  // 로컬 Web Speech TTS (안내용 / 전체 읽기용)
+  const { speak, stop } = useLocalTTS();
+
+  // 서버 TTS 재생 오디오
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // item별 TTS 캐시
   const [ttsMap, setTtsMap] = useState<
-    Record<string, { female: string; male: string }>
+    Record<string, { female?: string; male?: string }>
   >({});
   const [ttsLoadingKey, setTtsLoadingKey] = useState<string | null>(null);
   const [playingKey, setPlayingKey] = useState<string | null>(null);
 
+  // 문제 전체 듣기 상태
   const [isWholeReading, setIsWholeReading] = useState(false);
   const isWholeReadingRef = useRef(false);
-  const wholeQuestionRef = useRef<ExamQuestion | null>(null);
-
-  useEffect(() => {
-    isWholeReadingRef.current = isWholeReading;
-  }, [isWholeReading]);
 
   const makeKey = (qNo: number, idx: number) => `${qNo}-${idx}`;
 
+  const announce = (text: string) => {
+    if (!text) return;
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+      } catch {
+        // ignore
+      }
+      setPlayingKey(null);
+    }
+    stop();
+    speak(text);
+  };
+
   useEffect(() => {
     return () => {
+      stop();
       if (audioRef.current) {
-        audioRef.current.pause();
-      }
-    };
-  }, []);
-
-  const handlePlayItemTTS = useCallback(
-    async (questionNumber: number, itemIndex: number) => {
-      const key = makeKey(questionNumber, itemIndex);
-
-      if (
-        !isWholeReadingRef.current &&
-        playingKey === key &&
-        audioRef.current
-      ) {
-        if (!audioRef.current.paused) {
+        try {
           audioRef.current.pause();
-          setPlayingKey(null);
-          return;
+        } catch {
+          // ignore
         }
       }
+    };
+  }, [stop]);
 
-      let tts = ttsMap[key];
+  /* ---------- 1) 문제별 item TTS (서버 mp3 재생) ---------- */
+  const handlePlayItemTTS = async (
+    questionNumber: number,
+    itemIndex: number
+  ) => {
+    const key = makeKey(questionNumber, itemIndex);
 
-      if (!tts) {
-        try {
-          setTtsLoadingKey(key);
-          const res = await fetchExamItemTTS(questionNumber, itemIndex);
-          setTtsLoadingKey(null);
+    // 전체 듣기 중이면 중단 상태로 전환
+    if (isWholeReadingRef.current) {
+      isWholeReadingRef.current = false;
+      setIsWholeReading(false);
+      stop();
+    }
 
-          if (!res || !res.tts) {
-            console.error("[ExamTake] TTS 응답 없음:", res);
-            alert("음성을 불러오지 못했습니다.");
-            return;
-          }
+    // 안내용 로컬 TTS 끄기
+    stop();
 
-          tts = res.tts;
-          setTtsMap((prev) => ({ ...prev, [key]: res.tts }));
-        } catch (e) {
-          console.error("[ExamTake] TTS 요청 실패:", e);
-          setTtsLoadingKey(null);
+    if (playingKey === key && audioRef.current) {
+      if (!audioRef.current.paused) {
+        audioRef.current.pause();
+        setPlayingKey(null);
+        return;
+      }
+    }
+
+    // 1) 캐시 확인
+    let tts = ttsMap[key];
+
+    if (!tts) {
+      try {
+        setTtsLoadingKey(key);
+        const res = await fetchExamItemTTS(questionNumber, itemIndex);
+        setTtsLoadingKey(null);
+
+        if (!res || !res.tts) {
+          console.error("[ExamTake] TTS 응답 없음:", res);
           alert("음성을 불러오지 못했습니다.");
           return;
         }
-      }
 
-      const url =
-        soundVoice === "남성" ? tts.male ?? tts.female : tts.female ?? tts.male;
-      if (!url) {
-        alert("재생할 음성 파일이 없습니다.");
-        return;
-      }
-
-      if (!audioRef.current) {
-        audioRef.current = new Audio();
-      }
-      const audio = audioRef.current;
-
-      try {
-        audio.pause();
-        audio.src = url;
-        applyPlaybackRate(audio, soundRate);
-        await audio.play();
-        setPlayingKey(key);
+        tts = res.tts;
+        setTtsMap((prev) => ({
+          ...prev,
+          [key]: res.tts,
+        }));
       } catch (e) {
-        console.error("[ExamTake] 오디오 재생 실패:", e);
-        alert("음성을 재생할 수 없습니다.");
-      }
-    },
-    [soundRate, soundVoice, ttsMap, playingKey]
-  );
-
-  const playWholeFrom = useCallback(
-    async (startIndex: number) => {
-      const question = wholeQuestionRef.current;
-      if (!question) return;
-
-      const items = question.items;
-      if (startIndex >= items.length) {
-        setIsWholeReading(false);
+        console.error("[ExamTake] TTS 요청 실패:", e);
+        setTtsLoadingKey(null);
+        alert("음성을 불러오지 못했습니다.");
         return;
       }
+    }
 
-      await handlePlayItemTTS(question.questionNumber, startIndex);
+    const url =
+      soundVoice === "남성" ? tts.male ?? tts.female : tts.female ?? tts.male;
 
-      if (audioRef.current) {
-        audioRef.current.onended = () => {
-          if (!isWholeReadingRef.current) return;
-          playWholeFrom(startIndex + 1);
-        };
-      }
-    },
-    [handlePlayItemTTS]
-  );
-
-  useEffect(() => {
-    if (state?.exam) return;
-
-    const load = async () => {
-      setLoading(true);
-      const data = await fetchExamResult();
-
-      if (!data || data.questions.length === 0) {
-        console.warn(
-          "응답이 없거나 questions가 비어 있어서 더미 데이터를 사용합니다."
-        );
-        setExam(DUMMY_EXAM_RESULT);
-        setLoading(false);
-        return;
-      }
-
-      setExam(data);
-      setLoading(false);
-    };
-
-    load();
-  }, [state]);
-
-  const questions: ExamQuestion[] = useMemo(() => {
-    if (!exam) return [];
-    return [...exam.questions].sort(
-      (a, b) => a.questionNumber - b.questionNumber
-    );
-  }, [exam]);
-
-  const currentQuestion: ExamQuestion | null = useMemo(
-    () => questions[currentIndex] ?? null,
-    [questions, currentIndex]
-  );
-
-  const endTimeText = useMemo(() => {
-    if (!exam?.endTime) return null;
-    const d = new Date(exam.endTime);
-    if (Number.isNaN(d.getTime())) return exam.endTime;
-    return d.toLocaleTimeString("ko-KR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }, [exam]);
-
-  const handlePlayWholeQuestion = useCallback(() => {
-    if (!questions.length) return;
-    const question = questions[currentIndex];
-    if (!question) return;
-
-    if (isWholeReadingRef.current) {
-      setIsWholeReading(false);
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
+    if (!url) {
+      alert("재생할 음성 파일이 없습니다.");
       return;
     }
 
-    wholeQuestionRef.current = question;
-    setIsWholeReading(true);
-    playWholeFrom(0);
-  }, [questions, currentIndex, playWholeFrom]);
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+    }
 
+    const audio = audioRef.current;
+
+    try {
+      audio.pause();
+      audio.src = url;
+      applyPlaybackRate(audio, soundRate);
+      await audio.play();
+      setPlayingKey(key);
+
+      audio.onended = () => {
+        setPlayingKey((prev) => (prev === key ? null : prev));
+      };
+    } catch (e) {
+      console.error("[ExamTake] 오디오 재생 실패:", e);
+      alert("음성을 재생할 수 없습니다.");
+    }
+  };
+
+  /* ---------- 2) 최초 진입 시 /exam/result/ 조회 ---------- */
   useEffect(() => {
     if (state?.exam) {
       return;
@@ -233,28 +190,82 @@ const ExamTake = () => {
       setLoading(false);
     };
 
-    load();
+    void load();
   }, [state]);
+
+  /* ---------- 3) 문제 정렬 / 현재 문제 / 종료 시각 ---------- */
+  const questions: ExamQuestion[] = useMemo(() => {
+    if (!exam) return [];
+    return [...exam.questions].sort(
+      (a, b) => a.questionNumber - b.questionNumber
+    );
+  }, [exam]);
+
+  const currentQuestion: ExamQuestion | null = questions[currentIndex] ?? null;
+
+  const endTimeText = useMemo(() => {
+    if (!exam?.endTime) return null;
+    const d = new Date(exam.endTime);
+    if (Number.isNaN(d.getTime())) return exam.endTime;
+    return d.toLocaleTimeString("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }, [exam]);
+
+  const isFirst = currentIndex === 0;
+  const isLast = questions.length > 0 && currentIndex === questions.length - 1;
+
+  /* ---------- 4) 네비게이션/화면 상태 핸들러 ---------- */
 
   const handleClickThumbnail = (index: number) => {
     setCurrentIndex(index);
     setViewMode("detail");
+    isWholeReadingRef.current = false;
     setIsWholeReading(false);
-    if (audioRef.current) audioRef.current.pause();
+    stop();
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+      } catch {
+        // ignore
+      }
+      setPlayingKey(null);
+    }
   };
 
   const handlePrev = () => {
+    if (isFirst) return;
     setCurrentIndex((prev) => Math.max(0, prev - 1));
     setViewMode("detail");
+    isWholeReadingRef.current = false;
     setIsWholeReading(false);
-    if (audioRef.current) audioRef.current.pause();
+    stop();
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+      } catch {
+        // ignore
+      }
+      setPlayingKey(null);
+    }
   };
 
   const handleNext = () => {
+    if (isLast) return;
     setCurrentIndex((prev) => Math.min(questions.length - 1, prev + 1));
     setViewMode("detail");
+    isWholeReadingRef.current = false;
     setIsWholeReading(false);
-    if (audioRef.current) audioRef.current.pause();
+    stop();
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+      } catch {
+        // ignore
+      }
+      setPlayingKey(null);
+    }
   };
 
   const handleToggleViewMode = () => {
@@ -263,6 +274,20 @@ const ExamTake = () => {
 
   const handleEndExam = async () => {
     setLoading(true);
+
+    // 모든 TTS 정리
+    isWholeReadingRef.current = false;
+    setIsWholeReading(false);
+    stop();
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+      } catch {
+        // ignore
+      }
+      setPlayingKey(null);
+    }
+
     const ok = await endExam();
     setLoading(false);
 
@@ -271,13 +296,66 @@ const ExamTake = () => {
       return;
     }
 
-    setIsWholeReading(false);
-    if (audioRef.current) audioRef.current.pause();
     navigate("/exam", { replace: true });
   };
 
-  const isFirst = currentIndex === 0;
-  const isLast = questions.length > 0 && currentIndex === questions.length - 1;
+  /* ---------- 5) 문제 전체 듣기 (로컬 TTS로 한 번에 읽어주기) ---------- */
+
+  const { buildTtsText } = useTtsTextBuilder();
+
+  const handlePlayWholeQuestion = async () => {
+    if (!currentQuestion || !exam) return;
+
+    if (isWholeReadingRef.current) {
+      isWholeReadingRef.current = false;
+      setIsWholeReading(false);
+      stop();
+      return;
+    }
+
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+      } catch {
+        // ignore
+      }
+      setPlayingKey(null);
+    }
+
+    isWholeReadingRef.current = true;
+    setIsWholeReading(true);
+
+    try {
+      const parts: string[] = [];
+
+      for (const item of currentQuestion.items) {
+        if (!item.displayText) continue;
+
+        if (item.kind === "chart" || item.kind === "table") {
+          parts.push(item.displayText);
+        } else {
+          // text / code / qnum → 수식 포함 텍스트 전처리
+          try {
+            const processed = await buildTtsText(item.displayText);
+            parts.push(processed);
+          } catch {
+            parts.push(item.displayText);
+          }
+        }
+      }
+
+      const fullText = parts.join("\n\n");
+
+      if (!isWholeReadingRef.current) return;
+
+      stop();
+      speak(fullText);
+    } finally {
+      //igrnore
+    }
+  };
+
+  /* ---------- 6) 로딩/빈 상태 처리 ---------- */
 
   if (loading && !exam) {
     return (
@@ -309,6 +387,7 @@ const ExamTake = () => {
         </S.ToolbarLeft>
 
         <S.ToolbarRight>
+          {/* 보기 모드 토글 */}
           <S.ToolbarButton
             type="button"
             onClick={handleToggleViewMode}
@@ -318,33 +397,59 @@ const ExamTake = () => {
                 ? "현재 텍스트 모드입니다. 시험지 전체 페이지 보기로 전환"
                 : "현재 시험지 전체 페이지 모드입니다. 텍스트로 보기로 전환"
             }
+            onFocus={() => {
+              announce(
+                viewMode === "detail"
+                  ? "시험지 전체 페이지 보기 버튼입니다. 현재는 텍스트 모드입니다."
+                  : "텍스트로 보기 버튼입니다. 현재는 시험지 전체 페이지 모드입니다."
+              );
+            }}
           >
             {viewMode === "detail"
               ? "시험지 전체 페이지 보기"
               : "텍스트로 보기"}
           </S.ToolbarButton>
 
+          {/* 현재 문제 전체 듣기 */}
           <S.ToolbarButton
             type="button"
             onClick={handlePlayWholeQuestion}
             aria-pressed={isWholeReading}
             aria-label={
               isWholeReading
-                ? "현재 문제 전체 듣기 중지"
+                ? "현재 문제 전체 듣기 정지"
                 : "현재 문제의 모든 내용을 순서대로 듣기"
             }
+            onFocus={() => {
+              announce(
+                isWholeReading
+                  ? "문제 전체 듣기 정지 버튼입니다."
+                  : "문제 전체 듣기 버튼입니다. 누르면 이 문제의 모든 내용을 순서대로 읽어줍니다."
+              );
+            }}
           >
             {isWholeReading ? "전체 듣기 정지" : "문제 전체 듣기"}
           </S.ToolbarButton>
 
-          <S.EndButton type="button" onClick={handleEndExam}>
+          {/* 시험 종료 */}
+          <S.EndButton
+            type="button"
+            onClick={handleEndExam}
+            aria-label="시험 종료 후 시험 시작 화면으로 이동"
+            onFocus={() => {
+              announce(
+                "시험 종료 버튼입니다. 누르면 시험이 완전히 종료됩니다."
+              );
+            }}
+          >
             시험 종료
           </S.EndButton>
         </S.ToolbarRight>
       </S.Toolbar>
 
+      {/* 메인 레이아웃: 썸네일 + 문제 영역 */}
       <S.MainLayout>
-        {/* 썸네일 */}
+        {/* 썸네일 영역 */}
         <S.ThumbnailPane>
           <S.ThumbnailTitle>문제 목록</S.ThumbnailTitle>
           <S.ThumbnailList>
@@ -354,16 +459,21 @@ const ExamTake = () => {
                 <S.ThumbnailItem
                   key={q.questionNumber}
                   $active={isActive}
-                  onClick={() => handleClickThumbnail(idx)}
                   tabIndex={0}
                   role="button"
                   aria-pressed={isActive}
                   aria-label={`문제 ${q.questionNumber}로 이동`}
-                  onKeyDown={(e) => {
+                  onClick={() => handleClickThumbnail(idx)}
+                  onKeyDown={(e: React.KeyboardEvent<HTMLLIElement>): void => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       handleClickThumbnail(idx);
                     }
+                  }}
+                  onFocus={() => {
+                    announce(
+                      `문제 ${q.questionNumber}로 이동 버튼입니다. 엔터 키를 누르면 이 문제로 이동합니다.`
+                    );
                   }}
                 >
                   <S.ThumbImage
@@ -379,29 +489,45 @@ const ExamTake = () => {
           </S.ThumbnailList>
         </S.ThumbnailPane>
 
-        {/* 문제 내용 */}
+        {/* 문제 내용 영역 */}
         <S.QuestionPane>
           <S.QuestionHeader>
             <S.NavButton
               type="button"
               onClick={handlePrev}
               disabled={isFirst}
-              aria-label="이전 문제"
+              aria-label="이전 문제로 이동"
+              onFocus={() => {
+                if (isFirst) {
+                  announce(
+                    "이전 문제로 이동 버튼입니다. 첫 번째 문제라 비활성화되어 있습니다."
+                  );
+                } else {
+                  announce("이전 문제로 이동 버튼입니다.");
+                }
+              }}
             >
               ← 이전
             </S.NavButton>
 
             <S.QuestionIndicator>
-              {questions.length > 0
-                ? `${currentIndex + 1} / ${questions.length}`
-                : "문제 없음"}
+              {currentIndex + 1} / {questions.length}
             </S.QuestionIndicator>
 
             <S.NavButton
               type="button"
               onClick={handleNext}
               disabled={isLast}
-              aria-label="다음 문제"
+              aria-label="다음 문제로 이동"
+              onFocus={() => {
+                if (isLast) {
+                  announce(
+                    "다음 문제로 이동 버튼입니다. 마지막 문제라 비활성화되어 있습니다."
+                  );
+                } else {
+                  announce("다음 문제로 이동 버튼입니다.");
+                }
+              }}
             >
               다음 →
             </S.NavButton>
@@ -420,11 +546,13 @@ const ExamTake = () => {
                 />
               </S.QuestionImageWrapper>
             ) : (
+              // 상세 텍스트 모드
               <S.ItemsWrapper>
                 {currentQuestion.items.map((item, idx) => {
                   const key = makeKey(currentQuestion.questionNumber, idx);
                   const isLoading = ttsLoadingKey === key;
-                  const isPlaying = playingKey === key;
+                  const isPlaying =
+                    playingKey === key && !audioRef.current?.paused;
 
                   return (
                     <S.ItemBlock key={idx} $kind={item.kind}>
@@ -433,6 +561,20 @@ const ExamTake = () => {
                           <S.ItemImageButton
                             type="button"
                             onClick={() => setPreviewImage(item.imagePath)}
+                            aria-label={`문제 ${
+                              currentQuestion.questionNumber
+                            }의 ${
+                              item.kind === "chart" ? "차트" : "표"
+                            } 이미지 확대해서 보기`}
+                            onFocus={() => {
+                              announce(
+                                `문제 ${currentQuestion.questionNumber}의 ${
+                                  idx + 1
+                                }번째 요소, ${
+                                  item.kind === "chart" ? "차트" : "표"
+                                } 이미지 버튼입니다. 엔터 키를 누르면 확대해서 볼 수 있습니다.`
+                              );
+                            }}
                           >
                             <S.ItemImage
                               src={item.imagePath}
@@ -449,34 +591,53 @@ const ExamTake = () => {
                         <ItemTextContent item={item} />
                       )}
 
-                      <S.TtsButtonContainer>
-                        <S.TtsButton
-                          type="button"
-                          onClick={() => {
-                            if (isWholeReadingRef.current) return;
-                            handlePlayItemTTS(
-                              currentQuestion.questionNumber,
-                              idx
-                            );
-                          }}
-                          disabled={isLoading}
-                          aria-label={
-                            isLoading
-                              ? `문제 ${currentQuestion.questionNumber}의 ${
-                                  idx + 1
-                                }번 요소, 음성 불러오는 중`
-                              : `문제 ${currentQuestion.questionNumber}의 ${
-                                  idx + 1
-                                }번 요소 듣기 버튼`
-                          }
-                        >
-                          {isLoading
-                            ? "불러오는 중..."
+                      <S.TtsButton
+                        type="button"
+                        onClick={() =>
+                          handlePlayItemTTS(currentQuestion.questionNumber, idx)
+                        }
+                        disabled={isLoading}
+                        aria-label={
+                          isLoading
+                            ? `문제 ${currentQuestion.questionNumber}의 ${
+                                idx + 1
+                              }번째 요소, 음성 불러오는 중`
                             : isPlaying
-                            ? "정지"
-                            : "듣기"}
-                        </S.TtsButton>
-                      </S.TtsButtonContainer>
+                            ? `문제 ${currentQuestion.questionNumber}의 ${
+                                idx + 1
+                              }번째 요소, 재생 중. 정지하려면 엔터 키를 누르세요.`
+                            : `문제 ${currentQuestion.questionNumber}의 ${
+                                idx + 1
+                              }번째 요소 듣기 버튼`
+                        }
+                        onFocus={() => {
+                          if (isLoading) {
+                            announce(
+                              `문제 ${currentQuestion.questionNumber}의 ${
+                                idx + 1
+                              }번째 요소 듣기 버튼입니다. 음성을 불러오는 중입니다.`
+                            );
+                          } else if (isPlaying) {
+                            announce(
+                              `문제 ${currentQuestion.questionNumber}의 ${
+                                idx + 1
+                              }번째 요소가 재생 중입니다. 정지하려면 엔터 키를 누르세요.`
+                            );
+                          } else {
+                            announce(
+                              `문제 ${currentQuestion.questionNumber}의 ${
+                                idx + 1
+                              }번째 요소 듣기 버튼입니다. 엔터 키를 누르면 이 내용을 읽어줍니다.`
+                            );
+                          }
+                        }}
+                      >
+                        {isLoading
+                          ? "불러오는 중..."
+                          : isPlaying
+                          ? "정지"
+                          : "듣기"}
+                      </S.TtsButton>
                     </S.ItemBlock>
                   );
                 })}
@@ -489,14 +650,25 @@ const ExamTake = () => {
       {/* chart/table 확대 모달 */}
       {previewImage && (
         <S.ModalBackdrop onClick={() => setPreviewImage(null)}>
-          <S.ModalContent onClick={(e) => e.stopPropagation()}>
+          <S.ModalContent
+            onClick={(e: React.MouseEvent<HTMLDivElement>) =>
+              e.stopPropagation()
+            }
+            role="dialog"
+            aria-modal="true"
+            aria-label="확대된 문제 이미지 보기"
+          >
             <S.ModalCloseButton
               type="button"
-              onClick={() => setPreviewImage(null)}
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                e.stopPropagation();
+                setPreviewImage(null);
+              }}
+              aria-label="이미지 닫기"
             >
               ✕
             </S.ModalCloseButton>
-            <S.ModalImage src={previewImage} alt="확대된 이미지" />
+            <S.ModalImage src={previewImage} alt="확대된 문제 이미지" />
           </S.ModalContent>
         </S.ModalBackdrop>
       )}
@@ -506,7 +678,7 @@ const ExamTake = () => {
 
 export default ExamTake;
 
-/* ---------- 텍스트 변환 컴포넌트 (useTtsTextBuilder 사용) ---------- */
+/* ---------- 텍스트 변환 컴포넌트 (수식 포함 텍스트 전처리) ---------- */
 
 function ItemTextContent({ item }: { item: ExamItem }) {
   const { buildTtsText } = useTtsTextBuilder();
@@ -530,7 +702,7 @@ function ItemTextContent({ item }: { item: ExamItem }) {
       }
     };
 
-    run();
+    void run();
 
     return () => {
       cancelled = true;
