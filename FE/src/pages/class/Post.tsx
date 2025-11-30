@@ -20,7 +20,6 @@ import {
 } from "./pre/ally";
 import { Container, Grid, SrLive, Wrap } from "./pre/styles";
 
-import { useFocusTTS } from "src/hooks/useFocusTTS";
 import { useTtsTextBuilder } from "src/hooks/useTtsTextBuilder";
 import { useOcrTtsAutoStop } from "src/hooks/useOcrTtsAutoStop";
 import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
@@ -114,7 +113,7 @@ export default function PostClass() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [review, setReview] = useState<PageReview | null>(null);
 
-  const { fontPct, readOnFocus } = useA11ySettings();
+  const { fontPct } = useA11ySettings();
   const stackByFont = fontPct >= 175;
 
   const [mode, setMode] = useState<"ocr" | "image">(
@@ -163,10 +162,40 @@ export default function PostClass() {
         if (dp.pageId) {
           setSummaryLoading(true);
           try {
-            const [sum, rev] = await Promise.all([
-              fetchPageSummary(dp.pageId),
-              fetchPageReview(dp.pageId),
-            ]);
+            // 1) 요약은 기존처럼 한 번만
+            const sumPromise = fetchPageSummary(dp.pageId);
+
+            // 2) 리뷰는 폴링
+            const reviewPromise = (async (): Promise<PageReview | null> => {
+              const MAX_ATTEMPTS = 20; // 3s × 20 = 최대 60초
+              let attempt = 0;
+
+              while (!cancelled && attempt < MAX_ATTEMPTS) {
+                const res = await fetchPageReview(dp.pageId);
+                if (!res) return null;
+
+                const hasData =
+                  !!res.note ||
+                  (res.speeches && res.speeches.length > 0) ||
+                  (res.bookmarks && res.bookmarks.length > 0) ||
+                  (res.boards && res.boards.length > 0);
+
+                const isDone = res.status === "done" || hasData; // status 없으면 데이터 존재 여부로 done 판단
+
+                if (isDone) {
+                  return res;
+                }
+
+                // 아직 처리 중인 경우
+                await new Promise((r) => setTimeout(r, 3000));
+                attempt += 1;
+              }
+
+              console.warn("[PageReview] polling timeout or cancelled");
+              return null;
+            })();
+
+            const [sum, rev] = await Promise.all([sumPromise, reviewPromise]);
             if (!cancelled) {
               setSummary(sum ?? null);
               setReview(rev ?? null);
@@ -206,16 +235,6 @@ export default function PostClass() {
       cancelled = true;
     };
   }, [docId, page, isAssistant, announce]);
-  useFocusTTS({
-    enabled: readOnFocus,
-    mode,
-    page,
-    docContainerRef: docBodyRef,
-    sumContainerRef: sidePaneRef,
-    ocrAudioRef,
-    sumAudioRef,
-    announce,
-  });
 
   useOcrTtsAutoStop(ocrAudioRef, {
     pageKey: docPage?.pageId,
@@ -235,6 +254,13 @@ export default function PostClass() {
     stopMessageOnChange:
       "페이지 또는 보기 모드 변경으로 요약 음성을 중지합니다.",
   });
+
+  useEffect(() => {
+    const baseTitle = state?.navTitle ?? "수업 후";
+    const pageLabel = docPage?.pageNumber ?? page;
+    const t = `${baseTitle} - 수업 후 p.${pageLabel}`;
+    document.title = `캠퍼스 메이트 | ${t}`;
+  }, [state?.navTitle, docPage?.pageNumber, page]);
 
   /* 페이지 OCR → SRE → TTS 생성  */
   const handlePlayOcrTts = useCallback(async () => {

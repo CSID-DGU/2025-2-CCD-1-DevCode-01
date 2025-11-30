@@ -529,6 +529,12 @@ export default function LiveClass() {
       }
     }
 
+    console.log("[cut] prevPageId, endHHMMSS, recPersist =", {
+      prevPageId,
+      endHHMMSS,
+      rec: loadRec(dId),
+    });
+
     // 녹음 상태 갱신 및 재시작
     saveRec(dId, {
       status: "paused",
@@ -547,6 +553,13 @@ export default function LiveClass() {
 
   // 강의 종료
   const onEndLecture = async () => {
+    console.log("[onEndLecture] docId, docPage, pageId =", {
+      docId,
+      docPage,
+      pageId: docPage?.pageId,
+      recPersist: Number.isFinite(docId) ? loadRec(Number(docId)) : null,
+    });
+
     try {
       if (!Number.isFinite(docId)) throw new Error("잘못된 문서 ID");
       const dId = Number(docId);
@@ -579,12 +592,28 @@ export default function LiveClass() {
         console.warn("[end] empty blob → skip upload");
       }
 
+      if (!pageId) {
+        console.warn(
+          "[onEndLecture] pageId 없음 → 업로드 스킵하고 그냥 종료 이동"
+        );
+        clearRec(dId);
+        navigate(`/lecture/doc/${docId}/post`, {
+          replace: true,
+          state: {
+            docId: dId,
+            totalPage,
+            navTitle: state?.navTitle,
+          },
+        });
+        return;
+      }
+
       clearRec(dId);
       toast.success("강의를 종료합니다.");
       announce("강의 종료");
       navigate(`/lecture/doc/${docId}/post`, {
         replace: true,
-        state: { docId: dId, totalPage },
+        state: { docId: dId, totalPage, navTitle: state?.navTitle },
       });
     } catch (e) {
       console.error(e);

@@ -93,7 +93,6 @@ const router = createBrowserRouter([
             handle: {
               nav: {
                 variant: "post",
-                title: ({ courseId }) => `${courseId} - 수업 후`,
               } as NavMeta,
             },
           },

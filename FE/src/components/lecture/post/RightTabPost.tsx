@@ -129,7 +129,7 @@ const label = (k: TabKey) =>
     : k === "memo"
     ? "메모"
     : k === "board"
-    ? "판서"
+    ? "추가 자료"
     : "요약";
 
 const Aside = styled.aside<{ $stack: boolean }>`

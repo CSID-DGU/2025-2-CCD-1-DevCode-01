@@ -92,7 +92,7 @@ export default function RightTabs({
             onClick={() => setTab("board")}
             type="button"
           >
-            판서
+            추가 자료
           </Tab>
         )}
 

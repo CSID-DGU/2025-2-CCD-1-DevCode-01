@@ -4,10 +4,16 @@ import type { AxiosError } from "axios";
 export type PageStatus = "processing" | "done";
 
 export type PageTTSResponse = {
-  tts?: {
-    female?: string;
-    male?: string;
-  };
+  status?: "processing" | "done";
+  tts?:
+    | string
+    | {
+        female?: string;
+        male?: string;
+      }
+    | null;
+  female?: string;
+  male?: string;
 };
 
 export type PageTTSResult = {
@@ -105,7 +111,7 @@ function getHttpStatus(err: unknown): number | null {
 export async function fetchPageTTS(
   pageId: number,
   ocrText: string,
-  retry = 1
+  retry = 3
 ): Promise<PageTTSResult> {
   try {
     const body: PageTTSRequestBody = { ocr_text: ocrText };
@@ -114,13 +120,51 @@ export async function fetchPageTTS(
       `/page/${pageId}/tts/`,
       body
     );
+    console.log("TTS 응답(raw):", data);
 
-    const female = data?.tts?.female ?? "";
-    const male = data?.tts?.male ?? "";
-    console.log("TTS 응답:", data);
+    if (!data) {
+      if (retry > 0) {
+        await new Promise((r) => setTimeout(r, 800));
+        return fetchPageTTS(pageId, ocrText, retry - 1);
+      }
+      throw new Error("TTS 응답이 비어 있습니다.");
+    }
 
-    if (!female && !male) {
-      throw new Error("TTS 응답 형식이 올바르지 않습니다.");
+    let female = "";
+    let male = "";
+
+    if (typeof data.tts === "string") {
+      female = data.tts;
+      male = data.tts;
+    }
+    // case B: tts가 객체 { female, male }
+    else if (data.tts && typeof data.tts === "object") {
+      female = data.tts.female ?? "";
+      male = data.tts.male ?? "";
+    }
+    // top-level female/male 필드로 오는 경우
+    else {
+      female = data.female ?? "";
+      male = data.male ?? "";
+    }
+
+    // 2) 아직 생성 중인 경우 (URL 없음)
+    const hasUrl = !!female || !!male;
+
+    if (!hasUrl) {
+      // 백엔드가 status를 주고 processing이면 재시도
+      if (data.status === "processing" && retry > 0) {
+        await new Promise((r) => setTimeout(r, 800));
+        return fetchPageTTS(pageId, ocrText, retry - 1);
+      }
+
+      // status가 없지만 어쨌든 URL이 없는 경우 -> 재시도 한 번 더
+      if (retry > 0) {
+        await new Promise((r) => setTimeout(r, 800));
+        return fetchPageTTS(pageId, ocrText, retry - 1);
+      }
+
+      throw new Error("TTS 응답에 유효한 URL이 없습니다.");
     }
 
     const safeFemale = female || male;
