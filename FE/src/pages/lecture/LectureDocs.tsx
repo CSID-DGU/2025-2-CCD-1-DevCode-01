@@ -121,7 +121,10 @@ export default function LectureDocs() {
                     setReviewDoc(d);
                   } else {
                     nav(`/lecture/doc/${d.id}`, {
-                      state: { navTitle: d.title },
+                      state: {
+                        navTitle: d.title,
+                        resumeClock: d.timestamp ?? null,
+                      },
                     });
                   }
                 }}
@@ -163,7 +166,10 @@ export default function LectureDocs() {
         onContinue={() => {
           if (!reviewDoc) return;
           nav(`/lecture/doc/${reviewDoc.id}`, {
-            state: { navTitle: reviewDoc.title },
+            state: {
+              navTitle: reviewDoc.title,
+              resumeClock: reviewDoc.timestamp ?? null,
+            },
           });
           setReviewDoc(null);
         }}

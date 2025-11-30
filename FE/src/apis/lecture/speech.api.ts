@@ -1,4 +1,3 @@
-// src/apis/lecture/speech.api.ts
 import instance from "@apis/instance";
 
 let uploadTail: Promise<void> = Promise.resolve();
@@ -23,7 +22,7 @@ export function normalizeHHMMSS(hhmmss: string): string {
 interface PersistItem {
   url: string;
   token?: string;
-  timestamp: string;
+  timeStamp: string;
   audioBuf: ArrayBuffer;
   mime: string;
   filename: string;
@@ -47,13 +46,13 @@ async function persistJob(
   url: string,
   token: string | undefined,
   file: File,
-  timestamp: string
+  timeStamp: string
 ): Promise<void> {
   const audioBuf = await file.arrayBuffer();
   const item: PersistItem = {
     url,
     token,
-    timestamp,
+    timeStamp,
     audioBuf,
     mime: file.type || "audio/webm",
     filename: file.name,
@@ -78,7 +77,7 @@ export async function drainSpeechQueue(): Promise<void> {
         "audio",
         new File([it.audioBuf], it.filename, { type: it.mime })
       );
-      fd.append("timestamp", it.timestamp);
+      fd.append("timestamp", it.timeStamp);
       const res = await fetch(it.url, {
         method: "POST",
         body: fd,
@@ -104,7 +103,7 @@ export function registerSpeechBeacon(): void {
           "audio",
           new File([it.audioBuf], it.filename, { type: it.mime })
         );
-        fd.append("timestamp", it.timestamp);
+        fd.append("timestamp", it.timeStamp);
         const url = token
           ? `${it.url}?beacon=1&token=${encodeURIComponent(token)}`
           : `${it.url}?beacon=1`;
@@ -127,54 +126,57 @@ export function registerSpeechBeacon(): void {
   });
 }
 
-/** 업로드: 기본은 '타임아웃 없음'. 아주 긴 hang만 가드(기본 5분). */
 export function uploadSpeechQueued(
   pageId: number,
   blob: Blob,
   hhmmssEnd: string,
-  opts?: { maxUploadDurationMs?: number } // 행 가드 상한
+  opts?: { maxUploadDurationMs?: number }
 ): void {
-  const ext = blob.type.includes("ogg")
-    ? "ogg"
-    : blob.type.includes("webm")
+  const mime = blob.type || "";
+  const ext = mime.includes("webm")
     ? "webm"
-    : blob.type.includes("wav")
-    ? "wav"
-    : "webm";
+    : mime.includes("mp4") || mime.includes("m4a")
+    ? "m4a"
+    : "dat";
 
   const file = new File([blob], `lecture-${pageId}.${ext}`, {
-    type: blob.type || `audio/${ext}`,
+    type: mime || `audio/${ext}`,
   });
 
   const base = (instance.defaults.baseURL ?? "").replace(/\/+$/, "");
   const url = `${base}/class/speech/${pageId}/`;
   const token = localStorage.getItem("access") ?? "";
-  const timestamp = normalizeHHMMSS(hhmmssEnd);
+  const timeStamp = normalizeHHMMSS(hhmmssEnd);
 
-  // ✅ 행 가드(아주 길게): 기본 5분
   const MAX_UPLOAD_DURATION_MS = opts?.maxUploadDurationMs ?? 5 * 60_000;
+
+  console.log("[uploadSpeechQueued] enqueue", {
+    pageId,
+    hhmmssEnd,
+    timeStamp,
+    url,
+    mime,
+  });
 
   void enqueue(async () => {
     if (!navigator.onLine) {
-      await persistJob(url, token || undefined, file, timestamp);
+      await persistJob(url, token || undefined, file, timeStamp);
       console.log("[uploadQueued] offline → persisted");
       return;
     }
 
-    // ❗요청 자체는 타임아웃 '없음'
-    const controller = new AbortController(); // 가드/이탈 시에만 abort
+    const controller = new AbortController();
     const fdFactory = () => {
       const fd = new FormData();
       fd.append("audio", file);
-      fd.append("timestamp", timestamp);
+      fd.append("timestamp", timeStamp);
       return fd;
     };
 
-    // 행 가드: 일정 시간이 지나면 "실패로 간주"하고 큐를 막지 않음
     let timedOut = false;
     const hangGuard = window.setTimeout(() => {
       timedOut = true;
-      controller.abort(); // 이때만 abort 발생 → 드물게 (canceled) 표시 가능
+      controller.abort();
     }, MAX_UPLOAD_DURATION_MS);
 
     try {
@@ -183,7 +185,6 @@ export function uploadSpeechQueued(
         body: fdFactory(),
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         signal: controller.signal,
-        // keepalive: true  // (64KB 한계가 있어 큰 파일엔 비권장)
       });
       window.clearTimeout(hangGuard);
 
@@ -193,7 +194,7 @@ export function uploadSpeechQueued(
       }
       const msg = await res.text().catch(() => "");
       console.warn(`[uploadQueued] non-OK ${res.status}`, msg);
-      await persistJob(url, token || undefined, file, timestamp);
+      await persistJob(url, token || undefined, file, timeStamp);
     } catch (err) {
       window.clearTimeout(hangGuard);
       if (
@@ -202,11 +203,11 @@ export function uploadSpeechQueued(
         timedOut
       ) {
         console.warn(`[uploadQueued] ⏳ hang-guard abort → persist`);
-        await persistJob(url, token || undefined, file, timestamp);
+        await persistJob(url, token || undefined, file, timeStamp);
         return;
       }
       console.warn("[uploadQueued] error → persist", (err as Error).message);
-      await persistJob(url, token || undefined, file, timestamp);
+      await persistJob(url, token || undefined, file, timeStamp);
     }
   });
 }
