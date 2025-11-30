@@ -603,6 +603,7 @@ export default function LiveClass() {
             docId: dId,
             totalPage,
             navTitle: state?.navTitle,
+            resumeClock: endHHMMSS,
           },
         });
         return;
@@ -613,7 +614,12 @@ export default function LiveClass() {
       announce("강의 종료");
       navigate(`/lecture/doc/${docId}/post`, {
         replace: true,
-        state: { docId: dId, totalPage, navTitle: state?.navTitle },
+        state: {
+          docId: dId,
+          totalPage,
+          navTitle: state?.navTitle,
+          resumeClock: endHHMMSS,
+        },
       });
     } catch (e) {
       console.error(e);

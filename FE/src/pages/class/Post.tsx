@@ -30,7 +30,11 @@ import RightTabsPost from "src/components/lecture/post/RightTabPost";
 import { useFocusTTS } from "src/hooks/useFocusTTS";
 
 type RouteParams = { courseId?: string; docId?: string };
-type NavState = { navTitle?: string; docId?: number };
+type NavState = {
+  navTitle?: string;
+  docId?: number;
+  resumeClock?: string | null;
+};
 type UserRole = "assistant" | "student";
 
 function useDocIdFromParamsAndState(params: RouteParams, state?: NavState) {
@@ -264,7 +268,6 @@ export default function PostClass() {
             dp.totalPage ? ` / 총 ${dp.totalPage}` : ""
           }, ${nextDefault === "ocr" ? "본문" : "원본"} 보기`
         );
-        setTimeout(() => mainRegionRef.current?.focus(), 0);
       } catch (e) {
         if (!cancelled) {
           toast.error("데이터 로드 중 오류가 발생했습니다.");
@@ -518,6 +521,7 @@ export default function PostClass() {
               startPage: page,
               pageId,
               autoRecord: true,
+              resumeClock: state?.resumeClock ?? null,
             },
           });
         }}
