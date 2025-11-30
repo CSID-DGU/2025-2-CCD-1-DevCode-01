@@ -25,6 +25,17 @@ export type ExamResultResponse = {
   questions: ExamQuestion[];
 };
 
+export type ExamItemTTS = {
+  female: string;
+  male: string;
+};
+
+export type ExamItemTTSResponse = {
+  questionNumber: number;
+  itemIndex: number;
+  tts: ExamItemTTS;
+};
+
 // 시험 조회
 export async function fetchExamResult(): Promise<ExamResultResponse | null> {
   return await getResponse<ExamResultResponse>("/exam/result/");
@@ -51,4 +62,15 @@ export async function startExam(
 
 export async function endExam(): Promise<boolean> {
   return await postNoResponse("/exam/end/", null);
+}
+
+//시험 tts
+export async function fetchExamItemTTS(
+  questionNumber: number,
+  itemIndex: number
+): Promise<ExamItemTTSResponse | null> {
+  return await postResponse<
+    { questionNumber: number; itemIndex: number },
+    ExamItemTTSResponse
+  >("/exam/tts/", { questionNumber, itemIndex });
 }
