@@ -1,47 +1,39 @@
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import Spinner from "src/components/common/Spinner";
+import api from "@apis/instance";
+
 import {
-  fetchExamResult,
   endExam,
   type ExamResultResponse,
   type ExamQuestion,
   type ExamItem,
   fetchExamItemTTS,
 } from "@apis/exam/exam.api";
-import { DUMMY_EXAM_RESULT } from "@apis/exam/exam.dummy";
 import { useTtsTextBuilder } from "src/hooks/useTtsTextBuilder";
 import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 import { useLocalTTS } from "src/hooks/useLocalTTS";
 
 import * as S from "./ExamLive.styles";
 
-type LocationState = {
-  exam?: ExamResultResponse;
-};
-
 const ExamTake = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const state = location.state as LocationState | null;
 
-  const [exam, setExam] = useState<ExamResultResponse | null>(
-    state?.exam ?? null
-  );
-  const [loading, setLoading] = useState(!state?.exam);
+  const [exam, setExam] = useState<ExamResultResponse | null>(null);
+  const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [viewMode, setViewMode] = useState<"detail" | "page">("detail");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
-  // 서버 TTS (mp3) 재생 옵션
+  // 서버 TTS (mp3)
   const { soundRate, soundVoice } = useSoundOptions();
 
-  // 로컬 Web Speech TTS (안내용 / 전체 읽기용)
+  // 로컬 Web Speech TTS (안내 / 전체 듣기)
   const { speak, stop } = useLocalTTS();
 
-  // 서버 TTS 재생 오디오
+  // 서버 TTS 오디오
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // item별 TTS 캐시
@@ -57,8 +49,10 @@ const ExamTake = () => {
 
   const makeKey = (qNo: number, idx: number) => `${qNo}-${idx}`;
 
+  /* ---------- 공통: 로컬 안내 음성 ---------- */
   const announce = (text: string) => {
     if (!text) return;
+
     if (audioRef.current) {
       try {
         audioRef.current.pause();
@@ -84,21 +78,90 @@ const ExamTake = () => {
     };
   }, [stop]);
 
-  /* ---------- 1) 문제별 item TTS (서버 mp3 재생) ---------- */
+  /* ---------- 1) 페이지 진입 시마다 /exam/result/ 호출 ---------- */
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadExam = async () => {
+      setLoading(true);
+      try {
+        const res = await api.get<ExamResultResponse>("/exam/result/");
+
+        if (cancelled) return;
+
+        const data = res.data;
+
+        if (!data || !data.questions || data.questions.length === 0) {
+          console.warn("[ExamTake] 응답이 없거나 questions가 비어 있습니다.");
+        } else {
+          setExam(data);
+        }
+        setCurrentIndex(0);
+        setViewMode("detail");
+      } catch (e: unknown) {
+        const err = e as { response?: { status?: number } };
+
+        if (err.response?.status === 403) {
+          console.info(
+            "[ExamTake] /exam/result/ 403 → 시험 종료, /exam으로 이동"
+          );
+          if (!cancelled) {
+            navigate("/exam", { replace: true });
+          }
+          return;
+        }
+
+        console.error("[ExamTake] /exam/result/ 호출 실패:", e);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadExam();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+
+  /* ---------- 2) 문제 정렬 / 현재 문제 / 종료 시각 ---------- */
+  const questions: ExamQuestion[] = useMemo(() => {
+    if (!exam) return [];
+    return [...exam.questions].sort(
+      (a, b) => a.questionNumber - b.questionNumber
+    );
+  }, [exam]);
+
+  const currentQuestion: ExamQuestion | null = questions[currentIndex] ?? null;
+
+  const endTimeText = useMemo(() => {
+    if (!exam?.endTime) return null;
+    const d = new Date(exam.endTime);
+    if (Number.isNaN(d.getTime())) return exam.endTime;
+    return d.toLocaleTimeString("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }, [exam]);
+
+  const isFirst = currentIndex === 0;
+  const isLast = questions.length > 0 && currentIndex === questions.length - 1;
+
+  /* ---------- 3) 서버 TTS: item 개별 듣기 ---------- */
   const handlePlayItemTTS = async (
     questionNumber: number,
     itemIndex: number
   ) => {
     const key = makeKey(questionNumber, itemIndex);
 
-    // 전체 듣기 중이면 중단 상태로 전환
     if (isWholeReadingRef.current) {
       isWholeReadingRef.current = false;
       setIsWholeReading(false);
       stop();
     }
 
-    // 안내용 로컬 TTS 끄기
     stop();
 
     if (playingKey === key && audioRef.current) {
@@ -109,7 +172,6 @@ const ExamTake = () => {
       }
     }
 
-    // 1) 캐시 확인
     let tts = ttsMap[key];
 
     if (!tts) {
@@ -129,8 +191,8 @@ const ExamTake = () => {
           ...prev,
           [key]: res.tts,
         }));
-      } catch (e) {
-        console.error("[ExamTake] TTS 요청 실패:", e);
+      } catch (err) {
+        console.error("[ExamTake] TTS 요청 실패:", err);
         setTtsLoadingKey(null);
         alert("음성을 불러오지 못했습니다.");
         return;
@@ -161,66 +223,15 @@ const ExamTake = () => {
       audio.onended = () => {
         setPlayingKey((prev) => (prev === key ? null : prev));
       };
-    } catch (e) {
-      console.error("[ExamTake] 오디오 재생 실패:", e);
+    } catch (err) {
+      console.error("[ExamTake] 오디오 재생 실패:", err);
       alert("음성을 재생할 수 없습니다.");
     }
   };
 
-  /* ---------- 2) 최초 진입 시 /exam/result/ 조회 ---------- */
-  useEffect(() => {
-    if (state?.exam) {
-      return;
-    }
+  /* ---------- 4) 네비게이션 / 보기모드 / 종료 ---------- */
 
-    const load = async () => {
-      setLoading(true);
-      const data = await fetchExamResult();
-
-      if (!data || data.questions.length === 0) {
-        console.warn(
-          "응답이 없거나 questions가 비어 있어서 더미 데이터를 사용합니다."
-        );
-        setExam(DUMMY_EXAM_RESULT);
-        setLoading(false);
-        return;
-      }
-
-      setExam(data);
-      setLoading(false);
-    };
-
-    void load();
-  }, [state]);
-
-  /* ---------- 3) 문제 정렬 / 현재 문제 / 종료 시각 ---------- */
-  const questions: ExamQuestion[] = useMemo(() => {
-    if (!exam) return [];
-    return [...exam.questions].sort(
-      (a, b) => a.questionNumber - b.questionNumber
-    );
-  }, [exam]);
-
-  const currentQuestion: ExamQuestion | null = questions[currentIndex] ?? null;
-
-  const endTimeText = useMemo(() => {
-    if (!exam?.endTime) return null;
-    const d = new Date(exam.endTime);
-    if (Number.isNaN(d.getTime())) return exam.endTime;
-    return d.toLocaleTimeString("ko-KR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }, [exam]);
-
-  const isFirst = currentIndex === 0;
-  const isLast = questions.length > 0 && currentIndex === questions.length - 1;
-
-  /* ---------- 4) 네비게이션/화면 상태 핸들러 ---------- */
-
-  const handleClickThumbnail = (index: number) => {
-    setCurrentIndex(index);
-    setViewMode("detail");
+  const resetAllTTS = () => {
     isWholeReadingRef.current = false;
     setIsWholeReading(false);
     stop();
@@ -232,40 +243,26 @@ const ExamTake = () => {
       }
       setPlayingKey(null);
     }
+  };
+
+  const handleClickThumbnail = (index: number) => {
+    setCurrentIndex(index);
+    setViewMode("detail");
+    resetAllTTS();
   };
 
   const handlePrev = () => {
     if (isFirst) return;
     setCurrentIndex((prev) => Math.max(0, prev - 1));
     setViewMode("detail");
-    isWholeReadingRef.current = false;
-    setIsWholeReading(false);
-    stop();
-    if (audioRef.current) {
-      try {
-        audioRef.current.pause();
-      } catch {
-        // ignore
-      }
-      setPlayingKey(null);
-    }
+    resetAllTTS();
   };
 
   const handleNext = () => {
     if (isLast) return;
     setCurrentIndex((prev) => Math.min(questions.length - 1, prev + 1));
     setViewMode("detail");
-    isWholeReadingRef.current = false;
-    setIsWholeReading(false);
-    stop();
-    if (audioRef.current) {
-      try {
-        audioRef.current.pause();
-      } catch {
-        // ignore
-      }
-      setPlayingKey(null);
-    }
+    resetAllTTS();
   };
 
   const handleToggleViewMode = () => {
@@ -274,19 +271,7 @@ const ExamTake = () => {
 
   const handleEndExam = async () => {
     setLoading(true);
-
-    // 모든 TTS 정리
-    isWholeReadingRef.current = false;
-    setIsWholeReading(false);
-    stop();
-    if (audioRef.current) {
-      try {
-        audioRef.current.pause();
-      } catch {
-        // ignore
-      }
-      setPlayingKey(null);
-    }
+    resetAllTTS();
 
     const ok = await endExam();
     setLoading(false);
@@ -299,7 +284,7 @@ const ExamTake = () => {
     navigate("/exam", { replace: true });
   };
 
-  /* ---------- 5) 문제 전체 듣기 (로컬 TTS로 한 번에 읽어주기) ---------- */
+  /* ---------- 5) 문제 전체 듣기 (로컬 TTS로 한 번에) ---------- */
 
   const { buildTtsText } = useTtsTextBuilder();
 
@@ -334,7 +319,6 @@ const ExamTake = () => {
         if (item.kind === "chart" || item.kind === "table") {
           parts.push(item.displayText);
         } else {
-          // text / code / qnum → 수식 포함 텍스트 전처리
           try {
             const processed = await buildTtsText(item.displayText);
             parts.push(processed);
@@ -351,11 +335,11 @@ const ExamTake = () => {
       stop();
       speak(fullText);
     } finally {
-      //igrnore
+      //ignore
     }
   };
 
-  /* ---------- 6) 로딩/빈 상태 처리 ---------- */
+  /* ---------- 6) 로딩 / 빈 상태 ---------- */
 
   if (loading && !exam) {
     return (
@@ -447,7 +431,7 @@ const ExamTake = () => {
         </S.ToolbarRight>
       </S.Toolbar>
 
-      {/* 메인 레이아웃: 썸네일 + 문제 영역 */}
+      {/* 메인 레이아웃 */}
       <S.MainLayout>
         {/* 썸네일 영역 */}
         <S.ThumbnailPane>
@@ -546,7 +530,6 @@ const ExamTake = () => {
                 />
               </S.QuestionImageWrapper>
             ) : (
-              // 상세 텍스트 모드
               <S.ItemsWrapper>
                 {currentQuestion.items.map((item, idx) => {
                   const key = makeKey(currentQuestion.questionNumber, idx);
@@ -678,7 +661,7 @@ const ExamTake = () => {
 
 export default ExamTake;
 
-/* ---------- 텍스트 변환 컴포넌트 (수식 포함 텍스트 전처리) ---------- */
+/* ---------- 텍스트 변환 컴포넌트 (수식 포함) ---------- */
 
 function ItemTextContent({ item }: { item: ExamItem }) {
   const { buildTtsText } = useTtsTextBuilder();
@@ -694,8 +677,8 @@ function ItemTextContent({ item }: { item: ExamItem }) {
         if (!cancelled) {
           setText(processed);
         }
-      } catch (e) {
-        console.error("[ItemTextContent] buildTtsText 실패:", e);
+      } catch (err) {
+        console.error("[ItemTextContent] buildTtsText 실패:", err);
         if (!cancelled) {
           setText(item.displayText ?? "");
         }
