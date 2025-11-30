@@ -9,6 +9,8 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import fitz
 import requests
+
+from lectures.permissions import IsLectureMember
 from .serializers import *
 from rest_framework.views import APIView
 from rest_framework import status,permissions
@@ -26,12 +28,16 @@ from dotenv import load_dotenv
 
 #교안 업로드/조회
 class DocUploadView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
     #교안 조회
     def get(self, request, lectureId):
         lecture = Lecture.objects.get(id=lectureId)
 
-        docs = Doc.objects.filter(lecture=lecture).exclude(users=request.user)
+        user = request.user
+        
+        self.check_object_permissions(request, lecture)
+        
+        docs = Doc.objects.filter(lecture=lecture).exclude(users=user)
 
         serializer = DocSerializer(docs, many=True)
 
@@ -42,6 +48,7 @@ class DocUploadView(APIView):
     #교안 업로드 
     def post(self, request, lectureId):
         lecture = get_object_or_404(Lecture, id=lectureId)
+        self.check_object_permissions(request, lecture)
         file = request.FILES.get("file")
 
         if not file:
@@ -119,11 +126,11 @@ class OcrCallbackView(APIView):
     
 #교안 TTS
 class PageTTSView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
     
     def post(self, request, pageId):
         page = get_object_or_404(Page, id=pageId)
-
+        self.check_object_permissions(request, page)
         if not page.ocr:
             return Response({"error": "OCR이 완료되지 않았습니다."}, status=400)
         
@@ -162,11 +169,11 @@ class PageTTSView(APIView):
 
 #교안 ocr 요약
 class PageSummaryView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
 
     def post(self, request, pageId):
         page = get_object_or_404(Page, id=pageId)
-
+        self.check_object_permissions(request, page)
         if not page.ocr:
             return Response({"error": "OCR 완료 전입니다."}, status=400)
 
@@ -202,12 +209,13 @@ class PageSummaryView(APIView):
 
 #교안 수정 삭제
 class DocDetailView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
     def get_object(self, docId):
         return get_object_or_404(Doc, id=docId)
     #교안 제목 수정
     def patch(self, request, docId):
         doc = self.get_object(docId)
+        self.check_object_permissions(request, doc)
         serializer = DocUpdateSerializer(doc, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -216,8 +224,11 @@ class DocDetailView(APIView):
     #교안 삭제
     def delete(self, request, docId):
         doc = self.get_object(docId)
+        self.check_object_permissions(request, doc)
+        
+        user = request.user
 
-        doc.users.add(request.user)
+        doc.users.add(user)
 
         lecture_users = [doc.lecture.assistant, doc.lecture.student]
         deleted_users = list(doc.users.all())
@@ -230,7 +241,7 @@ class DocDetailView(APIView):
 
 #페이지 교안조회
 class PageDetailView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
 
     def get(self, request, docId, pageNumber):
 
@@ -239,6 +250,8 @@ class PageDetailView(APIView):
         except Doc.DoesNotExist:
             return Response({"detail": "문서를 찾을 수 없습니다."},
                             status=status.HTTP_404_NOT_FOUND)
+
+        self.check_object_permissions(request, doc)
 
         page = doc.pages.get(page_number=pageNumber)
         data = PageSerializer(page).data
@@ -251,10 +264,11 @@ class PageDetailView(APIView):
     
 #판서   
 class BoardView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
     #판서 조회
     def get(self, request, pageId):
         page = get_object_or_404(Page, id=pageId)
+        self.check_object_permissions(request, page)
         boards = Board.objects.filter(page=page).order_by("-created_at")
         serializer = BoardSerializer(boards, many=True)
 
@@ -271,6 +285,7 @@ class BoardView(APIView):
         serializer.is_valid(raise_exception=True)
 
         page = get_object_or_404(Page, id=pageId)
+        self.check_object_permissions(request, page)
         image = serializer.validated_data["image"]
 
         img_bytes = image.read()
@@ -324,6 +339,7 @@ class BoardView(APIView):
     #수정
     def patch(self, request, boardId):
         board = get_object_or_404(Board, id=boardId)
+        self.check_object_permissions(request, board)
         new_text = request.data.get("text")
 
         if new_text is None:
@@ -350,6 +366,7 @@ class BoardView(APIView):
     #삭제
     def delete(self, request, boardId):
         board = get_object_or_404(Board, id=boardId)
+        self.check_object_permissions(request, board)
         page = board.page
         board_id = board.id
 
@@ -373,6 +390,7 @@ class BoardView(APIView):
 
 # 교수발화 요약  
 class DocSttSummaryView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
     """
     교안 STT 요약문 생성 및 수정
     """
@@ -388,7 +406,7 @@ class DocSttSummaryView(APIView):
         doc = self.get_object(docId)
         if not doc:
             return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
-        
+        self.check_object_permissions(request, doc)
         summaries = SpeechSummary.objects.filter(doc=doc).order_by("created_at")
         serializer = SpeechSummaryListSerializer(summaries, many=True)
 
@@ -401,7 +419,7 @@ class DocSttSummaryView(APIView):
         doc = self.get_object(docId)
         if not doc:
             return Response({"error": "해당 교안을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
-
+        self.check_object_permissions(request, doc)
         timestamp = request.data.get("timestamp") # 수업 종료 시점
         
         # ✅ 요약 + TTS 생성
@@ -427,6 +445,7 @@ class DocSttSummaryView(APIView):
         }, status=status.HTTP_200_OK)
     
 class DocSttSummaryDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
     def get_object(self, speechSummaryId):
         try:
             return SpeechSummary.objects.get(id=speechSummaryId)
@@ -436,9 +455,10 @@ class DocSttSummaryDetailView(APIView):
     def get(self, request, speechSummaryId):
         """특정 STT 요약문 조회"""
         speech_sum = self.get_object(speechSummaryId)
+        
         if not speech_sum:
             return Response({"error": "해당 요약을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
-        
+        self.check_object_permissions(request, speech_sum)
         serializer = SpeechSummarySerializer(speech_sum)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -448,7 +468,7 @@ class DocSttSummaryDetailView(APIView):
         speech_sum = self.get_object(speechSummaryId)
         if not speech_sum:
             return Response({"error": "해당 요약을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
-
+        self.check_object_permissions(request, speech_sum)
         new_summary = request.data.get("stt_summary")
         if not new_summary or not new_summary.strip():
             return Response({"error": "수정할 stt_summary 내용이 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
@@ -471,14 +491,14 @@ class DocSttSummaryDetailView(APIView):
 
 #review    
 class PageView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
 
     def get(self, request, pageId):
         try:
             page = Page.objects.get(id=pageId)
         except Page.DoesNotExist:
             return Response({"detail": "페이지를 찾을 수 없습니다."}, status=404)
-
+        self.check_object_permissions(request, page)
         user = request.user
 
         note = Note.objects.filter(page=page, user=user).first()

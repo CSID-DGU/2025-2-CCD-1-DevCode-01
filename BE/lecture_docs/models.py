@@ -26,12 +26,14 @@ class Page(models.Model):
     summary = models.TextField(blank=True, null=True) 
     summary_tts = models.JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
+    @property
+    def lecture(self):
+        return self.doc.lecture
     class Meta:
         unique_together = ('doc', 'page_number')
         ordering = ['page_number']
 
-
+    
 #판서/필기
 class Board(models.Model):
     page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name='boards',  null=True, blank=True)
