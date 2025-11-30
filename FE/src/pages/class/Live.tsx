@@ -37,6 +37,7 @@ type NavState = {
   docId?: number;
   autoRecord?: boolean;
   startPage?: number;
+  resumeClock?: string | null;
 };
 
 type RecPersist = {
@@ -312,7 +313,15 @@ export default function LiveClass() {
     const dId = Number(docId);
     const persisted = loadRec(dId);
 
+    const baseOffsetSec = parseHHMMSSToSec(state?.resumeClock ?? null);
+
     if (!startedRef.current) {
+      // 이미 로컬에 녹음 상태가 있으면 그걸 존중하고 만약 없거나 (idle + 0초) 이면 리스트 timestamp를 초기값으로 사용
+      const initialAccumulated =
+        persisted.status === "idle" && (persisted.accumulated ?? 0) === 0
+          ? baseOffsetSec
+          : persisted.accumulated ?? 0;
+
       if (state?.autoRecord || persisted.status === "recording") {
         start()
           .then(() => {
@@ -320,7 +329,7 @@ export default function LiveClass() {
             saveRec(dId, {
               status: "recording",
               startedAt: now,
-              accumulated: persisted.accumulated ?? 0,
+              accumulated: initialAccumulated,
             });
             announce("녹음을 시작했습니다.");
             toast.success("녹음 시작");
@@ -332,14 +341,18 @@ export default function LiveClass() {
           });
         startedRef.current = true;
       } else if (persisted.status === "paused") {
-        saveRec(dId, { ...persisted, status: "paused", startedAt: undefined });
+        saveRec(dId, {
+          status: "paused",
+          accumulated: initialAccumulated,
+          startedAt: undefined,
+        });
         rerender();
       } else {
-        saveRec(dId, { status: "idle", accumulated: 0 });
+        saveRec(dId, { status: "idle", accumulated: initialAccumulated });
         rerender();
       }
     }
-  }, [docId, state?.autoRecord, start, announce, rerender]);
+  }, [docId, state?.autoRecord, state?.resumeClock, start, announce, rerender]);
 
   /* ------------------ 중지(토글) ------------------ */
   const handlePauseToggle = () => {
@@ -397,6 +410,21 @@ export default function LiveClass() {
   })();
 
   /* ------------------ 북마크: 논리시간 우선 ------------------ */
+  const parseHHMMSSToSec = (hhmmss?: string | null): number => {
+    if (!hhmmss) return 0;
+    const parts = hhmmss.split(":");
+    if (parts.length !== 3) return 0;
+
+    const [hStr, mStr, sStr] = parts;
+    const h = Number.parseInt(hStr, 10);
+    const m = Number.parseInt(mStr, 10);
+    const s = Number.parseInt(sStr, 10);
+
+    if ([h, m, s].some((n) => Number.isNaN(n) || n < 0)) return 0;
+
+    return h * 3600 + m * 60 + s;
+  };
+
   const getCurrentClock = (): string => {
     const p = Number.isFinite(docId)
       ? loadRec(Number(docId))
@@ -409,6 +437,11 @@ export default function LiveClass() {
     if (p.status === "paused") {
       return toHHMMSS(p.accumulated);
     }
+
+    if (p.accumulated > 0) {
+      return toHHMMSS(p.accumulated);
+    }
+
     const t1 = ocrAudioRef.current?.currentTime ?? 0;
     const t2 = sumAudioRef.current?.currentTime ?? 0;
     return toHHMMSS(Math.max(t1, t2));

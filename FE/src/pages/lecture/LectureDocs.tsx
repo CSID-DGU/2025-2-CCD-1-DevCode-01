@@ -121,7 +121,10 @@ export default function LectureDocs() {
                     setReviewDoc(d);
                   } else {
                     nav(`/lecture/doc/${d.id}`, {
-                      state: { navTitle: d.title },
+                      state: {
+                        navTitle: d.title,
+                        resumeClock: d.timestamp ?? null,
+                      },
                     });
                   }
                 }}
