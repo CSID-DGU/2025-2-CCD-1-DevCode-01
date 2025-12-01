@@ -14,7 +14,7 @@ celery_app = Celery(
 )
 
 
-celery_app.autodiscover_tasks(['ai_file_ocr', 'ai_exam_ocr.src'], force=True)
+celery_app.autodiscover_tasks(['ai_file_ocr', 'ai_exam_ocr'], force=True)
 
 celery_app.conf.update(
     task_routes={
