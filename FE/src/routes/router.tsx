@@ -20,6 +20,7 @@ import FoldersRoute from "./FoldersRoute";
 import LectureDocs from "@pages/lecture/LectureDocs";
 import ScrollToTop from "src/hooks/ScrollToTop";
 import ExamTake from "@pages/exam/ExamLive";
+import { PostSummary } from "@pages/PostSummary";
 
 const router = createBrowserRouter([
   {
@@ -95,6 +96,15 @@ const router = createBrowserRouter([
           {
             path: "/lecture/doc/:courseId/post",
             element: <PostClass />,
+            handle: {
+              nav: {
+                variant: "post",
+              } as NavMeta,
+            },
+          },
+          {
+            path: "/lecture/doc/:courseId/post/summary",
+            element: <PostSummary />,
             handle: {
               nav: {
                 variant: "post",
