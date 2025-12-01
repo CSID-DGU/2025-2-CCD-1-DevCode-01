@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from ai_file_ocr.celery_app import celery_app
 from ai_file_ocr.pipeline.ocr import pdf_to_images, analyze_page_with_context
 from ai_file_ocr.pipeline.summarize import make_mini_summary
-from ai_file_ocr.pipeline.memory import ContextMemory   # ⬅ 핵심
+from ai_file_ocr.pipeline.memory import ContextMemory  
 
 load_dotenv()
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")

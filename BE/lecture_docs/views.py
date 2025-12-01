@@ -3,7 +3,7 @@ import os
 import re
 from urllib.parse import unquote
 from io import BytesIO
-from django.http import HttpResponse
+import time
 from django.shortcuts import get_object_or_404
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -601,6 +601,7 @@ class ExamStartView(APIView):
 
         # OCR 처리
         ai_url = settings.AI_EXAM_OCR_URL
+        result_url = settings.AI_EXAM_OCR_RESULT_URL
         all_questions = []
 
         for image in images:
@@ -610,12 +611,34 @@ class ExamStartView(APIView):
             ai_resp = requests.post(ai_url, files=files, timeout=60)
             ai_resp.raise_for_status()
 
-            ocr_json = ai_resp.json()
-            all_questions.extend(ocr_json.get("questions", []))
+            task_json = ai_resp.json()
+            task_id = task_json.get("task_id")
 
-        # 결과 저장
+            if not task_id:
+                return Response({"error": "AI 서버가 task_id를 반환하지 않음"}, status=500)
+            
+            while True:
+                result_resp = requests.get(f"{result_url}/{task_id}", timeout=10)
+
+                if result_resp.status_code == 204:
+                    time.sleep(0.3)
+                    continue
+
+                if result_resp.status_code >= 400:
+                    return Response({"error": f"시험 OCR 실패: {result_resp.text}"}, status=500)
+                
+                result_json = result_resp.json()
+
+                questions = result_json.get("questions") or \
+                            result_json.get("data", {}).get("questions", [])
+
+                if questions:
+                    all_questions.extend(questions)
+                break
+
         ocr_key = f"exam_ocr:{user.id}"
         redis_client.set(ocr_key, json.dumps(all_questions))
+
 
         return Response({
             "endTime": end_time_kst.isoformat(),  

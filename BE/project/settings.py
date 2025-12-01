@@ -217,5 +217,6 @@ CELERY_TIMEZONE = 'Asia/Seoul'
 AI_OCR_URL = os.getenv("AI_OCR_URL")
 AI_BOARD_OCR_URL = os.getenv("AI_BOARD_OCR_URL")
 AI_EXAM_OCR_URL = os.getenv("AI_EXAM_OCR_URL")
-
+AI_EXAM_OCR_URL = os.getenv("AI_EXAM_OCR_URL")
+AI_EXAM_OCR_RESULT_URL = os.getenv("AI_EXAM_OCR_RESULT_URL") 
 BACKEND_BASE_URL= "https://campusmate.shop"
