@@ -69,7 +69,7 @@ function useA11ySettings() {
     };
 
     window.addEventListener("storage", onStorage);
-    window.addEventListener("a11y:font-change", onFontCustom as EventListener);
+    window.addEventListener("a11y-font-change", onFontCustom as EventListener);
     window.addEventListener(
       "a11y:read-on-focus-change",
       onReadCustom as EventListener
@@ -79,7 +79,7 @@ function useA11ySettings() {
     return () => {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener(
-        "a11y:font-change",
+        "a11y-font-change",
         onFontCustom as EventListener
       );
       window.removeEventListener(
