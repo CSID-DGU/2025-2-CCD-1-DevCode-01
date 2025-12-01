@@ -209,7 +209,8 @@ export default function ClassPane({ pageId, review, isActive }: Props) {
     areaRef,
   });
 
-  const renderWithHighlight = (full: string) => {
+  const renderWithHighlight = (full?: string | null) => {
+    if (!full) return "";
     if (!highlightText) return full;
 
     const idx = full.indexOf(highlightText);
