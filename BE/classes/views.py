@@ -125,11 +125,16 @@ class BookmarkDetailView(APIView):
 
         stt_tts = matched_speech.stt_tts if matched_speech else None
 
-        return JsonResponse({
-            "stt_tts": stt_tts,
-            "relative_time": bookmark.relative_time,
-            "text": bookmark.text,
-        }, status=200)
+        if stt_tts:
+            return JsonResponse({
+                "stt_tts": stt_tts,
+                "relative_time": bookmark.relative_time,
+                "text": bookmark.text,
+            }, status=200)
+        else:
+            return JsonResponse({
+                "error": "해당 북마크에 매칭되는 발화를 찾을 수 없습니다."
+            }, status=404)
     
     def delete(self, request, bookmarkId):
         try:
