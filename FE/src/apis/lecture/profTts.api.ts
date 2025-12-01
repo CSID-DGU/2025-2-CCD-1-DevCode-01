@@ -40,3 +40,26 @@ export const fetchDocSpeechSummaries = async (
     `/doc/${docId}/speech/summary/`
   );
 };
+
+//교수발화 요약 상세
+
+export type SpeechSummaryDetail = {
+  speechSummaryId: number;
+  docId: number;
+  end_time: string;
+  stt_summary: string;
+  stt_summary_tts: {
+    female?: string;
+    male?: string;
+  };
+  createdAt: string;
+};
+
+export const fetchSpeechSummaryDetail = async (
+  speechSummaryId: number
+): Promise<SpeechSummaryDetail | null> => {
+  if (!Number.isFinite(speechSummaryId)) return null;
+  return await getResponse<SpeechSummaryDetail>(
+    `/doc/speech/summary/${speechSummaryId}/`
+  );
+};

@@ -20,7 +20,7 @@ import FoldersRoute from "./FoldersRoute";
 import LectureDocs from "@pages/lecture/LectureDocs";
 import ScrollToTop from "src/hooks/ScrollToTop";
 import ExamTake from "@pages/exam/ExamLive";
-import { PostSummary } from "@pages/PostSummary";
+import { PostSummary } from "@pages/postSummary/PostSummary";
 
 const router = createBrowserRouter([
   {
