@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 import DefaultLayout from "@layouts/DefaultLayout";
 import GuestLayout from "@layouts/GuestLayout";
+import PrivateRoute from "@layouts/PrivateLayout";
 
 import Login from "@pages/auth/Login";
 
@@ -50,11 +51,12 @@ const router = createBrowserRouter([
               { path: "3", element: <Step3TTS /> },
               { path: "4", element: <Step4Credentials /> },
             ],
+            handle: { nav: { variant: "auth" } as NavMeta },
           },
         ],
       },
       {
-        // element: <PrivateRoute />,
+        element: <PrivateRoute />,
         children: [
           {
             path: "/",
