@@ -72,7 +72,7 @@ export default function A11yModal({ open, onClose }: Props) {
 
   const handleSave = async () => {
     setA11yAndApply({ font: draftFont, high_contrast: isHC });
-
+    window.dispatchEvent(new Event("a11y-font-change"));
     const res = await patchAccessibility({
       font: draftFont,
       high_contrast: isHC,

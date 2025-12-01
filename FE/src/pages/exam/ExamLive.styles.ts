@@ -1,4 +1,4 @@
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 import { fonts } from "@styles/fonts";
 import type { ExamItem } from "@apis/exam/exam.api";
 
@@ -110,7 +110,9 @@ export const EndButton = styled.button`
   }
 `;
 
-export const MainLayout = styled.main`
+export const MainLayout = styled.main<{
+  $mode: "normal" | "compact" | "stack";
+}>`
   flex: 1;
   width: 100%;
   max-width: 960px;
@@ -118,26 +120,64 @@ export const MainLayout = styled.main`
   padding: 8px 16px 24px;
 
   display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: auto auto;
   gap: 12px;
 
-  @media (min-width: 900px) {
-    grid-template-columns: 220px minmax(0, 1fr);
-    grid-template-rows: 1fr;
-    gap: 16px;
+  ${({ $mode }) => {
+    if ($mode === "stack") {
+      // 큰 글씨 → 위/아래로 쌓기
+      return css`
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto;
+      `;
+    }
+    if ($mode === "compact") {
+      // 글씨가 좀 커진 경우 → 썸네일 칼럼 폭 줄인 2열
+      return css`
+        grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr);
+        grid-template-rows: 1fr;
+      `;
+    }
+    // 기본 2열
+    return css`
+      grid-template-columns: 18rem minmax(0, 1fr);
+      grid-template-rows: 1fr;
+    `;
+  }}
+
+  /* 화면이 좁을 때는 그냥 무조건 스택 */
+  @media (max-width: 1024px) {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
   }
 `;
 
-export const ThumbnailPane = styled.aside`
+export const ThumbnailPane = styled.aside<{
+  $mode: "normal" | "compact" | "stack";
+}>`
   order: 2;
   @media (min-width: 900px) {
     order: 1;
   }
+
+  ${({ $mode }) => {
+    if ($mode === "stack") {
+      return css`
+        max-height: 40vh; /* 세로 스택에서 썸네일 높이 제한 */
+        border-bottom: 1px solid var(--gray-300);
+      `;
+    }
+    return css`
+      max-height: none;
+      border-right: 1px solid var(--gray-300);
+    `;
+  }}
 `;
 
-export const QuestionPane = styled.section`
+export const QuestionPane = styled.section<{
+  $mode: "normal" | "compact" | "stack";
+}>`
   order: 1;
+
   @media (min-width: 900px) {
     order: 2;
   }
@@ -153,6 +193,11 @@ export const QuestionPane = styled.section`
   @media (min-width: 768px) {
     padding: 16px 18px;
   }
+  ${({ $mode }) =>
+    $mode === "stack" &&
+    css`
+      margin-top: 0.75rem;
+    `}
 `;
 
 export const ThumbnailTitle = styled.h2`

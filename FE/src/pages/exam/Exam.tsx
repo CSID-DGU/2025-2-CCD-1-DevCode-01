@@ -21,7 +21,7 @@ const Exam = () => {
   const [submitting, setSubmitting] = useState(false);
   const [endTime, setEndTime] = useState("");
   const [images, setImages] = useState<File[]>([]);
-  const [mode, setMode] = useState<CaptureMode>("camera");
+  const [mode, setMode] = useState<CaptureMode>("file");
 
   /* ---------- 1) 현재 시험 상태 확인 ---------- */
   useEffect(() => {
@@ -229,7 +229,7 @@ const SpinnerWrapper = styled.div`
   align-items: center;
   justify-content: center;
   ${fonts.bold26}
-  color: var(--c-white);
+  color: white;
 `;
 
 const PageContainer = styled.div`
@@ -261,29 +261,27 @@ const Title = styled.h1`
   font-size: 1.4rem;
   font-weight: 700;
   margin-bottom: 8px;
-
+  color: var(--c-black);
   @media (min-width: 768px) {
     font-size: 1.6rem;
+    ${fonts.bold32}
   }
 `;
 
 const Description = styled.p`
   font-size: 0.9rem;
-  color: #555;
+  color: var(--c-grayD);
   line-height: 1.6;
   margin-bottom: 20px;
 
   @media (min-width: 768px) {
-    font-size: 1rem;
+    ${fonts.regular17}
   }
 `;
 
 const Field = styled.div`
   margin-bottom: 18px;
-
-  @media (min-width: 768px) {
-    margin-bottom: 20px;
-  }
+  margin-bottom: 20px;
 `;
 
 const Label = styled.label`
@@ -293,7 +291,7 @@ const Label = styled.label`
   margin-bottom: 6px;
 
   @media (min-width: 768px) {
-    font-size: 0.95rem;
+    ${fonts.bold20};
   }
 `;
 
@@ -302,44 +300,43 @@ const Input = styled.input`
   padding: 11px 12px;
   font-size: 1rem;
   border-radius: 10px;
-  border: 1px solid #ddd;
-  outline: none;
-  background-color: #fff;
+  border: 1px solid var(--c-grayD);
+  background-color: var(--c-white);
+  color: var(--c-black);
 
   &:focus {
-    border-color: #2563eb;
     box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.25);
+    outline: 2px solid var(--c-blue);
   }
 
   @media (min-width: 768px) {
     padding: 12px 14px;
-    font-size: 1.05rem;
+    ${fonts.medium24}
   }
 `;
 
 const Hint = styled.p`
   margin-top: 4px;
   font-size: 0.8rem;
-  color: #777;
+  color: var(--c-grayD);
 
   @media (min-width: 768px) {
-    font-size: 0.85rem;
+    ${fonts.regular20}
   }
 `;
 
-/* 모드 스위치 */
 const ModeSwitch = styled.div`
   display: inline-flex;
   padding: 3px;
   border-radius: 999px;
-  background: #e5e7eb;
+  background: var(--c-grayL);
   margin-bottom: 6px;
 `;
 
 const ModeButton = styled.button<{ $active: boolean }>`
   border: none;
-  background: ${({ $active }) => ($active ? "#ffffff" : "transparent")};
-  color: ${({ $active }) => ($active ? "#111827" : "#6b7280")};
+  background: ${({ $active }) => ($active ? "var(--c-white)" : "transparent")};
+  color: ${({ $active }) => ($active ? "var(--c-black)" : "var(--c-grayD)")};
   font-size: 0.85rem;
   font-weight: 600;
   padding: 8px 14px;
@@ -348,7 +345,7 @@ const ModeButton = styled.button<{ $active: boolean }>`
   transition: background 0.15s ease, color 0.15s ease;
 
   &:focus-visible {
-    outline: 2px solid #2563eb;
+    outline: 2px solid var(--c-blue);
     outline-offset: 2px;
   }
 
@@ -364,8 +361,8 @@ const FileInputLabel = styled.label`
   justify-content: center;
   padding: 10px 14px;
   border-radius: 999px;
-  background: #111827;
-  color: #fff;
+  background: var(--c-black);
+  color: var(--c-white);
   font-size: 0.9rem;
   cursor: pointer;
   margin-bottom: 4px;
@@ -375,7 +372,7 @@ const FileInputLabel = styled.label`
   }
 
   @media (min-width: 768px) {
-    font-size: 0.95rem;
+    font-size: 1.2rem;
     padding: 11px 16px;
   }
 `;
@@ -408,7 +405,7 @@ const ImageItem = styled.li`
   gap: 10px;
   padding: 8px;
   border-radius: 12px;
-  background: #f9fafb;
+  background: var(--c-grayL);
 
   @media (min-width: 768px) {
     padding: 10px;
@@ -460,9 +457,12 @@ const ImageMeta = styled.div`
 const RemoveButton = styled.button`
   border: none;
   background: transparent;
-  color: #ef4444;
-  font-size: 0.8rem;
-  padding: 4px 6px;
+  color: white;
+  font-size: 1rem;
+  border: 1px solid red;
+  border-radius: 16px;
+  background-color: #ef4444;
+  padding: 4px 10px;
   cursor: pointer;
 
   &:focus-visible {
@@ -478,14 +478,14 @@ const SubmitButton = styled.button`
   transform: translateX(-50%);
 
   width: 100%;
-  max-width: 600px;
+  max-width: 400px;
   margin: 0 auto;
   padding: 13px 18px;
 
   border-radius: 999px;
   border: none;
-  background: #2563eb;
-  color: #ffffff;
+  background: var(--c-blue);
+  color: var(--c-white);
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
@@ -501,7 +501,7 @@ const SubmitButton = styled.button`
   @media (min-width: 768px) {
     bottom: 24px;
     padding: 14px 20px;
-    font-size: 1.05rem;
+    ${fonts.bold20}
   }
 `;
 
