@@ -4,7 +4,7 @@ import shutil
 import tempfile
 import traceback
 
-from ai_file_ocr.celery_app import shared_task
+from ai_file_ocr.celery_app import celery_app
 import boto3
 
 from ai_exam_ocr.src.exam_ocr.pipeline import process_exam
@@ -29,7 +29,7 @@ def upload_s3(local_path: str, key_prefix: str) -> str:
     return f"https://{S3_BUCKET}.s3.amazonaws.com/{key}"
 
 
-@shared_task(name="tasks.exam_tasks.run_exam_ocr")
+@celery_app.task(name="ai_exam_ocr.tasks.run_exam_ocr")
 def run_exam_ocr(image_bytes: bytes, ext: str):
 
     tmp_root = tempfile.mkdtemp(prefix="exam_")
