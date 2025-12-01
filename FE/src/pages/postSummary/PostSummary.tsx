@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Spinner from "src/components/common/Spinner";
 import { readFontPct } from "@pages/class/pre/ally";
@@ -10,6 +10,7 @@ import {
   type SpeechSummaryDetail,
 } from "@apis/lecture/profTts.api";
 import toast from "react-hot-toast";
+import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 
 type SpeechSummaryItem = {
   speechSummaryId: number;
@@ -40,6 +41,50 @@ export const PostSummary = () => {
   const [isDirty, setIsDirty] = useState(false);
 
   const [loading, setLoading] = useState(false);
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { soundRate, soundVoice } = useSoundOptions();
+
+  const ensureSummarySrc = useCallback(() => {
+    const a = audioRef.current;
+    if (!a || !detail) return null;
+
+    const female = detail.stt_summary_tts?.female;
+    const male = detail.stt_summary_tts?.male;
+
+    const url = soundVoice === "여성" ? female ?? male : male ?? female;
+    if (!url) return null;
+
+    if (a.src !== url) {
+      a.src = url;
+    }
+
+    applyPlaybackRate(a, soundRate);
+    return a;
+  }, [detail, soundRate, soundVoice]);
+
+  const handleFocusTextarea = useCallback(() => {
+    const a = ensureSummarySrc();
+    if (!a) return;
+
+    a.currentTime = 0;
+    a.play()
+      .then(() => {})
+      .catch((err) => {
+        console.warn("[PostSummary] 요약 TTS 자동 재생 실패:", err);
+      });
+  }, [ensureSummarySrc]);
+
+  useEffect(() => {
+    if (!detail) return;
+
+    const a = audioRef.current;
+    if (!a) return;
+
+    a.pause();
+    a.currentTime = 0;
+    a.src = "";
+  }, [detail?.speechSummaryId]);
 
   useEffect(() => {
     const handleFontChange = () => {
@@ -273,6 +318,29 @@ export const PostSummary = () => {
                   setEditText(e.target.value);
                   setIsDirty(true);
                 }}
+                onFocus={handleFocusTextarea}
+                onBlur={() => {
+                  const a = audioRef.current;
+                  if (!a) return;
+                  a.pause();
+                }}
+                onKeyDown={(e) => {
+                  const isCtrlEnter =
+                    (e.ctrlKey || e.metaKey) && e.key === "Enter";
+
+                  if (isCtrlEnter) {
+                    e.preventDefault();
+                    if (isDirty && detail) {
+                      void handleSave();
+                    }
+                  }
+                }}
+              />
+
+              <audio
+                ref={audioRef}
+                preload="none"
+                style={{ display: "none" }}
               />
 
               <S.DetailFooter>

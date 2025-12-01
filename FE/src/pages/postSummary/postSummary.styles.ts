@@ -9,6 +9,18 @@ export const PageContainer = styled.div`
   background: #f5f7fb;
 `;
 
+export const SrLive = styled.div`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  overflow: hidden;
+`;
+
 /* 상단 툴바 */
 export const Toolbar = styled.header`
   display: flex;

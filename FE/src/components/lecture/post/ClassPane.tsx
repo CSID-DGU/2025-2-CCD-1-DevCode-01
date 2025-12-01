@@ -12,7 +12,7 @@ import Spinner from "src/components/common/Spinner";
 import { useOcrTtsAutoStop } from "src/hooks/useOcrTtsAutoStop";
 
 type Props = {
-  pageId: number;
+  pageId?: number;
   review: PageReview | null;
   isActive: boolean;
 };
