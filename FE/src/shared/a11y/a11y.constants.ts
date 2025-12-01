@@ -3,7 +3,7 @@ export const A11Y_STORAGE_KEYS = {
   hc: "high_contrast",
 } as const;
 
-export const DEFAULT_FONT_PCT = "125";
+export const DEFAULT_FONT_PCT = "100";
 
 export const FONT_RANGE = { min: "100", max: "400" } as const;
 

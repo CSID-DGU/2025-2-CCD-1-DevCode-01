@@ -108,6 +108,47 @@ const Nav = ({ variant, title }: Props) => {
     );
   }
 
+  //시험
+
+  if (variant === "exam") {
+    return (
+      <s.NavWrapper data-variant="folder">
+        <s.FolderLeft>
+          <img src={logo} alt="캠퍼스 메이트 로고" />
+          <s.TabNav role="tablist" aria-label="메인 탭">
+            {/* 경로는 기존 라우트 유지, 라벨만 변경 */}
+            <s.TabLink to="/" end>
+              강의실
+            </s.TabLink>
+          </s.TabNav>
+        </s.FolderLeft>
+
+        <s.Title aria-live="polite">{title ?? " "}</s.Title>
+
+        <s.Right>
+          <RightActions
+            isHC={isHC}
+            onOpenA11y={() => setA11yOpen(true)}
+            soundSrc={sound}
+            eyeSrc={eye}
+            logoutSrc={logout}
+            onOpenSound={() => setSoundOpen(true)}
+            onLogout={handleLogout}
+          />
+        </s.Right>
+
+        <A11yModal open={a11yOpen} onClose={() => setA11yOpen(false)} />
+        <SoundModal
+          open={soundOpen}
+          onClose={() => setSoundOpen(false)}
+          onApplied={({ rate, voice }) => {
+            toast.success(`${voice}, ${rate}로 적용했어요`);
+          }}
+        />
+      </s.NavWrapper>
+    );
+  }
+
   /* ---------- 2) 홈(폴더): 로고 + 탭(강의실, 시험) / 오른쪽 설정 ---------- */
   if (variant === "folder") {
     return (

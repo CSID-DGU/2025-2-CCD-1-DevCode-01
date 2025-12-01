@@ -21,7 +21,7 @@ const Exam = () => {
   const [submitting, setSubmitting] = useState(false);
   const [endTime, setEndTime] = useState("");
   const [images, setImages] = useState<File[]>([]);
-  const [mode, setMode] = useState<CaptureMode>("camera");
+  const [mode, setMode] = useState<CaptureMode>("file");
 
   /* ---------- 1) 현재 시험 상태 확인 ---------- */
   useEffect(() => {

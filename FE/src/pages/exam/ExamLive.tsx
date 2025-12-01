@@ -17,6 +17,7 @@ import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 import { useLocalTTS } from "src/hooks/useLocalTTS";
 
 import * as S from "./ExamLive.styles";
+import { readFontPct } from "@pages/class/pre/ally";
 
 const ExamTake = () => {
   const navigate = useNavigate();
@@ -48,6 +49,25 @@ const ExamTake = () => {
   const isWholeReadingRef = useRef(false);
 
   const makeKey = (qNo: number, idx: number) => `${qNo}-${idx}`;
+
+  const [fontPct, setFontPct] = useState(() => readFontPct());
+
+  useEffect(() => {
+    const handleFontChange = () => {
+      setFontPct(readFontPct());
+    };
+
+    window.addEventListener("a11y-font-change", handleFontChange);
+    return () =>
+      window.removeEventListener("a11y-font-change", handleFontChange);
+  }, []);
+
+  // 배율에 따라 레이아웃 모드 결정
+  const layoutMode: "normal" | "compact" | "stack" = useMemo(() => {
+    if (fontPct >= 175) return "stack"; // 175~300% -> 세로 스택
+    if (fontPct >= 150) return "compact"; // 150~200% -> 좁은 2열
+    return "normal"; // 그 외 -> 기본 2열
+  }, [fontPct]);
 
   /* ---------- 공통: 로컬 안내 음성 ---------- */
   const announce = (text: string) => {
@@ -430,9 +450,9 @@ const ExamTake = () => {
       </S.Toolbar>
 
       {/* 메인 레이아웃 */}
-      <S.MainLayout>
+      <S.MainLayout $mode={layoutMode}>
         {/* 썸네일 영역 */}
-        <S.ThumbnailPane>
+        <S.ThumbnailPane $mode={layoutMode}>
           <S.ThumbnailTitle>문제 목록</S.ThumbnailTitle>
           <S.ThumbnailList>
             {questions.map((q, idx) => {
@@ -472,7 +492,7 @@ const ExamTake = () => {
         </S.ThumbnailPane>
 
         {/* 문제 내용 영역 */}
-        <S.QuestionPane>
+        <S.QuestionPane $mode={layoutMode}>
           <S.QuestionHeader>
             <S.NavButton
               type="button"
@@ -571,54 +591,58 @@ const ExamTake = () => {
                       ) : (
                         <ItemTextContent item={item} />
                       )}
-
-                      <S.TtsButton
-                        type="button"
-                        onClick={() =>
-                          handlePlayItemTTS(currentQuestion.questionNumber, idx)
-                        }
-                        disabled={isLoading}
-                        aria-label={
-                          isLoading
-                            ? `문제 ${currentQuestion.questionNumber}의 ${
-                                idx + 1
-                              }번째 요소, 음성 불러오는 중`
-                            : isPlaying
-                            ? `문제 ${currentQuestion.questionNumber}의 ${
-                                idx + 1
-                              }번째 요소, 재생 중. 정지하려면 엔터 키를 누르세요.`
-                            : `문제 ${currentQuestion.questionNumber}의 ${
-                                idx + 1
-                              }번째 요소 듣기 버튼`
-                        }
-                        onFocus={() => {
-                          if (isLoading) {
-                            announce(
-                              `문제 ${currentQuestion.questionNumber}의 ${
-                                idx + 1
-                              }번째 요소 듣기 버튼입니다. 음성을 불러오는 중입니다.`
-                            );
-                          } else if (isPlaying) {
-                            announce(
-                              `문제 ${currentQuestion.questionNumber}의 ${
-                                idx + 1
-                              }번째 요소가 재생 중입니다. 정지하려면 엔터 키를 누르세요.`
-                            );
-                          } else {
-                            announce(
-                              `문제 ${currentQuestion.questionNumber}의 ${
-                                idx + 1
-                              }번째 요소 듣기 버튼입니다. 엔터 키를 누르면 이 내용을 읽어줍니다.`
-                            );
+                      <S.TtsButtonContainer>
+                        <S.TtsButton
+                          type="button"
+                          onClick={() =>
+                            handlePlayItemTTS(
+                              currentQuestion.questionNumber,
+                              idx
+                            )
                           }
-                        }}
-                      >
-                        {isLoading
-                          ? "불러오는 중..."
-                          : isPlaying
-                          ? "정지"
-                          : "듣기"}
-                      </S.TtsButton>
+                          disabled={isLoading}
+                          aria-label={
+                            isLoading
+                              ? `문제 ${currentQuestion.questionNumber}의 ${
+                                  idx + 1
+                                }번째 요소, 음성 불러오는 중`
+                              : isPlaying
+                              ? `문제 ${currentQuestion.questionNumber}의 ${
+                                  idx + 1
+                                }번째 요소, 재생 중. 정지하려면 엔터 키를 누르세요.`
+                              : `문제 ${currentQuestion.questionNumber}의 ${
+                                  idx + 1
+                                }번째 요소 듣기 버튼`
+                          }
+                          onFocus={() => {
+                            if (isLoading) {
+                              announce(
+                                `문제 ${currentQuestion.questionNumber}의 ${
+                                  idx + 1
+                                }번째 요소 듣기 버튼입니다. 음성을 불러오는 중입니다.`
+                              );
+                            } else if (isPlaying) {
+                              announce(
+                                `문제 ${currentQuestion.questionNumber}의 ${
+                                  idx + 1
+                                }번째 요소가 재생 중입니다. 정지하려면 엔터 키를 누르세요.`
+                              );
+                            } else {
+                              announce(
+                                `문제 ${currentQuestion.questionNumber}의 ${
+                                  idx + 1
+                                }번째 요소 듣기 버튼입니다. 엔터 키를 누르면 이 내용을 읽어줍니다.`
+                              );
+                            }
+                          }}
+                        >
+                          {isLoading
+                            ? "불러오는 중..."
+                            : isPlaying
+                            ? "정지"
+                            : "듣기"}
+                        </S.TtsButton>
+                      </S.TtsButtonContainer>
                     </S.ItemBlock>
                   );
                 })}
