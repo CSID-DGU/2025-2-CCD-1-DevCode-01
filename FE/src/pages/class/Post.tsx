@@ -524,6 +524,20 @@ export default function PostClass() {
             },
           });
         }}
+        onPostSummary={() => {
+          if (!docId) {
+            toast.error(
+              "문서 정보가 없어 발화 요약 화면으로 이동할 수 없습니다."
+            );
+            return;
+          }
+          navigate(`/lecture/doc/${docId}/post/summary`, {
+            state: {
+              docId,
+              navTitle: state?.navTitle ?? "수업 후",
+            },
+          });
+        }}
       />
     </Wrap>
   );

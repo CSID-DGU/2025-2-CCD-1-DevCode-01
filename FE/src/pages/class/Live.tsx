@@ -29,6 +29,7 @@ import {
 import { postBookmarkClock, toHHMMSS } from "@apis/lecture/bookmark.api";
 import { uploadSpeechQueued } from "@apis/lecture/speech.api";
 import { useAudioRecorder } from "@shared/useAudioRecorder";
+import { requestDocSpeechSummary } from "@apis/lecture/profTts.api";
 
 type RouteParams = { courseId?: string; docId?: string };
 type NavState = {
@@ -590,9 +591,11 @@ export default function LiveClass() {
         console.warn("[end] empty blob → skip upload");
       }
 
+      void requestDocSpeechSummary(dId, endHHMMSS);
+
       if (!pageId) {
         console.warn(
-          "[onEndLecture] pageId 없음 → 업로드 스킵하고 그냥 종료 이동"
+          "[onEndLecture] pageId 없음. 업로드 스킵하고 그냥 종료 이동"
         );
         clearRec(dId);
         navigate(`/lecture/doc/${docId}/post`, {
