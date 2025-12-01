@@ -31,7 +31,11 @@ type LiveOnly = {
   pauseLabel?: string;
 };
 
-type Props = CommonProps & PreOnly & LiveOnly;
+type PostOnly = {
+  onPostSummary?: () => void | Promise<void>;
+};
+
+type Props = CommonProps & PreOnly & LiveOnly & PostOnly;
 
 export default function BottomToolbar({
   canPrev,
@@ -51,6 +55,7 @@ export default function BottomToolbar({
   onBookmark,
   onEnd,
   pauseLabel = "일시 정지",
+  onPostSummary,
 }: Props) {
   const [draft, setDraft] = useState<string>(String(page));
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -222,6 +227,24 @@ export default function BottomToolbar({
                 ■ 강의종료
               </Primary>
             )}
+          </Group>
+        </>
+      )}
+      {onPostSummary && (
+        <>
+          <Divider role="separator" aria-orientation="vertical" />
+          <Group>
+            <Primary
+              type="button"
+              onClick={() => {
+                void onPostSummary();
+                speak?.("교수 발화 요약 화면으로 이동");
+              }}
+              onFocus={() => speak?.("교수 발화 요약 버튼")}
+              aria-label="교수 발화 요약 화면으로 이동"
+            >
+              발화 요약 보기
+            </Primary>
           </Group>
         </>
       )}

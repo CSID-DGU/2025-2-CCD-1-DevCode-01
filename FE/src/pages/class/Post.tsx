@@ -28,6 +28,7 @@ import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 import BottomToolbar from "src/components/lecture/pre/BottomToolBar";
 import RightTabsPost from "src/components/lecture/post/RightTabPost";
 import { useFocusTTS } from "src/hooks/useFocusTTS";
+import { fetchDocSpeechSummaries } from "@apis/lecture/profTts.api";
 
 type RouteParams = { courseId?: string; docId?: string };
 type NavState = {
@@ -521,6 +522,27 @@ export default function PostClass() {
               pageId,
               autoRecord: true,
               resumeClock: state?.resumeClock ?? null,
+            },
+          });
+        }}
+        onPostSummary={async () => {
+          if (!docId) {
+            toast.error("문서 정보가 없어 발화 요약을 확인할 수 없습니다.");
+            return;
+          }
+
+          const res = await fetchDocSpeechSummaries(docId);
+
+          if (!res) {
+            toast.error("발화 요약 목록을 불러오지 못했습니다.");
+            return;
+          }
+
+          navigate(`/lecture/doc/${docId}/post/summary`, {
+            state: {
+              docId,
+              summaries: res.summaries,
+              navTitle: state?.navTitle ?? "수업 후",
             },
           });
         }}

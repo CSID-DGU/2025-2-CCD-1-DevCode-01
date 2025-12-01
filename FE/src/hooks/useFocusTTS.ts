@@ -1,4 +1,3 @@
-// src/pages/class/Pre/hooks/useFocusTTS.ts
 import { useEffect, useRef } from "react";
 
 type Opts = {
