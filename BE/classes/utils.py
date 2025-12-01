@@ -1,13 +1,15 @@
 import re
 import tempfile
 import wave
+from bs4 import BeautifulSoup
 from google.cloud import speech, storage
-from google.cloud import texttospeech
+from google.cloud import texttospeech, translate_v2 as translate
 import boto3
 from django.conf import settings
 import io, os
 import uuid
 from datetime import datetime, timedelta
+import markdown
 import numpy as np
 
 from users.models import User
@@ -51,6 +53,7 @@ symbol_map = {
 symbol_pattern = re.compile("|".join(re.escape(k) for k in symbol_map.keys()))
 code_pattern = re.compile(r"<코드>(.*?)</코드>", re.DOTALL)
 math_pattern = re.compile(r"<수식>(.*?)</수식>", re.DOTALL)
+translate_client = translate.Client()
 
 def upload_to_gcs(file_bytes: bytes, filename: str, bucket_name: str) -> str:
     """GCS 버킷에 파일 업로드 후 URI 반환"""
@@ -261,13 +264,40 @@ def preprocess_text(processed_math):
         # 코드 전처리
         processed_code = preprocess_code(code_text)
         return processed_code
+    
+    # 수식 번역
+    def translate_math(match):
+        english_math = match.group(1)
+
+        result = translate_client.translate(
+            english_math,
+            source_language='en',
+            target_language='ko'
+        )
+        
+        korean_math = result['translatedText']
+        return korean_math
 
     # 최종 전처리 텍스트
     processed_text = code_pattern.sub(replace_code, processed_math)
-    processed_text = math_pattern.sub(r"\1", processed_text)
+    processed_text = math_pattern.sub(translate_math, processed_text)
 
     return processed_text
+
+def markdown_to_text(md_text: str) -> str:
+    if not md_text or md_text.strip() == "":
+        raise ValueError("변환할 마크다운 텍스트가 비어 있습니다.")
     
+    html = markdown.markdown(md_text)
+
+    soup = BeautifulSoup(html, "lxml")
+    text = soup.get_text(separator="\n")
+
+    text = re.sub(r'\n\s*\n', '\n', text).strip()
+
+    return text
+
+
 def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     
     if not text or text.strip() == "":
