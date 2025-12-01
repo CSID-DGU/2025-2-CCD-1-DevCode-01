@@ -44,6 +44,9 @@ const router = createBrowserRouter([
           {
             path: "/signup",
             element: <SignupShell />,
+            handle: {
+              nav: { variant: "auth", title: "캠퍼스 메이트" } as NavMeta,
+            },
             children: [
               { index: true, element: <Step1Role /> },
               { path: "1", element: <Step1Role /> },
@@ -51,7 +54,6 @@ const router = createBrowserRouter([
               { path: "3", element: <Step3TTS /> },
               { path: "4", element: <Step4Credentials /> },
             ],
-            handle: { nav: { variant: "auth" } as NavMeta },
           },
         ],
       },
