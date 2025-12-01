@@ -67,10 +67,11 @@ export async function endExam(): Promise<boolean> {
 //시험 tts
 export async function fetchExamItemTTS(
   questionNumber: number,
-  itemIndex: number
+  itemIndex: number,
+  text: string
 ): Promise<ExamItemTTSResponse | null> {
   return await postResponse<
-    { questionNumber: number; itemIndex: number },
+    { questionNumber: number; itemIndex: number; text: string },
     ExamItemTTSResponse
-  >("/exam/tts/", { questionNumber, itemIndex });
+  >("/exam/tts/", { questionNumber, itemIndex, text });
 }

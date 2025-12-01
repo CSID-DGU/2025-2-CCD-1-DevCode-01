@@ -185,7 +185,7 @@ export async function fetchPageTTS(
   }
 }
 
-// ---------- ✅ 새로 추가: 요약 TTS API ----------
+// ---------- 요약 TTS API ----------
 
 export type SummaryTTSRequestBody = {
   summary_text: string;
