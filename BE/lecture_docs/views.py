@@ -732,12 +732,14 @@ class ExamTTSView(APIView):
         if not text:
             return Response({"error": "item에 displayText 없음"}, status=400)
 
-        processed_text = preprocess_text(text)
+        processed_math = request.data.get("text", text)
+
+        preprocessed_text = preprocess_text(processed_math)
 
         # TTS 생성
         try:
             tts_url = text_to_speech(
-                processed_text,
+                preprocessed_text,
                 user=user,
                 s3_folder="tts/exam_items/"
             )
