@@ -540,16 +540,16 @@ class PageView(APIView):
             for board in boards:
                 if not board.board_tts:
                     try:
-                        board.board_tts = text_to_speech(board.text, user)
+                        board.board_tts = text_to_speech(markdown_to_text(board.text), user, s3_folder="tts/boards/")
                         board.save()
                     except Exception as e:
                         print("추가 자료 TTS 생성 중 오류:", e)
 
         response_data = {
             "note": note_data,
-            "speeches": SpeechSerializer(speeches, many=True).data,
-            "bookmarks": bookmarks,
-            "boards": BoardReviewSerializer(boards, many=True).data,
+            "speeches": SpeechSerializer(speeches, many=True).data if speeches.exists() else None,
+            "bookmarks": bookmarks if bookmarks else None,
+            "boards": BoardReviewSerializer(boards, many=True).data if boards.exists() else None,
         }
 
         return Response(response_data, status=200)
