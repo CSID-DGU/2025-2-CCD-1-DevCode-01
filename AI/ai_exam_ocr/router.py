@@ -8,7 +8,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 
 from dotenv import load_dotenv
-from ai_exam_ocr.src.tasks import run_exam_ocr
+from ai_exam_ocr.tasks import run_exam_ocr
 from ai_file_ocr.celery_app import celery_app
 
 load_dotenv()
