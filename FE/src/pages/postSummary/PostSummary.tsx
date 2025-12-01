@@ -1,4 +1,3 @@
-// src/pages/class/PostSummary.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Spinner from "src/components/common/Spinner";
@@ -7,14 +6,14 @@ import { readFontPct } from "@pages/class/pre/ally";
 import * as S from "./postSummary.styles";
 import {
   fetchSpeechSummaryDetail,
+  patchSpeechSummary,
   type SpeechSummaryDetail,
 } from "@apis/lecture/profTts.api";
+import toast from "react-hot-toast";
 
 type SpeechSummaryItem = {
   speechSummaryId: number;
   createdAt: string;
-  // 추후 리스트 API가 간단 요약 텍스트를 준다면 추가:
-  // previewText?: string;
 };
 
 type LocationState = {
@@ -28,22 +27,20 @@ export const PostSummary = () => {
   const { state } = useLocation() as { state?: LocationState };
 
   const docId = state?.docId;
-  const summaries: SpeechSummaryItem[] = state?.summaries ?? [];
+  const summaries = useMemo(() => state?.summaries ?? [], [state?.summaries]);
+
   const navTitle = state?.navTitle ?? "수업 후";
 
   const [fontPct, setFontPct] = useState(() => readFontPct());
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  // 상세 데이터
   const [detail, setDetail] = useState<SpeechSummaryDetail | null>(null);
 
-  // 수정 텍스트
   const [editText, setEditText] = useState<string>("");
   const [isDirty, setIsDirty] = useState(false);
 
-  const [loading, setLoading] = useState(false); // 저장/상세 로딩용
+  const [loading, setLoading] = useState(false);
 
-  // 배율에 따라 레이아웃 결정 (ExamTake와 비슷한 느낌)
   useEffect(() => {
     const handleFontChange = () => {
       setFontPct(readFontPct());
@@ -98,11 +95,9 @@ export const PostSummary = () => {
     };
   }, [selectedId]);
 
-  // 요약 선택 변경
   const handleSelectSummary = (id: number) => {
     if (id === selectedId) return;
 
-    // 수정 중이면 경고 (간단 버전)
     if (
       isDirty &&
       !window.confirm("수정 중인 내용이 사라집니다. 계속할까요?")
@@ -111,7 +106,6 @@ export const PostSummary = () => {
     }
 
     setSelectedId(id);
-    // detail/editText는 위 useEffect에서 다시 세팅
   };
 
   const handleBackToPost = () => {
@@ -131,35 +125,45 @@ export const PostSummary = () => {
 
     try {
       setLoading(true);
-      // TODO: API 연동
-      // await patchDocSpeechSummary(detail.speechSummaryId, { stt_summary: editText });
 
-      // 일단 로컬 상태만 동기화
+      const res = await patchSpeechSummary(detail.speechSummaryId, {
+        stt_summary: editText,
+      });
+
+      if (!res) {
+        console.warn("[PostSummary] PATCH 응답이 null입니다.");
+        toast?.error("요약 저장에 실패했습니다.");
+        return;
+      }
+
       setDetail((prev: SpeechSummaryDetail | null) =>
-        prev ? { ...prev, stt_summary: editText } : prev
+        prev
+          ? {
+              ...prev,
+              stt_summary: res.stt_summary,
+              stt_summary_tts: res.stt_summary_tts,
+              end_time: res.timestamp,
+            }
+          : prev
       );
 
       setIsDirty(false);
-      // toast.success("요약이 저장되었습니다.");
+      toast.success("요약이 저장되었습니다.");
     } catch (e) {
       console.error(e);
-      // toast.error("요약 저장에 실패했습니다.");
     } finally {
       setLoading(false);
     }
   };
-
   const handleReset = () => {
     if (!isDirty || !detail) return;
     if (!window.confirm("수정한 내용을 모두 취소할까요?")) return;
 
-    // 상세에서 받은 원본 텍스트로 롤백
     setEditText(detail.stt_summary ?? "");
     setIsDirty(false);
   };
 
   if (!docId) {
-    // docId 없이 직접 URL로 접근한 경우
     return (
       <S.PageContainer>
         <S.Toolbar>

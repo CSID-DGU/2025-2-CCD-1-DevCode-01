@@ -1,4 +1,4 @@
-import { getResponse, postNoResponse } from "@apis/instance";
+import { getResponse, patchResponse, postNoResponse } from "@apis/instance";
 
 // 교수 발화 요약 생성
 export const requestDocSpeechSummary = async (
@@ -61,5 +61,28 @@ export const fetchSpeechSummaryDetail = async (
   if (!Number.isFinite(speechSummaryId)) return null;
   return await getResponse<SpeechSummaryDetail>(
     `/doc/speech/summary/${speechSummaryId}/`
+  );
+};
+
+//교수 발화 요약 수정
+export type SpeechSummaryPatchResponse = {
+  docId: number;
+  stt_summary: string;
+  stt_summary_tts: {
+    female?: string;
+    male?: string;
+  };
+  timestamp: string;
+};
+
+export const patchSpeechSummary = async (
+  speechSummaryId: number,
+  body: { stt_summary: string }
+): Promise<SpeechSummaryPatchResponse | null> => {
+  if (!Number.isFinite(speechSummaryId)) return null;
+
+  return await patchResponse<typeof body, SpeechSummaryPatchResponse>(
+    `/doc/speech/summary/${speechSummaryId}/`,
+    body
   );
 };
