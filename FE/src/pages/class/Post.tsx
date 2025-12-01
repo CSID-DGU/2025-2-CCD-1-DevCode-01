@@ -441,7 +441,6 @@ export default function PostClass() {
     setMode((prev) => {
       const next = prev === "ocr" ? "image" : "ocr";
       announce(next === "image" ? "원본 보기" : "본문 보기");
-      setTimeout(() => mainRegionRef.current?.focus(), 0);
       return next;
     });
 

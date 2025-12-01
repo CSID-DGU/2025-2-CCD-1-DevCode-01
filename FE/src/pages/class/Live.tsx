@@ -203,8 +203,6 @@ export default function LiveClass() {
             nextDefaultMode === "ocr" ? "본문" : "원본"
           } 보기`
         );
-
-        setTimeout(() => mainRegionRef.current?.focus(), 0);
       } catch (err) {
         if (!cancelled) {
           toast.error("데이터 로드 중 오류가 발생했습니다.");
@@ -657,7 +655,6 @@ export default function LiveClass() {
     setMode((prev) => {
       const next = prev === "ocr" ? "image" : "ocr";
       announce(next === "image" ? "원본 보기" : "본문 보기");
-      setTimeout(() => mainRegionRef.current?.focus(), 0);
       return next;
     });
 
