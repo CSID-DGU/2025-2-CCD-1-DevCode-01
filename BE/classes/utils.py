@@ -1,6 +1,7 @@
 import re
 import tempfile
 import wave
+from bs4 import BeautifulSoup
 from google.cloud import speech, storage
 from google.cloud import texttospeech, translate_v2 as translate
 import boto3
@@ -8,6 +9,7 @@ from django.conf import settings
 import io, os
 import uuid
 from datetime import datetime, timedelta
+import markdown
 import numpy as np
 
 from users.models import User
@@ -281,7 +283,21 @@ def preprocess_text(processed_math):
     processed_text = math_pattern.sub(translate_math, processed_text)
 
     return processed_text
+
+def markdown_to_text(md_text: str) -> str:
+    if not md_text or md_text.strip() == "":
+        raise ValueError("변환할 마크다운 텍스트가 비어 있습니다.")
     
+    html = markdown.markdown(md_text)
+
+    soup = BeautifulSoup(html, "lxml")
+    text = soup.get_text(separator="\n")
+
+    text = re.sub(r'\n\s*\n', '\n', text).strip()
+
+    return text
+
+
 def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     
     if not text or text.strip() == "":

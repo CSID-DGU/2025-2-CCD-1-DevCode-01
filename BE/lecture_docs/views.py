@@ -17,7 +17,7 @@ from rest_framework import status,permissions
 from rest_framework.response import Response
 from classes.models import Bookmark, Note, Speech
 from classes.models import Bookmark, Note, Speech
-from classes.utils import preprocess_text, text_to_speech
+from classes.utils import markdown_to_text, preprocess_text, text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
 from .utils import  *
