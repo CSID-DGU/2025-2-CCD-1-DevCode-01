@@ -172,7 +172,8 @@ const ExamTake = () => {
   /* ---------- 3) 서버 TTS: item 개별 듣기 ---------- */
   const handlePlayItemTTS = async (
     questionNumber: number,
-    itemIndex: number
+    itemIndex: number,
+    rawText?: string | null
   ) => {
     const key = makeKey(questionNumber, itemIndex);
 
@@ -195,9 +196,27 @@ const ExamTake = () => {
     let tts = ttsMap[key];
 
     if (!tts) {
+      if (!rawText) {
+        alert("텍스트가 없어 음성을 생성할 수 없습니다.");
+        return;
+      }
+
+      let finalText = rawText;
+      try {
+        finalText = await buildTtsText(rawText);
+      } catch (err) {
+        console.error("[ExamTake] buildTtsText 실패, 원본 텍스트로 진행:", err);
+      }
+
       try {
         setTtsLoadingKey(key);
-        const res = await fetchExamItemTTS(questionNumber, itemIndex);
+
+        const res = await fetchExamItemTTS(
+          questionNumber,
+          itemIndex,
+          finalText
+        );
+
         setTtsLoadingKey(null);
 
         if (!res || !res.tts) {
@@ -597,7 +616,8 @@ const ExamTake = () => {
                           onClick={() =>
                             handlePlayItemTTS(
                               currentQuestion.questionNumber,
-                              idx
+                              idx,
+                              item.displayText ?? null
                             )
                           }
                           disabled={isLoading}
