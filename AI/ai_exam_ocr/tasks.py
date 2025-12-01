@@ -7,7 +7,7 @@ import traceback
 from ai_file_ocr.celery_app import celery_app
 import boto3
 
-from ai_exam_ocr.src.exam_ocr.pipeline import process_exam
+from ai_exam_ocr.pipeline.pipeline import process_exam
 
 
 S3_BUCKET = os.getenv("AWS_BUCKET_NAME")
