@@ -389,9 +389,7 @@ const ExamTake = () => {
               );
             }}
           >
-            {viewMode === "detail"
-              ? "시험지 전체 페이지 보기"
-              : "텍스트로 보기"}
+            {viewMode === "detail" ? "시험지 원본 사진 보기" : "텍스트로 보기"}
           </S.ToolbarButton>
 
           {/* 현재 문제 전체 듣기 */}

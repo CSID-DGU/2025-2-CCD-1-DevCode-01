@@ -229,7 +229,7 @@ const SpinnerWrapper = styled.div`
   align-items: center;
   justify-content: center;
   ${fonts.bold26}
-  color: var(--c-white);
+  color: white;
 `;
 
 const PageContainer = styled.div`
