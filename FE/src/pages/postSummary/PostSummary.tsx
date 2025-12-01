@@ -285,7 +285,9 @@ export const PostSummary = () => {
                       }
                     }}
                   >
-                    <S.SummaryDate>{s.createdAt}</S.SummaryDate>
+                    <S.SummaryDate $active={active}>
+                      {s.createdAt}
+                    </S.SummaryDate>
                   </S.SummaryItem>
                 );
               })}

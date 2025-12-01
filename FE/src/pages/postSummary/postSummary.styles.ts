@@ -6,7 +6,7 @@ export const PageContainer = styled.div`
   display: flex;
   flex-direction: column;
   width: 100%;
-  background: #f5f7fb;
+  background: var(--c-grayL);
 `;
 
 export const SrLive = styled.div`
@@ -27,8 +27,8 @@ export const Toolbar = styled.header`
   align-items: center;
   justify-content: space-between;
   padding: 0.9rem 1.5rem;
-  border-bottom: 1px solid #dde3f0;
-  background: #ffffff;
+  border-bottom: 1px solid var(--c-grayL);
+  background: var(--c-white);
 `;
 
 export const ToolbarLeft = styled.div`
@@ -38,13 +38,13 @@ export const ToolbarLeft = styled.div`
 `;
 
 export const ToolbarTitle = styled.h1`
-  ${fonts.bold20};
-  color: #111827;
+  ${fonts.bold26};
+  color: var(--c-black);
 `;
 
 export const ToolbarSubtitle = styled.p`
-  ${fonts.regular17};
-  color: #6b7280;
+  ${fonts.bold26};
+  color: var(--c-grayD);
 `;
 
 export const ToolbarRight = styled.div`
@@ -54,17 +54,13 @@ export const ToolbarRight = styled.div`
 `;
 
 export const ToolbarButton = styled.button`
-  ${fonts.regular17};
+  ${fonts.medium24};
   padding: 0.4rem 0.9rem;
   border-radius: 999px;
-  border: 1px solid #d1d5db;
-  background: #ffffff;
-  color: #111827;
+  border: 1px solid var(--c-black);
+  background: var(--c-white);
+  color: var(--c-black);
   cursor: pointer;
-
-  &:hover {
-    background: #f3f4f6;
-  }
 
   &:focus-visible {
     outline: 2px solid var(--c-blue, #2563eb);
@@ -86,9 +82,7 @@ export const MainLayout = styled.main<{ $stack: boolean }>`
 
 /* 좌측 목록 패널 */
 export const ListPane = styled.section<{ $stack: boolean }>`
-  background: #ffffff;
-  border-right: ${({ $stack }) => ($stack ? "none" : "1px solid #e5e7eb")};
-  border-bottom: ${({ $stack }) => ($stack ? "1px solid #e5e7eb" : "none")};
+  background: var(--c-white);
   padding: 1rem;
   overflow: hidden;
 `;
@@ -101,13 +95,13 @@ export const ListHeader = styled.div`
 `;
 
 export const ListTitle = styled.h2`
-  ${fonts.regular17};
-  color: #111827;
+  ${fonts.bold26};
+  color: var(--c-black);
 `;
 
 export const ListCount = styled.span`
-  ${fonts.regular17};
-  color: #6b7280;
+  ${fonts.bold20};
+  color: var(--c-grayD);
 `;
 
 export const SummaryList = styled.ul`
@@ -124,31 +118,23 @@ export const SummaryList = styled.ul`
 export const SummaryItem = styled.li<{ $active: boolean }>`
   border-radius: 0.5rem;
   padding: 0.55rem 0.65rem;
-  border: 1px solid ${({ $active }) => ($active ? "#2563eb" : "#e5e7eb")};
-  background: ${({ $active }) => ($active ? "#eff6ff" : "#ffffff")};
+  border: 1px solid
+    ${({ $active }) => ($active ? "var(--c-blue)" : "var(--c-grayD)")};
+  background: ${({ $active }) =>
+    $active ? "var(--c-blue)" : "var(--c-white)"};
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
 
-  &:hover {
-    background: ${({ $active }) => ($active ? "#e0ecff" : "#f9fafb")};
-  }
-
   &:focus-visible {
     outline: 2px solid #2563eb;
-    outline-offset: 2px;
   }
 `;
 
-export const SummaryDate = styled.span`
-  ${fonts.regular17};
-  color: #111827;
-`;
-
-export const SummaryMeta = styled.span`
-  ${fonts.regular17};
-  color: #6b7280;
+export const SummaryDate = styled.span<{ $active: boolean }>`
+  ${fonts.regular20};
+  color: ${({ $active }) => ($active ? "var(--c-white)" : "var(--c-black)")};
 `;
 
 /* 우측 상세 패널 */
@@ -168,8 +154,8 @@ export const DetailHeader = styled.div`
 `;
 
 export const DetailTitle = styled.h2`
-  ${fonts.bold20};
-  color: #111827;
+  ${fonts.bold26};
+  color: var(--c-black);
 `;
 
 export const DetailMeta = styled.div`
@@ -179,8 +165,8 @@ export const DetailMeta = styled.div`
   gap: 0.1rem;
 
   span {
-    ${fonts.regular17};
-    color: #6b7280;
+    ${fonts.regular20};
+    color: var(--c-grayD);
   }
 `;
 
@@ -198,15 +184,14 @@ export const EmptyState = styled.div`
 
 export const TextArea = styled.textarea`
   width: 100%;
-  min-height: 220px;
+  min-height: 70%;
   resize: vertical;
   padding: 0.75rem 0.9rem;
   border-radius: 0.75rem;
-  border: 1px solid #d1d5db;
-  background: #ffffff;
-  ${fonts.regular17};
-  color: #111827;
-  line-height: 1.6;
+  border: 1px solid var(--c-grayD);
+  background: var(--c-white);
+  ${fonts.medium24};
+  color: var(--c-black);
 
   &:focus-visible {
     outline: 2px solid #2563eb;
@@ -222,8 +207,8 @@ export const DetailFooter = styled.div`
 `;
 
 export const FooterLeft = styled.div`
-  ${fonts.regular17};
-  color: #9ca3af;
+  ${fonts.regular20};
+  color: var(--c-grayD);
 `;
 
 export const FooterRight = styled.div`
@@ -232,12 +217,12 @@ export const FooterRight = styled.div`
 `;
 
 export const PrimaryButton = styled.button`
-  ${fonts.regular17};
+  ${fonts.medium24};
   padding: 0.4rem 0.9rem;
   border-radius: 0.6rem;
   border: none;
-  background: var(--c-blue, #2563eb);
-  color: #ffffff;
+  background: var(--c-blue, var(--c-blue));
+  color: var(--c-white);
   cursor: pointer;
 
   &:disabled {
@@ -246,30 +231,26 @@ export const PrimaryButton = styled.button`
   }
 
   &:hover:not(:disabled) {
-    background: #1d4ed8;
+    background: var(--c-blue);
   }
 
   &:focus-visible {
-    outline: 2px solid #1d4ed8;
+    outline: 2px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;
 
 export const GhostButton = styled.button`
-  ${fonts.regular17};
+  ${fonts.medium24};
   padding: 0.4rem 0.9rem;
   border-radius: 0.6rem;
-  border: 1px solid #d1d5db;
-  background: #ffffff;
-  color: #111827;
+  border: 1px solid var(--c-gray);
+  background: var(--c-white);
+  color: var(--c-black);
   cursor: pointer;
 
-  &:hover {
-    background: #f3f4f6;
-  }
-
   &:focus-visible {
-    outline: 2px solid #9ca3af;
+    outline: 2px solid var(--c-grayL);
     outline-offset: 2px;
   }
 `;
