@@ -60,3 +60,27 @@ export async function fetchPageReview(
     boards,
   };
 }
+
+export type BookmarkDetail = {
+  stt_tts: {
+    female?: string;
+    male?: string;
+  } | null;
+  relative_time: number;
+  text: string;
+};
+
+//북마크 재생
+export async function fetchBookmarkDetail(
+  bookmarkId: number
+): Promise<BookmarkDetail> {
+  const data = await getResponse<BookmarkDetail>(
+    `/class/bookmark/${bookmarkId}/`
+  );
+
+  if (!data) {
+    throw new Error("북마크 정보를 불러오지 못했습니다.");
+  }
+
+  return data;
+}

@@ -1,19 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { fonts } from "@styles/fonts";
-import { fetchPageReview, type PageReview } from "@apis/lecture/review.api";
+import {
+  fetchPageReview,
+  fetchBookmarkDetail,
+  type PageReview,
+} from "@apis/lecture/review.api";
 import { PANEL_FIXED_H_LIVE } from "@pages/class/pre/styles";
 import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 import Spinner from "src/components/common/Spinner";
 import { useOcrTtsAutoStop } from "src/hooks/useOcrTtsAutoStop";
-
-const toSec = (hhmmss: string) => {
-  const [h = "0", m = "0", s = "0"] = (hhmmss || "00:00:00").split(":");
-  return Number(h) * 3600 + Number(m) * 60 + Number(s);
-};
-
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
 
 type Props = {
   pageId: number;
@@ -32,7 +28,6 @@ export default function ClassPane({ pageId, review, isActive }: Props) {
   const bookmarks = localReview?.bookmarks ?? [];
   const isProcessing = localReview?.status === "processing";
 
-  // 재생 인덱스
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -42,12 +37,14 @@ export default function ClassPane({ pageId, review, isActive }: Props) {
   const [active, setActive] = useState(false);
   const [playing, setPlaying] = useState(false);
 
-  // 음성 옵션
+  const [highlightText, setHighlightText] = useState<string | null>(null);
+
   const { soundRate, soundVoice } = useSoundOptions();
 
   useEffect(() => {
     setLocalReview(review);
     setCurrentIndex(0);
+    setHighlightText(null);
   }, [review]);
 
   /* ---------- processing이면 폴링 ---------- */
@@ -132,12 +129,14 @@ export default function ClassPane({ pageId, review, isActive }: Props) {
 
     a.addEventListener("ended", handleEnd);
     return () => a.removeEventListener("ended", handleEnd);
-  }, [currentIndex, speeches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, speeches.length]);
 
   const onTogglePlay = () => {
     if (speeches.length === 0) return;
 
     setActive(true);
+    setHighlightText(null);
 
     if (playing) {
       pause();
@@ -156,6 +155,7 @@ export default function ClassPane({ pageId, review, isActive }: Props) {
     if (playing) return;
 
     setActive(true);
+    setHighlightText(null);
 
     let index = currentIndex;
     if (!audioRef.current?.src) {
@@ -165,28 +165,42 @@ export default function ClassPane({ pageId, review, isActive }: Props) {
     play(index);
   };
 
-  const onClickBookmark = (timestamp: string) => {
-    if (speeches.length === 0) return;
+  const onClickBookmark = async (bookmark: {
+    bookmark_id: number;
+    timestamp: string;
+  }) => {
+    if (!audioRef.current) return;
 
-    const sec = toSec(timestamp);
+    try {
+      const detail = await fetchBookmarkDetail(bookmark.bookmark_id);
 
-    let foundIndex = 0;
-    let acc = 0;
+      const female = detail.stt_tts?.female;
+      const male = detail.stt_tts?.male;
+      const url = soundVoice === "여성" ? female ?? male : male ?? female;
+      if (!url) return;
 
-    for (let i = 0; i < speeches.length; i++) {
-      const d = toSec(speeches[i].duration ?? "00:00:00");
-      if (sec < acc + d) {
-        foundIndex = i;
-        break;
+      const audio = audioRef.current;
+      if (audio.src !== url) {
+        audio.src = url;
       }
-      acc += d;
+
+      applyPlaybackRate(audio, soundRate);
+      audio.currentTime = detail.relative_time ?? 0;
+      await audio.play();
+      setPlaying(true);
+      setActive(true);
+
+      setHighlightText(detail.text ?? null);
+
+      if (detail.text) {
+        const idx = speeches.findIndex((s) => s.stt.includes(detail.text!));
+        if (idx >= 0) {
+          setCurrentIndex(idx);
+        }
+      }
+    } catch (e) {
+      console.error("북마크 호출 실패:", e);
     }
-
-    const offsetSec = clamp(sec - acc, 0, Number.MAX_SAFE_INTEGER);
-
-    setCurrentIndex(foundIndex);
-    setActive(true);
-    playFrom(foundIndex, offsetSec);
   };
 
   useOcrTtsAutoStop(audioRef, {
@@ -194,6 +208,25 @@ export default function ClassPane({ pageId, review, isActive }: Props) {
     mode: isActive ? "class-active" : "class-inactive",
     areaRef,
   });
+
+  const renderWithHighlight = (full: string) => {
+    if (!highlightText) return full;
+
+    const idx = full.indexOf(highlightText);
+    if (idx === -1) return full;
+
+    const before = full.slice(0, idx);
+    const match = full.slice(idx, idx + highlightText.length);
+    const after = full.slice(idx + highlightText.length);
+
+    return (
+      <>
+        {before}
+        <Highlight>{match}</Highlight>
+        {after}
+      </>
+    );
+  };
 
   return (
     <Wrap ref={areaRef}>
@@ -211,7 +244,7 @@ export default function ClassPane({ pageId, review, isActive }: Props) {
                 <Mark
                   key={b.bookmark_id}
                   type="button"
-                  onClick={() => onClickBookmark(b.timestamp)}
+                  onClick={() => onClickBookmark(b)}
                 >
                   {b.timestamp.replace(/^00:/, "")}
                 </Mark>
@@ -255,7 +288,7 @@ export default function ClassPane({ pageId, review, isActive }: Props) {
               <Content>
                 {speeches.map((s) => (
                   <p key={s.speech_id} className="sttText">
-                    {s.stt}
+                    {renderWithHighlight(s.stt)}
                   </p>
                 ))}
               </Content>
@@ -303,7 +336,7 @@ const GhostBtn = styled.button`
   padding: 6px 10px;
   border-radius: 999px;
   background: var(--c-blue);
-  color: #fff;
+  color: var(--c-white);
   ${fonts.bold20}
   cursor: pointer;
 
@@ -315,7 +348,7 @@ const GhostBtn = styled.button`
 
 const Card = styled.article<{ $active?: boolean }>`
   border: 2px solid ${({ $active }) => ($active ? "var(--c-blue)" : "#e7eef6")};
-  background: ${({ $active }) => ($active ? "rgba(37,99,235,0.06)" : "#fff")};
+  background: var(--c-white);
   border-radius: 12px;
   padding: 12px;
   cursor: pointer;
@@ -371,4 +404,12 @@ const LoadingWrap = styled.div`
 const LoadingText = styled.p`
   ${fonts.regular20}
   color: #6b7280;
+`;
+
+const Highlight = styled.span`
+  background: rgba(37, 99, 235, 0.15);
+  color: var(--c-blue);
+  font-weight: 600;
+  padding: 0 2px;
+  border-radius: 4px;
 `;
