@@ -1,4 +1,4 @@
-import { postNoResponse } from "@apis/instance";
+import { getResponse, postNoResponse } from "@apis/instance";
 
 // 교수 발화 요약 생성
 export const requestDocSpeechSummary = async (
@@ -19,4 +19,24 @@ export const requestDocSpeechSummary = async (
   }
 
   return ok;
+};
+
+// 교수발화 요약 리스트
+
+export type SpeechSummaryItem = {
+  speechSummaryId: number;
+  createdAt: string;
+};
+
+export type SpeechSummaryListResponse = {
+  summaries: SpeechSummaryItem[];
+};
+
+export const fetchDocSpeechSummaries = async (
+  docId: number
+): Promise<SpeechSummaryListResponse | null> => {
+  if (!Number.isFinite(docId)) return null;
+  return await getResponse<SpeechSummaryListResponse>(
+    `/doc/${docId}/speech/summary/`
+  );
 };
