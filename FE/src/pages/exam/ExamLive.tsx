@@ -203,7 +203,6 @@ const ExamTake = () => {
 
       let finalText = rawText;
       try {
-        // 🔥 OCR 세그먼트 → 코드/수식 변환 포함 전처리
         finalText = await buildTtsText(rawText);
       } catch (err) {
         console.error("[ExamTake] buildTtsText 실패, 원본 텍스트로 진행:", err);
@@ -212,7 +211,6 @@ const ExamTake = () => {
       try {
         setTtsLoadingKey(key);
 
-        // 🔥 text를 body에 담아서 보내기
         const res = await fetchExamItemTTS(
           questionNumber,
           itemIndex,
