@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 import DefaultLayout from "@layouts/DefaultLayout";
 import GuestLayout from "@layouts/GuestLayout";
+import PrivateRoute from "@layouts/PrivateLayout";
 
 import Login from "@pages/auth/Login";
 
@@ -43,6 +44,9 @@ const router = createBrowserRouter([
           {
             path: "/signup",
             element: <SignupShell />,
+            handle: {
+              nav: { variant: "auth", title: "캠퍼스 메이트" } as NavMeta,
+            },
             children: [
               { index: true, element: <Step1Role /> },
               { path: "1", element: <Step1Role /> },
@@ -54,7 +58,7 @@ const router = createBrowserRouter([
         ],
       },
       {
-        // element: <PrivateRoute />,
+        element: <PrivateRoute />,
         children: [
           {
             path: "/",
