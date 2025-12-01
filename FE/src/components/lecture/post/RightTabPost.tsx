@@ -24,6 +24,8 @@ type Props = {
   };
   memo: { docId: number; pageId?: number | null };
   board: { docId: number; pageId?: number | null; page: number };
+  onSummaryTtsPlay?: () => void;
+  summaryTtsLoading?: boolean;
 };
 
 export default function RightTabsPost({
@@ -33,6 +35,8 @@ export default function RightTabsPost({
   memo,
   board,
   summary,
+  onSummaryTtsPlay,
+  summaryTtsLoading,
 }: Props) {
   const [tab, setTab] = useState<TabKey>("class");
   const baseId = useId();
@@ -41,8 +45,23 @@ export default function RightTabsPost({
     panel: `${baseId}-panel-${k}`,
   });
 
+  const handleTabClick = (k: TabKey) => {
+    console.log(summary.sidePaneRef.current);
+    setTab(k);
+
+    if (k === "summary") {
+      setTimeout(() => {
+        summary.sidePaneRef.current?.focus();
+      }, 0);
+    }
+  };
+
   return (
-    <Aside $stack={stack} aria-label="수업/메모/판서/요약 패널">
+    <Aside
+      $stack={stack}
+      aria-label="수업/메모/판서/요약 패널"
+      data-area="review-pane"
+    >
       <Tablist role="tablist" aria-label="우측 기능">
         {(["class", "memo", "board", "summary"] as TabKey[]).map((k) => (
           <Tab
@@ -52,7 +71,7 @@ export default function RightTabsPost({
             aria-selected={tab === k}
             aria-controls={id(k).panel}
             type="button"
-            onClick={() => setTab(k)}
+            onClick={() => handleTabClick(k)}
           >
             {label(k)}
           </Tab>
@@ -65,6 +84,7 @@ export default function RightTabsPost({
         role="tabpanel"
         aria-labelledby={id("class").tab}
         hidden={tab !== "class"}
+        tabIndex={0}
       >
         <ClassPane review={review} isActive={tab === "class"} />
       </Panel>
@@ -116,7 +136,9 @@ export default function RightTabsPost({
           sidePaneRef={summary.sidePaneRef}
           stack={stack}
           panelHeight={PANEL_FIXED_H_LIVE}
-          loading={summary.loading}
+          loading={summary.loading || summaryTtsLoading}
+          autoPlayOnFocus
+          onPlaySummaryTts={onSummaryTtsPlay}
         />
       </Panel>
     </Aside>
@@ -129,7 +151,7 @@ const label = (k: TabKey) =>
     : k === "memo"
     ? "메모"
     : k === "board"
-    ? "판서"
+    ? "추가 자료"
     : "요약";
 
 const Aside = styled.aside<{ $stack: boolean }>`
@@ -160,7 +182,7 @@ const Tab = styled.button`
 
   &[aria-selected="true"] {
     background: var(--c-blue);
-    color: black;
+    color: var(--c-white);
     border: 2px solid var(--c-blue);
   }
 
@@ -187,7 +209,14 @@ const Panel = styled.section`
     display: none !important;
   }
   overflow: scroll;
+
+  &:focus-visible {
+    outline: none;
+    border: 2px solid var(--c-blue);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4);
+  }
 `;
+
 const Empty = styled.p`
   margin: 0;
   color: var(--c-gray9, #666);

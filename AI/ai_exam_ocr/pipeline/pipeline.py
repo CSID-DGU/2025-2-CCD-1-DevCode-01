@@ -7,8 +7,8 @@ from typing import List, Dict, Any
 
 import cv2
 from dotenv import load_dotenv
-from ai_exam_ocr.src.exam_ocr.detection_layout import detect_boxes_with_roboflow, build_structured_questions
-from ai_exam_ocr.src.exam_ocr.ocr_hybrid import run_hybrid_ocr_on_seq_meta, build_reading_text
+from ai_exam_ocr.pipeline.detection_layout import detect_boxes_with_roboflow, build_structured_questions
+from ai_exam_ocr.pipeline.ocr_hybrid import run_hybrid_ocr_on_seq_meta, build_reading_text
 
 
 load_dotenv()

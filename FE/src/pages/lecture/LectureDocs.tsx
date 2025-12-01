@@ -159,7 +159,10 @@ export default function LectureDocs() {
         onReview={() => {
           if (!reviewDoc) return;
           nav(`/lecture/doc/${reviewDoc.id}/post`, {
-            state: { navTitle: reviewDoc.title },
+            state: {
+              navTitle: reviewDoc.title,
+              resumeClock: reviewDoc.timestamp ?? null,
+            },
           });
           setReviewDoc(null);
         }}

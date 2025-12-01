@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 import DefaultLayout from "@layouts/DefaultLayout";
 import GuestLayout from "@layouts/GuestLayout";
+import PrivateRoute from "@layouts/PrivateLayout";
 
 import Login from "@pages/auth/Login";
 
@@ -18,6 +19,7 @@ import Step4Credentials from "@pages/auth/steps/Step4Credentials";
 import FoldersRoute from "./FoldersRoute";
 import LectureDocs from "@pages/lecture/LectureDocs";
 import ScrollToTop from "src/hooks/ScrollToTop";
+import ExamTake from "@pages/exam/ExamLive";
 
 const router = createBrowserRouter([
   {
@@ -42,6 +44,9 @@ const router = createBrowserRouter([
           {
             path: "/signup",
             element: <SignupShell />,
+            handle: {
+              nav: { variant: "auth", title: "캠퍼스 메이트" } as NavMeta,
+            },
             children: [
               { index: true, element: <Step1Role /> },
               { path: "1", element: <Step1Role /> },
@@ -53,7 +58,7 @@ const router = createBrowserRouter([
         ],
       },
       {
-        // element: <PrivateRoute />,
+        element: <PrivateRoute />,
         children: [
           {
             path: "/",
@@ -93,13 +98,17 @@ const router = createBrowserRouter([
             handle: {
               nav: {
                 variant: "post",
-                title: ({ courseId }) => `${courseId} - 수업 후`,
               } as NavMeta,
             },
           },
           {
             path: "/exam",
             element: <Exam />,
+            handle: { nav: { variant: "exam", title: "시험" } as NavMeta },
+          },
+          {
+            path: "/exam/take",
+            element: <ExamTake />,
             handle: { nav: { variant: "exam", title: "시험" } as NavMeta },
           },
         ],

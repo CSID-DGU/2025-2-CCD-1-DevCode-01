@@ -3,6 +3,7 @@ import styled from "styled-components";
 import { fonts } from "@styles/fonts";
 import type { PageReview } from "@apis/lecture/review.api";
 import { PANEL_FIXED_H_LIVE } from "@pages/class/pre/styles";
+import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 
 /* ---------- 유틸 ---------- */
 const toSec = (hhmmss: string) => {
@@ -11,16 +12,6 @@ const toSec = (hhmmss: string) => {
 };
 const clamp = (v: number, min: number, max: number) =>
   Math.max(min, Math.min(max, v));
-
-// /* ---------- 더미 ---------- */
-// const DUMMY_SPEECH = {
-//   speech_id: 0,
-//   stt: "직접 재산권을 다른 매체로 확장하는 사업 전략 되면 미디어 프랜차이즈업 원소스 멀티유즈가 있습니다 애들은 하나의 IP를 영화 드라마 소설 게임 등 여러 형태로 전개하여 수익을 창출하고 브랜드 가치를 확장하는 방법입니다 원소스 멀티유즈는 하나의 콘텐츠를 다양한 매체를 활용하여 난 전략입니다 미디어플랜 성공한 IP를 기반으로 영화 시리즈 게임 상품전 확장해나가는 사업 모델입니다",
-//   stt_tts: "",
-//   end_time: "00:00:30",
-//   duration: "00:00:30",
-// };
-// const DUMMY_BOOKMARK = { bookmark_id: 0, timestamp: "00:00:15" };
 
 type Props = {
   review: PageReview | null;
@@ -31,8 +22,6 @@ type Props = {
 export default function ClassPane({ review, isActive }: Props) {
   const stt = review?.speeches?.[0]; // 한 페이지 = 1 발화
   const bookmarks = review?.bookmarks;
-  //   const stt = review?.speeches?.[0] ?? DUMMY_SPEECH; // 한 페이지 = 1 발화
-  // const bookmarks = review?.bookmarks ?? [DUMMY_BOOKMARK];
 
   // refs
   const cardRef = useRef<HTMLElement | null>(null);
@@ -42,17 +31,37 @@ export default function ClassPane({ review, isActive }: Props) {
   const [active, setActive] = useState(false);
   const [playing, setPlaying] = useState(false);
 
+  // 음성 옵션 (여성/남성 + 재생 속도)
+  const { soundRate, soundVoice } = useSoundOptions();
+
   /* ---------- 공통 재생/정지 ---------- */
   const ensureSrc = () => {
     const a = audioRef.current;
-    if (!a) return null;
-    if (stt?.stt_tts && a.src !== stt.stt_tts) a.src = stt.stt_tts;
+    if (!a || !stt?.stt_tts) return null;
+
+    const femaleUrl = stt.stt_tts.female ?? undefined;
+    const maleUrl = stt.stt_tts.male ?? undefined;
+
+    let url: string | undefined;
+    if (soundVoice === "여성") {
+      url = femaleUrl ?? maleUrl;
+    } else {
+      url = maleUrl ?? femaleUrl;
+    }
+    if (!url) return null;
+
+    if (!a.src || a.src !== url) {
+      a.src = url;
+    }
+
+    applyPlaybackRate(a, soundRate);
     return a;
   };
 
   const playFrom = (sec: number) => {
     const a = ensureSrc();
     if (!a) return;
+
     const dur = Math.max(1, toSec(stt?.duration ?? "00:00:00")); // 0 방지
     a.currentTime = clamp(sec, 0, dur);
     a.play().then(
@@ -71,14 +80,19 @@ export default function ClassPane({ review, isActive }: Props) {
   /* ---------- 탭 활성 시: 카드 포커스 & 처음부터 재생 ---------- */
   useEffect(() => {
     if (!isActive) return;
+    if (!stt?.stt_tts) return; // TTS 없으면 자동재생 안 함
+
     setTimeout(() => {
       setActive(true);
-      cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      cardRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
       cardRef.current?.focus({ preventScroll: true });
       playFrom(0);
     }, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive]);
+  }, [isActive, stt?.stt_tts, soundVoice, soundRate]);
 
   /* ---------- 카드 클릭: 재생/일시정지 토글 ---------- */
   const onTogglePlay = () => {
@@ -130,7 +144,7 @@ export default function ClassPane({ review, isActive }: Props) {
         </HeaderRow>
 
         <Card
-          ref={cardRef}
+          ref={cardRef as React.RefObject<HTMLElement>}
           tabIndex={0}
           onClick={onTogglePlay}
           aria-current={active ? "true" : undefined}
@@ -201,6 +215,12 @@ const Card = styled.article<{ $active?: boolean }>`
   transition: background-color 0.15s ease, border-color 0.15s ease;
   outline: none;
   cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 10px;
+    border-radius: 10px;
+  }
 `;
 
 const Content = styled.div`
