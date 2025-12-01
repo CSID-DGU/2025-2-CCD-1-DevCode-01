@@ -1,4 +1,3 @@
-// src/pages/class/Pre/a11y.ts
 import type { RefObject } from "react";
 
 /** 접근성 관련 localStorage 키 */

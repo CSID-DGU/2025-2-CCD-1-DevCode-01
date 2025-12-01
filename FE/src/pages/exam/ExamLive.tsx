@@ -31,7 +31,7 @@ const ExamTake = () => {
   // 서버 TTS (mp3)
   const { soundRate, soundVoice } = useSoundOptions();
 
-  // 로컬 Web Speech TTS (안내 / 전체 듣기)
+  // 로컬 Web Speech TTS (안내 전용)
   const { speak, stop } = useLocalTTS();
 
   // 서버 TTS 오디오
@@ -69,10 +69,13 @@ const ExamTake = () => {
     return "normal"; // 그 외 -> 기본 2열
   }, [fontPct]);
 
+  const { buildTtsText } = useTtsTextBuilder();
+
   /* ---------- 공통: 로컬 안내 음성 ---------- */
   const announce = (text: string) => {
     if (!text) return;
 
+    // 서버 TTS 정지
     if (audioRef.current) {
       try {
         audioRef.current.pause();
@@ -81,6 +84,7 @@ const ExamTake = () => {
       }
       setPlayingKey(null);
     }
+    // 로컬 안내만 재생
     stop();
     speak(text);
   };
@@ -169,6 +173,62 @@ const ExamTake = () => {
   const isFirst = currentIndex === 0;
   const isLast = questions.length > 0 && currentIndex === questions.length - 1;
 
+  /* ---------- 공통: item TTS 보장 함수 (API TTS + 캐시) ---------- */
+  const ensureItemTTS = async (
+    questionNumber: number,
+    itemIndex: number,
+    rawText?: string | null
+  ): Promise<{ female?: string; male?: string } | null> => {
+    const key = makeKey(questionNumber, itemIndex);
+
+    let tts = ttsMap[key];
+
+    if (!tts) {
+      if (!rawText) {
+        alert("텍스트가 없어 음성을 생성할 수 없습니다.");
+        return null;
+      }
+
+      let finalText = rawText;
+      try {
+        finalText = await buildTtsText(rawText);
+      } catch (err) {
+        console.error("[ExamTake] buildTtsText 실패, 원본 텍스트로 진행:", err);
+      }
+
+      try {
+        setTtsLoadingKey(key);
+
+        const res = await fetchExamItemTTS(
+          questionNumber,
+          itemIndex,
+          finalText
+        );
+
+        setTtsLoadingKey(null);
+
+        if (!res || !res.tts) {
+          console.error("[ExamTake] TTS 응답 없음:", res);
+          alert("음성을 불러오지 못했습니다.");
+          return null;
+        }
+
+        tts = res.tts;
+        setTtsMap((prev) => ({
+          ...prev,
+          [key]: res.tts,
+        }));
+      } catch (err) {
+        console.error("[ExamTake] TTS 요청 실패:", err);
+        setTtsLoadingKey(null);
+        alert("음성을 불러오지 못했습니다.");
+        return null;
+      }
+    }
+
+    return tts;
+  };
+
   /* ---------- 3) 서버 TTS: item 개별 듣기 ---------- */
   const handlePlayItemTTS = async (
     questionNumber: number,
@@ -193,50 +253,8 @@ const ExamTake = () => {
       }
     }
 
-    let tts = ttsMap[key];
-
-    if (!tts) {
-      if (!rawText) {
-        alert("텍스트가 없어 음성을 생성할 수 없습니다.");
-        return;
-      }
-
-      let finalText = rawText;
-      try {
-        finalText = await buildTtsText(rawText);
-      } catch (err) {
-        console.error("[ExamTake] buildTtsText 실패, 원본 텍스트로 진행:", err);
-      }
-
-      try {
-        setTtsLoadingKey(key);
-
-        const res = await fetchExamItemTTS(
-          questionNumber,
-          itemIndex,
-          finalText
-        );
-
-        setTtsLoadingKey(null);
-
-        if (!res || !res.tts) {
-          console.error("[ExamTake] TTS 응답 없음:", res);
-          alert("음성을 불러오지 못했습니다.");
-          return;
-        }
-
-        tts = res.tts;
-        setTtsMap((prev) => ({
-          ...prev,
-          [key]: res.tts,
-        }));
-      } catch (err) {
-        console.error("[ExamTake] TTS 요청 실패:", err);
-        setTtsLoadingKey(null);
-        alert("음성을 불러오지 못했습니다.");
-        return;
-      }
-    }
+    const tts = await ensureItemTTS(questionNumber, itemIndex, rawText);
+    if (!tts) return;
 
     const url =
       soundVoice === "남성" ? tts.male ?? tts.female : tts.female ?? tts.male;
@@ -323,20 +341,26 @@ const ExamTake = () => {
     navigate("/exam", { replace: true });
   };
 
-  /* ---------- 5) 문제 전체 듣기 (로컬 TTS로 한 번에) ---------- */
-
-  const { buildTtsText } = useTtsTextBuilder();
-
+  /* ---------- 5) 문제 전체 듣기 (API TTS로 순서대로 재생) ---------- */
   const handlePlayWholeQuestion = async () => {
     if (!currentQuestion || !exam) return;
 
     if (isWholeReadingRef.current) {
       isWholeReadingRef.current = false;
       setIsWholeReading(false);
-      stop();
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+        } catch {
+          // ignore
+        }
+        audioRef.current.onended = null;
+      }
+      setPlayingKey(null);
       return;
     }
 
+    stop();
     if (audioRef.current) {
       try {
         audioRef.current.pause();
@@ -349,33 +373,81 @@ const ExamTake = () => {
     isWholeReadingRef.current = true;
     setIsWholeReading(true);
 
-    try {
-      const parts: string[] = [];
+    const queue: number[] = currentQuestion.items
+      .map((item, idx) => ({ item, idx }))
+      .filter(({ item }) => !!item.displayText)
+      .map(({ idx }) => idx);
 
-      for (const item of currentQuestion.items) {
-        if (!item.displayText) continue;
+    if (queue.length === 0) {
+      isWholeReadingRef.current = false;
+      setIsWholeReading(false);
+      return;
+    }
 
-        if (item.kind === "chart" || item.kind === "table") {
-          parts.push(item.displayText);
-        } else {
-          try {
-            const processed = await buildTtsText(item.displayText);
-            parts.push(processed);
-          } catch {
-            parts.push(item.displayText);
-          }
-        }
-      }
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+    }
 
-      const fullText = parts.join("\n\n");
+    const audio = audioRef.current;
 
+    const playFromQueue = async (pos: number) => {
       if (!isWholeReadingRef.current) return;
 
-      stop();
-      speak(fullText);
-    } finally {
-      //ignore
-    }
+      if (pos >= queue.length) {
+        isWholeReadingRef.current = false;
+        setIsWholeReading(false);
+        setPlayingKey(null);
+        audio.onended = null;
+        return;
+      }
+
+      const itemIdx = queue[pos];
+      const item = currentQuestion.items[itemIdx];
+      const key = makeKey(currentQuestion.questionNumber, itemIdx);
+
+      const tts = await ensureItemTTS(
+        currentQuestion.questionNumber,
+        itemIdx,
+        item.displayText ?? null
+      );
+
+      if (!tts) {
+        await playFromQueue(pos + 1);
+        return;
+      }
+
+      const url =
+        soundVoice === "남성" ? tts.male ?? tts.female : tts.female ?? tts.male;
+
+      if (!url) {
+        await playFromQueue(pos + 1);
+        return;
+      }
+
+      try {
+        audio.pause();
+      } catch {
+        // ignore
+      }
+
+      audio.src = url;
+      applyPlaybackRate(audio, soundRate);
+      setPlayingKey(key);
+
+      audio.onended = () => {
+        setPlayingKey((prev) => (prev === key ? null : prev));
+        void playFromQueue(pos + 1);
+      };
+
+      try {
+        await audio.play();
+      } catch (err) {
+        console.error("[ExamTake] 전체 듣기 중 오디오 재생 실패:", err);
+        await playFromQueue(pos + 1);
+      }
+    };
+
+    void playFromQueue(0);
   };
 
   /* ---------- 6) 로딩 / 빈 상태 ---------- */
@@ -431,7 +503,7 @@ const ExamTake = () => {
             {viewMode === "detail" ? "시험지 원본 사진 보기" : "텍스트로 보기"}
           </S.ToolbarButton>
 
-          {/* 현재 문제 전체 듣기 */}
+          {/* 현재 문제 전체 듣기 (이제 API TTS) */}
           <S.ToolbarButton
             type="button"
             onClick={handlePlayWholeQuestion}
@@ -445,7 +517,7 @@ const ExamTake = () => {
               announce(
                 isWholeReading
                   ? "문제 전체 듣기 정지 버튼입니다."
-                  : "문제 전체 듣기 버튼입니다. 누르면 이 문제의 모든 내용을 순서대로 읽어줍니다."
+                  : "문제 전체 듣기 버튼입니다. 누르면 이 문제의 모든 항목을 순서대로 읽어줍니다."
               );
             }}
           >

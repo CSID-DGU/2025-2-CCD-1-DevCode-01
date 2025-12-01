@@ -71,7 +71,7 @@ function useA11ySettings() {
     };
 
     window.addEventListener("storage", onStorage);
-    window.addEventListener("a11y:font-change", onFontCustom as EventListener);
+    window.addEventListener("a11y-font-change", onFontCustom as EventListener);
     window.addEventListener(
       "a11y:read-on-focus-change",
       onReadCustom as EventListener
@@ -81,7 +81,7 @@ function useA11ySettings() {
     return () => {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener(
-        "a11y:font-change",
+        "a11y-font-change",
         onFontCustom as EventListener
       );
       window.removeEventListener(
@@ -441,7 +441,6 @@ export default function PostClass() {
     setMode((prev) => {
       const next = prev === "ocr" ? "image" : "ocr";
       announce(next === "image" ? "원본 보기" : "본문 보기");
-      setTimeout(() => mainRegionRef.current?.focus(), 0);
       return next;
     });
 
