@@ -105,11 +105,11 @@ const router = createBrowserRouter([
           {
             path: "/lecture/doc/:courseId/post/summary",
             element: <PostSummary />,
-            handle: {
-              nav: {
-                variant: "post",
-              } as NavMeta,
-            },
+            // handle: {
+            //   nav: {
+            //     variant: "post",
+            //   } as NavMeta,
+            // },
           },
           {
             path: "/exam",
