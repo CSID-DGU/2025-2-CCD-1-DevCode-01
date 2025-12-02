@@ -629,7 +629,7 @@ class ExamStartView(APIView):
             files = {
                 "image": (image.name, image.read(), image.content_type)
             }
-            ai_resp = requests.post(ai_url, files=files, timeout=60)
+            ai_resp = requests.post(ai_url, files=files, timeout=300)
             ai_resp.raise_for_status()
 
             task_json = ai_resp.json()

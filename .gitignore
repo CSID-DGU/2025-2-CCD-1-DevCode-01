@@ -223,6 +223,7 @@ BE/db.sqlite3
 BE/docs
 BE/embedded
 BE/boards
+BE/temp
 
 # ---- Python 기본 ----
 __pycache__/
