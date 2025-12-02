@@ -9,6 +9,7 @@ import {
   type PageSummary,
   fetchSummaryTTS,
 } from "@apis/lecture/lecture.api";
+
 import { postPageReview, type PageReview } from "@apis/lecture/review.api";
 import { fetchBoards, type BoardItem } from "@apis/lecture/board.api";
 import { formatOcr } from "@shared/formatOcr";
@@ -104,14 +105,19 @@ type BoardsPayload = {
   }[];
 };
 
-async function buildBoardsPayload(pageId: number): Promise<BoardsPayload> {
+async function buildBoardsPayload(
+  pageId: number,
+  transformText: (raw: string) => Promise<string>
+): Promise<BoardsPayload> {
   const res = await fetchBoards(pageId);
   const items: BoardItem[] = res?.boards ?? [];
 
-  const boards = items.map((b) => ({
-    boardId: b.boardId,
-    text: (b.text ?? "").trim(),
-  }));
+  const boards = await Promise.all(
+    items.map(async (b) => ({
+      boardId: b.boardId,
+      text: b.text ? await transformText(b.text) : "",
+    }))
+  );
 
   return { boards };
 }
@@ -241,7 +247,11 @@ export default function PostClass() {
 
             const reviewPromise = (async (): Promise<PageReview | null> => {
               try {
-                const boardsPayload = await buildBoardsPayload(dp.pageId);
+                const boardsPayload = await buildBoardsPayload(
+                  dp.pageId,
+                  buildTtsText
+                );
+
                 const res = await postPageReview(dp.pageId, boardsPayload);
                 return res ?? null;
               } catch (err) {
