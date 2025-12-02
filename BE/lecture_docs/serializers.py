@@ -29,7 +29,7 @@ class DocUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Doc
-        fields = ["docId", "title"]
+        fields = ["docId", "title", "doc_tts"]
 
 
 class PageSerializer(serializers.ModelSerializer):

@@ -237,10 +237,27 @@ class DocDetailView(APIView):
     def patch(self, request, docId):
         doc = self.get_object(docId)
         self.check_object_permissions(request, doc)
-        serializer = DocUpdateSerializer(doc, data=request.data, partial=True)
+
+        title = request.data.get("title")
+
+        if not title.strip():
+            return Response({"error": "title 필드가 필요합니다."}, status=400)
+
+        try:
+            tts_url = text_to_speech(title, request.user, s3_folder="tts/doc/")
+        except Exception as e:
+            return Response({"error": f"TTS 오류: {e}"}, status=500)
+
+        serializer = DocUpdateSerializer(
+            doc, 
+            data={"title": title, "doc_tts": tts_url}, 
+            partial=True
+        )
+        
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=200)
+        
         return Response(serializer.errors, status=400)
     #교안 삭제
     def delete(self, request, docId):
@@ -405,6 +422,37 @@ class BoardView(APIView):
         )
 
         return Response({"message": "판서가 삭제되었습니다."}, status=status.HTTP_200_OK)
+
+class BoardTTSView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
+
+    def patch(self, request, boardId):
+        board = get_object_or_404(Board, id=boardId)
+        self.check_object_permissions(request, board)
+
+        board_text = request.data.get("board_text")
+
+        if not board_text.strip():
+            return Response({"error": "board_text 필드가 필요합니다."}, status=400)
+
+        processed_math = request.data.get("processed_text", board_text)
+        processed_text = preprocess_text(processed_math)
+
+        try:
+            tts_url = text_to_speech(markdown_to_text(processed_text), request.user, s3_folder="tts/boards/")
+        except Exception as e:
+            return Response({"error": f"TTS 오류: {e}"}, status=500)
+        
+        board.text = board_text
+        board.board_tts = tts_url
+            
+        board.save(update_fields=["text", "board_tts"])
+
+        return Response({
+            "board_id": board.id,
+            "board_text": board.text,
+            "board_tts": board.board_tts
+        }, status=200)
 
 
 # 교수발화 요약  
