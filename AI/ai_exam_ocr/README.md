@@ -1,10 +1,8 @@
 # Exam OCR Pipeline
 
 **시험지 이미지**를 입력으로 받아,  
-문항 단위로 쪼개고, Roboflow + PaddleOCR + GPT Vision을 이용해 텍스트를 추출한 뒤  
+문항 단위로 쪼개고, Roboflow + GPT Vision을 이용해 텍스트를 추출한 뒤  
 프론트에서 바로 쓸 수 있는 형태의 `exam_questions.json`을 생성하는 파이프라인입니다.
-
-PaddleOCR를 이용해 1차 텍스트를 추출한 뒤, GPT 계열 LLM(Vision)을 활용해 이미지와 1차 OCR 결과를 함께 입력으로 사용하는 하이브리드 OCR 파이프라인을 구성했습니다.
 
 ---
 
@@ -66,7 +64,7 @@ exam_outputs/
 src/
   exam_ocr/
     ├── detection_layout.py   # 박스 검출 + 문항 레이아웃/그룹핑
-    ├── ocr_hybrid.py         # 전처리 + PaddleOCR + GPT Vision + 텍스트 후처리
+    ├── ocr_hybrid.py         # 전처리  + GPT Vision + 텍스트 후처리
     └── pipeline.py           # 전체 흐름 orchestration + JSON 생성 + CLI
 ```
 
