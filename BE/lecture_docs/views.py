@@ -622,7 +622,7 @@ class ExamStartView(APIView):
 
         # OCR 처리
         ai_url = settings.AI_EXAM_OCR_URL
-        result_url = settings.AI_EXAM_OCR_RESULT_URL
+        #result_url = settings.AI_EXAM_OCR_RESULT_URL
         all_questions = []
 
         for image in images:
@@ -632,30 +632,20 @@ class ExamStartView(APIView):
             ai_resp = requests.post(ai_url, files=files, timeout=300)
             ai_resp.raise_for_status()
 
-            task_json = ai_resp.json()
-            task_id = task_json.get("task_id")
 
-            if not task_id:
-                return Response({"error": "AI 서버가 task_id를 반환하지 않음"}, status=500)
-            
-            while True:
-                result_resp = requests.get(f"{result_url}/{task_id}", timeout=10)
+            result_json = ai_resp.json()
 
-                if result_resp.status_code == 204:
-                    time.sleep(0.3)
-                    continue
+            # questions 추출 (AI 응답 형태 유연하게 대응)
+            questions = (
+                result_json.get("questions")
+                or result_json.get("data", {}).get("questions")
+                or []
+            )
 
-                if result_resp.status_code >= 400:
-                    return Response({"error": f"시험 OCR 실패: {result_resp.text}"}, status=500)
-                
-                result_json = result_resp.json()
+            if not isinstance(questions, list):
+                return Response({"error": "AI OCR 결과 형식 오류"}, status=500)
 
-                questions = result_json.get("questions") or \
-                            result_json.get("data", {}).get("questions", [])
-
-                if questions:
-                    all_questions.extend(questions)
-                break
+            all_questions.extend(questions)
 
         ocr_key = f"exam_ocr:{user.id}"
         redis_client.set(ocr_key, json.dumps(all_questions))
