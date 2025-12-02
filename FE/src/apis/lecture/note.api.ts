@@ -35,3 +35,25 @@ export async function updateNote(
     { content }
   );
 }
+
+//노트 업데이트 tts
+
+type UpdateNoteTtsRequest = {
+  content: string;
+};
+
+export async function updateNoteTts(
+  noteId: number,
+  content: string
+): Promise<Note> {
+  const data = await patchResponse<UpdateNoteTtsRequest, Note>(
+    `/class/note/${noteId}/tts/`,
+    { content }
+  );
+
+  if (!data) {
+    throw new Error("노트 TTS 응답이 올바르지 않습니다.");
+  }
+
+  return data;
+}

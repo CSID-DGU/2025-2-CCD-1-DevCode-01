@@ -6,7 +6,7 @@ import ClassPane from "./ClassPane";
 import { PANEL_FIXED_H_LIVE } from "@pages/class/pre/styles";
 import MemoBox from "../live/Memo";
 import BoardBox from "../live/BoardBox";
-import type { PageReview } from "@apis/lecture/review.api";
+import type { PageReview, TtsPair } from "@apis/lecture/review.api";
 
 type TabKey = "class" | "memo" | "board" | "summary";
 type Role = "student" | "assistant";
@@ -26,6 +26,12 @@ type Props = {
   board: { docId: number; pageId?: number | null; page: number };
   onSummaryTtsPlay?: () => void;
   summaryTtsLoading?: boolean;
+  onPlayMemoTts?: (payload: { content: string; tts?: TtsPair | null }) => void;
+  readOnFocus?: boolean;
+  onFocusReviewTts?: (opts: {
+    tts?: TtsPair | null;
+    fallbackText?: string;
+  }) => void;
 };
 
 export default function RightTabsPost({
@@ -37,6 +43,8 @@ export default function RightTabsPost({
   summary,
   onSummaryTtsPlay,
   summaryTtsLoading,
+  onPlayMemoTts,
+  readOnFocus,
 }: Props) {
   const [tab, setTab] = useState<TabKey>("class");
   const baseId = useId();
@@ -97,7 +105,13 @@ export default function RightTabsPost({
         hidden={tab !== "memo"}
       >
         {typeof memo.pageId === "number" && memo.pageId > 0 ? (
-          <MemoBox docId={memo.docId} pageId={memo.pageId} review={review} />
+          <MemoBox
+            docId={memo.docId}
+            pageId={memo.pageId}
+            review={review}
+            onPlayMemoTts={onPlayMemoTts}
+            autoReadOnFocus={readOnFocus}
+          />
         ) : (
           <Empty>이 페이지는 아직 메모를 사용할 수 없어요.</Empty>
         )}

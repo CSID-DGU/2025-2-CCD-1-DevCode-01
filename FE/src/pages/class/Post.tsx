@@ -26,6 +26,7 @@ import { Container, Grid, SrLive, Wrap } from "./pre/styles";
 import { useTtsTextBuilder } from "src/hooks/useTtsTextBuilder";
 import { useOcrTtsAutoStop } from "src/hooks/useOcrTtsAutoStop";
 import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
+import { useLocalTTS } from "src/hooks/useLocalTTS";
 
 import BottomToolbar from "src/components/lecture/pre/BottomToolBar";
 import RightTabsPost from "src/components/lecture/post/RightTabPost";
@@ -175,6 +176,8 @@ export default function PostClass() {
   const { soundRate, soundVoice } = useSoundOptions();
   const [pageTtsLoading, setPageTtsLoading] = useState(false);
 
+  const { speak, stop } = useLocalTTS();
+
   useFocusTTS({
     enabled: readOnFocus,
     mode,
@@ -185,6 +188,38 @@ export default function PostClass() {
     sumAudioRef,
     announce,
   });
+
+  /* 서버 오디오 정지 도우미 (본문/요약 공통) */
+  const stopServerAudio = useCallback(() => {
+    const ocr = ocrAudioRef.current;
+    const sum = sumAudioRef.current;
+
+    if (ocr) {
+      try {
+        ocr.pause();
+        ocr.currentTime = 0;
+      } catch {
+        // ignore
+      }
+    }
+    if (sum) {
+      try {
+        sum.pause();
+        sum.currentTime = 0;
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  const speakWithStop = useCallback(
+    (text: string) => {
+      stopServerAudio();
+      stop();
+      speak(text);
+    },
+    [stopServerAudio, stop, speak]
+  );
 
   /* ---------------- 페이지 로드 + 요약/리뷰/요약TTS ---------------- */
   useEffect(() => {
@@ -371,6 +406,85 @@ export default function PostClass() {
     announce,
   ]);
 
+  type TtsPair = {
+    female?: string | null;
+    male?: string | null;
+  } | null;
+
+  const playReviewTts = useCallback(
+    async (tts: TtsPair | null | undefined, fallbackText?: string) => {
+      stop();
+      stopServerAudio();
+
+      const url =
+        tts && (tts.female || tts.male)
+          ? soundVoice === "여성"
+            ? tts.female ?? tts.male ?? null
+            : tts.male ?? tts.female ?? null
+          : null;
+
+      if (!url) {
+        if (fallbackText) {
+          speakWithStop(fallbackText);
+        }
+        return;
+      }
+
+      const audio = sumAudioRef.current;
+      if (!audio) return;
+
+      try {
+        audio.pause();
+      } catch {
+        // ignore
+      }
+
+      audio.src = url;
+      applyPlaybackRate(audio, soundRate);
+      audio.currentTime = 0;
+
+      try {
+        const playPromise = audio.play();
+        // 일부 브라우저는 play()가 Promise를 안 돌려주기도 해서 방어코드
+        if (playPromise !== undefined) {
+          await playPromise;
+        }
+      } catch (err) {
+        if ((err as DOMException).name === "AbortError") {
+          // 🔇 포커스 이동 등으로 인한 자연스러운 중단 → 조용히 무시
+          console.warn(
+            "[TTS] play aborted (probably due to quick focus change or pause)."
+          );
+          return;
+        }
+        throw err; // 다른 에러는 그대로 위로 던짐
+      }
+    },
+    [stop, stopServerAudio, soundVoice, soundRate, speakWithStop]
+  );
+
+  const handleFocusReviewTts = useCallback(
+    (opts: { tts?: TtsPair | null; fallbackText?: string }) => {
+      if (!readOnFocus) return; // 설정 꺼져 있으면 아무것도 안 함
+      void playReviewTts(opts.tts ?? null, opts.fallbackText);
+    },
+    [readOnFocus, playReviewTts]
+  );
+
+  const handlePlayMemoTts = useCallback(
+    async ({ content, tts }: { content: string; tts?: TtsPair | null }) => {
+      try {
+        await playReviewTts(tts ?? null, content);
+        announce("메모 음성을 재생합니다.");
+      } catch (e) {
+        console.error("[PostClass] 메모 음성 재생 실패:", e);
+        toast.error("메모 음성 재생에 실패했습니다.");
+        announce("메모 음성을 불러오지 못했습니다.");
+      }
+    },
+    [playReviewTts, announce]
+  );
+
   const handlePlaySummaryTts = useCallback(async () => {
     if (!docPage?.pageId) {
       toast.error("페이지 정보가 없어 요약 음성을 재생할 수 없습니다.");
@@ -507,6 +621,9 @@ export default function PostClass() {
             }}
             onSummaryTtsPlay={handlePlaySummaryTts}
             summaryTtsLoading={summaryTtsLoading}
+            onPlayMemoTts={handlePlayMemoTts}
+            readOnFocus={readOnFocus}
+            onFocusReviewTts={handleFocusReviewTts}
           />
         </Grid>
       </Container>

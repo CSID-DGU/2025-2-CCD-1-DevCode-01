@@ -35,7 +35,9 @@ type Props = {
   onSummaryOpen?: () => void;
   onSummaryTtsPlay?: () => void;
   summaryTtsLoading?: boolean;
-  onPlayMemoTts?: (payload: { content: string; tts?: NoteTts }) => void;
+  memoAutoReadOnFocus?: boolean;
+  memoUpdateWithTts?: boolean;
+  onPlayMemoTts?: (payload: { content: string; tts?: NoteTts | null }) => void;
 };
 
 export default function RightTabs({
@@ -49,6 +51,8 @@ export default function RightTabs({
   onSummaryOpen,
   onSummaryTtsPlay,
   summaryTtsLoading,
+  memoAutoReadOnFocus,
+  memoUpdateWithTts,
   onPlayMemoTts,
 }: Props) {
   const [tab, setTab] = useState<TabKey>(activeInitial);
@@ -126,7 +130,8 @@ export default function RightTabs({
           <MemoBox
             docId={memo.docId}
             pageId={memo.pageId}
-            autoReadOnFocus
+            autoReadOnFocus={memoAutoReadOnFocus}
+            updateWithTts={memoUpdateWithTts}
             onPlayMemoTts={onPlayMemoTts}
           />
         ) : (

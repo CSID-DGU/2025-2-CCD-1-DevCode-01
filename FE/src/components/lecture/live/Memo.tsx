@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type FocusEvent } from "react";
 import styled from "styled-components";
-import { type PageReview } from "@apis/lecture/review.api";
+import { type PageReview, type TtsPair } from "@apis/lecture/review.api";
 import {
   createNote,
   updateNote,
   fetchNoteByPage,
+  updateNoteTts,
   type Note,
   type NoteTts,
 } from "@apis/lecture/note.api";
@@ -17,7 +18,8 @@ export type MemoBoxProps = {
   autoSaveDebounceMs?: number;
   saveOnUnmount?: boolean;
   autoReadOnFocus?: boolean;
-  onPlayMemoTts?: (payload: { content: string; tts?: NoteTts }) => void;
+  updateWithTts?: boolean;
+  onPlayMemoTts?: (payload: { content: string; tts?: TtsPair | null }) => void;
 };
 
 export default function MemoBox({
@@ -28,6 +30,7 @@ export default function MemoBox({
   saveOnUnmount = true,
   autoReadOnFocus = true,
   onPlayMemoTts,
+  updateWithTts = false,
 }: MemoBoxProps) {
   const [noteId, setNoteId] = useState<number | null>(null);
   const [content, setContent] = useState("");
@@ -61,6 +64,7 @@ export default function MemoBox({
     } else {
       setNoteId(null);
       setContent("");
+      setNoteTts(null);
       setDirty(false);
     }
   }, [review]);
@@ -82,14 +86,13 @@ export default function MemoBox({
 
         if (note) {
           console.log("[Memo] ▶ 메모 있음:", note);
-          // 메모가 있으면 이후 PATCH 사용
           setNoteId(note.note_id);
           setContent(note.content ?? "");
           setNoteTts(note.note_tts ?? null);
         } else {
-          // 메모가 없으면 noteId = null → 이후 첫 저장은 POST
           setNoteId(null);
           setContent("");
+          setNoteTts(null);
         }
         setDirty(false);
         setStatus("idle");
@@ -108,7 +111,7 @@ export default function MemoBox({
     };
   }, [pageId, review]);
 
-  /* ---------- 저장 로직: noteId 유무에 따라 POST / PATCH ---------- */
+  /* ---------- 저장 로직: noteId 유무에 따라 POST / PATCH (텍스트만) ---------- */
   const saveOnce = async () => {
     if (!dirty) return;
 
@@ -124,11 +127,11 @@ export default function MemoBox({
     let saved: Note | null = null;
     try {
       if (noteId == null) {
-        // 메모 없던 상태 → POST /class/{pageId}/note/
+        // 첫 저장: POST /class/{pageId}/note/
         saved = await createNote(pageId, content);
         if (saved) setNoteId(saved.note_id);
       } else {
-        // 메모 이미 있던 상태 → PATCH /class/note/{noteId}/
+        // 이후 저장: 텍스트만 PATCH
         saved = await updateNote(noteId, content);
       }
     } catch (e) {
@@ -142,7 +145,6 @@ export default function MemoBox({
     }
 
     setContent(saved.content ?? content);
-    setNoteTts(saved.note_tts ?? noteTts);
     setDirty(false);
     setStatus("saved");
     setTimeout(() => setStatus("idle"), 1500);
@@ -181,10 +183,9 @@ export default function MemoBox({
   };
 
   /* ---------- 포커스 TTS 핸들러 ---------- */
-  const handleFocus: React.FocusEventHandler<HTMLTextAreaElement> = (
+  const handleFocus: React.FocusEventHandler<HTMLTextAreaElement> = async (
     e: FocusEvent<HTMLTextAreaElement>
   ) => {
-    // textarea 자체에 포커스가 들어온 경우만
     if (e.currentTarget !== e.target) return;
     if (!autoReadOnFocus) return;
     if (!onPlayMemoTts) return;
@@ -192,7 +193,52 @@ export default function MemoBox({
     const text = content.trim();
     if (!text) return;
 
-    onPlayMemoTts({ content: text, tts: noteTts });
+    if (noteId == null) {
+      onPlayMemoTts({ content: text, tts: null });
+      return;
+    }
+
+    if (updateWithTts && dirty) {
+      try {
+        const updated = await updateNoteTts(noteId, text);
+
+        setContent(updated.content ?? text);
+        setNoteTts(updated.note_tts ?? null);
+        setDirty(false);
+
+        const ttsPair: TtsPair | null = updated.note_tts
+          ? {
+              female: updated.note_tts.female ?? null,
+              male: updated.note_tts.male ?? null,
+            }
+          : null;
+
+        onPlayMemoTts({
+          content: updated.content ?? text,
+          tts: ttsPair,
+        });
+        return;
+      } catch (err) {
+        console.error("[Memo] TTS 갱신 실패:", err);
+        onPlayMemoTts({
+          content: text,
+          tts: null,
+        });
+        return;
+      }
+    }
+
+    const ttsPair: TtsPair | null = noteTts
+      ? {
+          female: noteTts.female ?? null,
+          male: noteTts.male ?? null,
+        }
+      : null;
+
+    onPlayMemoTts({
+      content: text,
+      tts: ttsPair,
+    });
   };
 
   return (

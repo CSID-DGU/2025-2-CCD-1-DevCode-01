@@ -496,7 +496,7 @@ export default function PreClass() {
             : null;
 
         if (!url) {
-          // 🔁 서버 TTS가 아직 없으면 로컬 TTS로 fallback
+          // 서버 TTS가 아직 없으면 로컬 TTS로 fallback
           speakWithStop(content);
           return;
         }
@@ -517,6 +517,11 @@ export default function PreClass() {
 
         announce("메모 음성을 재생합니다.");
       } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+          console.warn("[PreClass] 메모 음성 재생 중단(AbortError) - 무시");
+          return;
+        }
+
         console.error("[PreClass] 메모 음성 재생 실패:", e);
         toast.error("메모 음성 재생에 실패했습니다.");
         announce("메모 음성을 불러오지 못했습니다.");
@@ -532,11 +537,8 @@ export default function PreClass() {
       return;
     }
 
-    // 페이지 이동 전에 TTS 모두 정지
     stop();
     stopServerAudio();
-
-    console.log("[PreClass] resumeClock BEFORE NAVIGATE =", state?.resumeClock);
 
     navigate(`/lecture/doc/${docIdNum}/live/`, {
       state: {
@@ -594,6 +596,8 @@ export default function PreClass() {
               }}
               onSummaryOpen={() => setSummaryRequested(true)}
               onSummaryTtsPlay={handlePlaySummaryTts}
+              memoAutoReadOnFocus={readOnFocus}
+              memoUpdateWithTts
               onPlayMemoTts={handlePlayMemoTts}
             />
           )}
