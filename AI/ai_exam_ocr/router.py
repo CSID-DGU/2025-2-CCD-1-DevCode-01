@@ -40,22 +40,6 @@ async def exam_ocr(image: UploadFile = File(...)):
             user_id=uid,
             now_str=now_str
         )       
-        # URL 변환
-        for q in exam_json.get("questions", []):
-            q_img = q.get("questionImagePath")
-            if q_img:
-                fn = os.path.basename(q_img)
-                q["questionImagePath"] = (
-                    f"{AI_BASE_URL}/exam_images/{uid}/{now_str}/{fn}"
-                )
-
-            for item in q.get("items", []):
-                item_img = item.get("imagePath")
-                if item_img:
-                    fn = os.path.basename(item_img)
-                    item["imagePath"] = (
-                        f"{AI_BASE_URL}/exam_images/{uid}/{now_str}/{fn}"
-                    )
 
         return {"questions": exam_json.get("questions", [])}
 
