@@ -14,7 +14,7 @@ from ai_exam_ocr.pipeline.ocr_hybrid import run_hybrid_ocr_on_seq_meta, build_re
 load_dotenv()
 
 ROBOFLOW_API_KEY = os.environ.get("ROBOFLOW_API_KEY")
-MODEL_ID = os.environ.get("ROBOFLOW_MODEL_ID", "ccd-pn4pd/8")
+MODEL_ID = os.environ.get("ROBOFLOW_MODEL_ID", "ccd-pn4pd/11")
 
 if not ROBOFLOW_API_KEY:
     raise RuntimeError("ROBOFLOW_API_KEY 환경변수를 설정해 주세요.")
