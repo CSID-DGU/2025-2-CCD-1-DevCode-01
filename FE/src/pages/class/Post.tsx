@@ -9,7 +9,8 @@ import {
   type PageSummary,
   fetchSummaryTTS,
 } from "@apis/lecture/lecture.api";
-import { fetchPageReview, type PageReview } from "@apis/lecture/review.api";
+import { postPageReview, type PageReview } from "@apis/lecture/review.api";
+import { fetchBoards, type BoardItem } from "@apis/lecture/board.api";
 import { formatOcr } from "@shared/formatOcr";
 
 import DocPane from "src/components/lecture/pre/DocPane";
@@ -94,6 +95,25 @@ function useA11ySettings() {
   }, []);
 
   return { fontPct, readOnFocus };
+}
+
+type BoardsPayload = {
+  boards: {
+    boardId: number;
+    text: string;
+  }[];
+};
+
+async function buildBoardsPayload(pageId: number): Promise<BoardsPayload> {
+  const res = await fetchBoards(pageId);
+  const items: BoardItem[] = res?.boards ?? [];
+
+  const boards = items.map((b) => ({
+    boardId: b.boardId,
+    text: (b.text ?? "").trim(),
+  }));
+
+  return { boards };
 }
 
 export default function PostClass() {
@@ -220,31 +240,14 @@ export default function PostClass() {
             })();
 
             const reviewPromise = (async (): Promise<PageReview | null> => {
-              const MAX_ATTEMPTS = 20;
-              let attempt = 0;
-
-              while (!cancelled && attempt < MAX_ATTEMPTS) {
-                const res = await fetchPageReview(dp.pageId);
-                if (!res) return null;
-
-                const hasData =
-                  !!res.note ||
-                  (res.speeches && res.speeches.length > 0) ||
-                  (res.bookmarks && res.bookmarks.length > 0) ||
-                  (res.boards && res.boards.length > 0);
-
-                const isDone = res.status === "done" || hasData;
-
-                if (isDone) {
-                  return res;
-                }
-
-                await new Promise((r) => setTimeout(r, 3000));
-                attempt += 1;
+              try {
+                const boardsPayload = await buildBoardsPayload(dp.pageId);
+                const res = await postPageReview(dp.pageId, boardsPayload);
+                return res ?? null;
+              } catch (err) {
+                console.error("[PostClass] postPageReview 실패:", err);
+                return null;
               }
-
-              console.warn("[PageReview] polling timeout or cancelled");
-              return null;
             })();
 
             const [, rev] = await Promise.all([sumPromise, reviewPromise]);

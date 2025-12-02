@@ -1,11 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { fonts } from "@styles/fonts";
-import {
-  fetchPageReview,
-  fetchBookmarkDetail,
-  type PageReview,
-} from "@apis/lecture/review.api";
+import { fetchBookmarkDetail, type PageReview } from "@apis/lecture/review.api";
 import { PANEL_FIXED_H_LIVE } from "@pages/class/pre/styles";
 import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 import Spinner from "src/components/common/Spinner";
@@ -46,31 +42,6 @@ export default function ClassPane({ pageId, review, isActive }: Props) {
     setCurrentIndex(0);
     setHighlightText(null);
   }, [review]);
-
-  /* ---------- processing이면 폴링 ---------- */
-  useEffect(() => {
-    if (!isActive || !pageId) return;
-    if (!isProcessing) return;
-
-    let cancelled = false;
-
-    const poll = async () => {
-      const next = await fetchPageReview(pageId);
-      if (cancelled) return;
-
-      setLocalReview(next);
-
-      if (next?.status === "processing") {
-        setTimeout(poll, 3000);
-      }
-    };
-
-    poll();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isProcessing, isActive, pageId]);
 
   const ensureSrc = (index: number) => {
     const a = audioRef.current;

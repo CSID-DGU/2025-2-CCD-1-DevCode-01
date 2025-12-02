@@ -97,7 +97,7 @@ export default function RightTabsPost({
         hidden={tab !== "memo"}
       >
         {typeof memo.pageId === "number" && memo.pageId > 0 ? (
-          <MemoBox docId={memo.docId} pageId={memo.pageId} />
+          <MemoBox docId={memo.docId} pageId={memo.pageId} review={review} />
         ) : (
           <Empty>이 페이지는 아직 메모를 사용할 수 없어요.</Empty>
         )}

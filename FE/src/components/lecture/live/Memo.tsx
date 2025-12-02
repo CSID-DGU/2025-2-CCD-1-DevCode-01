@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
-import { fetchPageReview } from "@apis/lecture/review.api";
+import { type PageReview } from "@apis/lecture/review.api";
 import { createNote, updateNote, type Note } from "@apis/lecture/note.api";
 import { fonts } from "@styles/fonts";
 
 export type MemoBoxProps = {
   pageId: number;
   docId?: number;
+  review?: PageReview | null;
   autoSaveDebounceMs?: number;
   saveOnUnmount?: boolean;
 };
@@ -14,6 +15,7 @@ export type MemoBoxProps = {
 export default function MemoBox({
   pageId,
   docId,
+  review,
   autoSaveDebounceMs = 1200,
   saveOnUnmount = true,
 }: MemoBoxProps) {
@@ -36,11 +38,16 @@ export default function MemoBox({
     }
   };
 
-  const loadNote = async (pid: number) => {
-    setStatus("loading");
-    setErrMsg(null);
-    const review = await fetchPageReview(pid);
-    if (review?.note) {
+  /* ---------- review.note 기반으로 초기화 ---------- */
+  useEffect(() => {
+    if (!review) {
+      setNoteId(null);
+      setContent("");
+      setDirty(false);
+      return;
+    }
+
+    if (review.note) {
       setNoteId(review.note.note_id);
       setContent(review.note.content ?? "");
       setDirty(false);
@@ -49,8 +56,7 @@ export default function MemoBox({
       setContent("");
       setDirty(false);
     }
-    setStatus("idle");
-  };
+  }, [review]);
 
   const saveOnce = async () => {
     if (!dirty) return;
@@ -102,7 +108,6 @@ export default function MemoBox({
       void saveOnce();
     }
     prevPageRef.current = pageId;
-    void loadNote(pageId);
 
     return () => {
       clearTimer();
