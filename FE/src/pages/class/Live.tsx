@@ -113,7 +113,7 @@ export default function LiveClass() {
   );
 
   // 페이지 따라가기 토글 (장애학우 전용)
-  const [followEnabled, setFollowEnabled] = useState<boolean>(true);
+  const [followEnabled, setFollowEnabled] = useState<boolean>(false);
 
   // ------- refs -------
   const liveRef = useRef<HTMLDivElement | null>(null);
