@@ -199,8 +199,44 @@ class NoteDetailView(APIView):
         content = request.data.get("content", "").strip()
         note.content = content
 
-        note.save()
+        note.save(update_fields=['content'])
 
         return Response(NoteSerializer(note).data, status=200)
     
+class NoteTTSView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
+
+    def patch(self, request, noteId):
+        note = Note.objects.filter(id=noteId).first()
+        if not note:
+            return Response({"error": "해당 노트를 찾을 수 없습니다."}, status=404)
+        
+        if note.user != request.user:
+            return Response({"error": "본인이 작성한 노트만 수정할 수 있습니다."}, status=403)
+        self.check_object_permissions(request, note)
+        
+        content = request.data.get("content", "").strip()
+
+        # content가 비어있으면 TTS 변환하지 않음
+        if not content:
+            return Response({
+                "note_id": note.id,
+                "note_tts": None
+            }, status=200)
+        
+        try:
+            tts_url = text_to_speech(note.content, request.user, s3_folder="tts/notes/")
+        except Exception as e:
+            return Response({"error": f"TTS 오류: {e}"}, status=500)
+        
+        note.content = content
+        note.note_tts = tts_url
+
+        note.save(update_fields=['content', 'note_tts'])
+
+        return Response({
+            "note_id": note.id,
+            "content": note.content,
+            "note_tts": tts_url
+        }, status=200)
 
