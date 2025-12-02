@@ -512,8 +512,7 @@ class DocSttSummaryDetailView(APIView):
 class PageView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsLectureMember]
 
-    # def post(self, request, pageId):
-    def get(self, request, pageId):
+    def post(self, request, pageId):
         try:
             page = Page.objects.get(id=pageId)
         except Page.DoesNotExist:
@@ -521,10 +520,10 @@ class PageView(APIView):
         self.check_object_permissions(request, page)
 
         user = request.user
-        # boards_input = request.data.get("boards")
+        boards_input = request.data.get("boards")
 
-        # if not boards_input:
-        #     return Response({"error": "수식 전처리 데이터가 필요합니다."}, status=400)
+        if not boards_input:
+            return Response({"error": "수식 전처리 데이터가 필요합니다."}, status=400)
 
         note = Note.objects.filter(page=page, user=user).first()
         speeches = Speech.objects.filter(page=page).order_by("-created_at")
@@ -554,16 +553,15 @@ class PageView(APIView):
             # board_tts 생성
             for board in boards:
                 if not board.board_tts:
-                    # board_input = next((b for b in boards_input if b.get("boardId") == board.id), None)
-                    # processed_math = board_input.get("text") if board_input else board.text
+                    board_input = next((b for b in boards_input if b.get("boardId") == board.id), None)
+                    processed_math = board_input.get("text") if board_input else board.text
 
-                    # if not processed_math:
-                    #     continue
+                    if not processed_math:
+                        continue
 
                     try:
-                        # processed_text = preprocess_text(processed_math)
-                        # board.board_tts = text_to_speech(markdown_to_text(processed_text), user, s3_folder="tts/boards/")
-                        board.board_tts = text_to_speech(markdown_to_text(board.text), user, s3_folder="tts/boards/")
+                        processed_text = preprocess_text(processed_math)
+                        board.board_tts = text_to_speech(markdown_to_text(processed_text), user, s3_folder="tts/boards/")
                         board.save(update_fields=["board_tts"])
                     except Exception as e:
                         print("추가 자료 TTS 생성 중 오류:", e)
