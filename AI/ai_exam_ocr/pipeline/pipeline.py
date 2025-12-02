@@ -14,7 +14,7 @@ from ai_exam_ocr.pipeline.ocr_hybrid import run_hybrid_ocr_on_seq_meta, build_re
 load_dotenv()
 
 ROBOFLOW_API_KEY = os.environ.get("ROBOFLOW_API_KEY")
-MODEL_ID = os.environ.get("ROBOFLOW_MODEL_ID", "ccd-pn4pd/8")
+MODEL_ID = os.environ.get("ROBOFLOW_MODEL_ID", "ccd-pn4pd/11")
 
 if not ROBOFLOW_API_KEY:
     raise RuntimeError("ROBOFLOW_API_KEY 환경변수를 설정해 주세요.")
@@ -150,40 +150,12 @@ def build_exam_json_for_views(seq_meta_hybrid: List[Dict[str, Any]],
 
     return {"questions": questions}
 
-
-# ==============================
-# 3. public API
-# ==============================
-
-# def process_exam(
-#     image_path: str,
-#     output_dir: str,
-#     base_url: str | None = None,
-# ) -> Dict[str, Any]:
-#     os.makedirs(output_dir, exist_ok=True)
-
-#     img_bgr, all_boxes = detect_boxes_with_roboflow(image_path, ROBOFLOW_API_KEY, MODEL_ID)
-#     structured_questions = build_structured_questions(img_bgr, all_boxes)
-#     seq_meta = build_sequential_crops(structured_questions, img_bgr, output_dir)
-#     seq_meta_hybrid = run_hybrid_ocr_on_seq_meta(seq_meta)
-#     exam_json = build_exam_json_for_views(seq_meta_hybrid, img_bgr, output_dir, base_url)
-
-#     # JSON 파일 저장
-#     out_path = os.path.join(output_dir, "exam_questions.json")
-#     with open(out_path, "w", encoding="utf-8") as f:
-#         json.dump(exam_json, f, ensure_ascii=False, indent=2)
-
-#     exam_json["_output_path"] = out_path
-#     return exam_json
-
 def process_exam(
     image_path: str,
     output_dir: str,
     base_url: str | None = None,
-    save_json: bool = False, #로컬저장x
+    save_json: bool = False,
 ) -> Dict[str, Any]:
-    os.makedirs(output_dir, exist_ok=True)
-
     img_bgr, all_boxes = detect_boxes_with_roboflow(image_path, ROBOFLOW_API_KEY, MODEL_ID)
     structured_questions = build_structured_questions(img_bgr, all_boxes)
     seq_meta = build_sequential_crops(structured_questions, img_bgr, output_dir)
@@ -198,6 +170,7 @@ def process_exam(
 
     return exam_json
 
+
 # ==============================
 # 4. CLI 엔트리
 # ==============================
@@ -206,7 +179,6 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) < 2:
-        print("Usage: python src/exam_ocr/pipeline.py <image_path> [output_dir]")
         raise SystemExit(1)
 
     img_path = sys.argv[1]
@@ -214,6 +186,3 @@ if __name__ == "__main__":
 
     result = process_exam(img_path, out_dir, base_url=None, save_json=True)
 
-    print("=== Exam OCR 완료 ===")
-    print(f"JSON 경로: {result['_output_path']}")
-    print(f"문항 수: {len(result['questions'])}")
