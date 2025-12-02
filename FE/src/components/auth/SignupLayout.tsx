@@ -102,7 +102,7 @@ const Btn = styled.button`
   }
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;

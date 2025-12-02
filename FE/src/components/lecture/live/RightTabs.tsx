@@ -216,7 +216,8 @@ const Tab = styled.button`
     outline: none;
   }
   &:focus-visible {
-    border-color: var(--c-blue, #2563eb);
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
     box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(37, 99, 235, 0.35);
 
     &[aria-selected="true"] {
@@ -232,9 +233,8 @@ const Tab = styled.button`
 
   @media (forced-colors: active) {
     &:focus-visible {
-      outline: 2px solid CanvasText;
+      outline: 5px solid var(--c-blue);
       outline-offset: 2px;
-      box-shadow: none;
     }
   }
 `;

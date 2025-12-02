@@ -184,7 +184,7 @@ export const RecIconBtn = styled.button`
     filter: brightness(0.9);
   }
   &:focus-visible {
-    outline: 2px solid #3b82f6;
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;

@@ -187,8 +187,8 @@ const Tab = styled.button`
   }
 
   &:focus-visible {
-    outline: none;
-    border: 2px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4);
   }
 
@@ -211,8 +211,8 @@ const Panel = styled.section`
   overflow: scroll;
 
   &:focus-visible {
-    outline: none;
-    border: 2px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4);
   }
 `;

@@ -22,11 +22,6 @@ export const Input = styled.input`
   color: var(--c-black);
   transition: 0.2s border-color;
 
-  &:focus {
-    border-color: var(--c-blueM);
-    outline: none;
-  }
-
   &::placeholder {
     color: var(--c-grayD);
     opacity: 0.6;

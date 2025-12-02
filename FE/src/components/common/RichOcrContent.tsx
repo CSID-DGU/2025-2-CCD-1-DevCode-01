@@ -119,7 +119,8 @@ const CodeBlock = styled.pre`
   overflow-x: auto;
 
   &:focus-visible {
-    outline: none;
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
   }
 `;
 
@@ -134,6 +135,7 @@ const MathContainer = styled.div`
   overflow: auto;
 
   &:focus-visible {
-    outline: none;
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
   }
 `;

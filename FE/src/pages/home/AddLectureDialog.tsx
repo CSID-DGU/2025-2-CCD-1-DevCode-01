@@ -232,7 +232,7 @@ const ChoiceButton = styled.button`
   }
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;
@@ -265,7 +265,7 @@ const Input = styled.input`
   margin-bottom: 0.5rem;
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;
@@ -301,7 +301,7 @@ const PrimaryButton = styled(BaseButton)`
   ${fonts.regular20}
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;
@@ -315,7 +315,7 @@ const GhostButton = styled(BaseButton)`
   width: 100%;
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;
