@@ -35,20 +35,36 @@ export default function MarkdownText({ children }: { children: string }) {
     ol: (props: React.ComponentPropsWithoutRef<"ol">) => (
       <OL {...dropNodeRef(props)} />
     ),
+
+    pre: (props: React.ComponentPropsWithoutRef<"pre">) => (
+      <CodeBlock {...dropNodeRef(props)} />
+    ),
+
     code: ({
       inline,
       className,
       children,
+      ...rest
     }: {
       inline?: boolean;
       className?: string;
       children?: React.ReactNode;
-    }) =>
-      inline ? (
-        <CodeInline className={className}>{children}</CodeInline>
-      ) : (
-        <CodeBlock className={className}>{children}</CodeBlock>
-      ),
+    }) => {
+      const cleaned = dropNodeRef(rest);
+
+      if (inline) {
+        return (
+          <CodeInline className={className} {...cleaned}>
+            {children}
+          </CodeInline>
+        );
+      }
+      return (
+        <code className={className} {...cleaned}>
+          {children}
+        </code>
+      );
+    },
   };
 
   return (
