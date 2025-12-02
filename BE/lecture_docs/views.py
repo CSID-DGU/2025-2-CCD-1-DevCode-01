@@ -568,10 +568,7 @@ class PageView(APIView):
         self.check_object_permissions(request, page)
 
         user = request.user
-        boards_input = request.data.get("boards")
-
-        if not boards_input:
-            return Response({"error": "수식 전처리 데이터가 필요합니다."}, status=400)
+        boards_input = request.data.get("boards", [])
 
         note = Note.objects.filter(page=page, user=user).first()
         speeches = Speech.objects.filter(page=page).order_by("-created_at")
