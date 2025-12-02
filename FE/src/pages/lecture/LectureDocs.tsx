@@ -1,5 +1,13 @@
 import { useParams, useNavigate } from "react-router-dom";
 import styled from "styled-components";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 
 import UploadBar from "src/components/lecture/UploadBar";
 import { DocList, ListItem } from "src/components/lecture/DocList";
@@ -10,12 +18,14 @@ import { useLectureMemoList } from "src/hooks/useLectureMemoList";
 
 import type { LectureDoc } from "src/entities/doc/types";
 import ReviewRecordModal from "src/components/lecture/pre/ReviewRecordModal";
-import { useCallback, useRef, useState } from "react";
 import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 import { useOcrTtsAutoStop } from "src/hooks/useOcrTtsAutoStop";
 import type { LectureNote } from "@apis/lecture/memo.api";
 
+import { readFontPct } from "src/pages/class/pre/ally";
+
 type RouteParams = { courseId?: string };
+type LayoutMode = "normal" | "compact" | "stack";
 
 export default function LectureDocs() {
   const { courseId } = useParams<RouteParams>();
@@ -42,9 +52,28 @@ export default function LectureDocs() {
   const { soundRate, soundVoice } = useSoundOptions();
 
   useOcrTtsAutoStop(memoAudioRef, {
-    areaRef: memoAreaRef as React.RefObject<HTMLElement | null>,
+    areaRef: memoAreaRef as RefObject<HTMLElement | null>,
     stopMessageOnBlur: "메모 음성 재생이 중지되었습니다.",
   });
+
+  const [fontPct, setFontPct] = useState<number>(() => readFontPct());
+
+  useEffect(() => {
+    const handleFontChange = () => {
+      setFontPct(readFontPct());
+    };
+
+    window.addEventListener("a11y-font-change", handleFontChange);
+    return () => {
+      window.removeEventListener("a11y-font-change", handleFontChange);
+    };
+  }, []);
+
+  const layoutMode: LayoutMode = useMemo(() => {
+    if (fontPct >= 175) return "stack"; // 175~300% -> 세로 스택
+    if (fontPct >= 150) return "compact"; // 150~175% -> 좁은 2열
+    return "normal"; // 그 외 -> 기본 2열
+  }, [fontPct]);
 
   const fmtDate = (iso: string) => {
     try {
@@ -95,6 +124,7 @@ export default function LectureDocs() {
 
   return (
     <Wrap
+      mode={layoutMode}
       aria-busy={busy || memoLoading}
       aria-labelledby="lecture-docs-heading"
     >
@@ -104,7 +134,7 @@ export default function LectureDocs() {
 
       <UploadBar onSelectFile={upload} />
 
-      <Left role="region" aria-label="교안 목록">
+      <Left mode={layoutMode} role="region" aria-label="교안 목록">
         <DocList role="list" aria-describedby="doc-list-desc">
           <SrOnly id="doc-list-desc">
             항목을 클릭하면 해당 교안을 열 수 있습니다. 각 항목의 옵션 버튼으로
@@ -140,7 +170,12 @@ export default function LectureDocs() {
         </DocList>
       </Left>
 
-      <Right ref={memoAreaRef} role="complementary" aria-label="메모">
+      <Right
+        mode={layoutMode}
+        ref={memoAreaRef}
+        role="complementary"
+        aria-label="메모"
+      >
         <audio ref={memoAudioRef} preload="none" />
         <MemoListCard
           items={items}
@@ -153,6 +188,7 @@ export default function LectureDocs() {
           onFocusNote={playNoteTts}
         />
       </Right>
+
       <ReviewRecordModal
         open={!!reviewDoc}
         onClose={() => setReviewDoc(null)}
@@ -181,24 +217,40 @@ export default function LectureDocs() {
   );
 }
 
-const Wrap = styled.section`
+const Wrap = styled.section<{ mode: LayoutMode }>`
   display: grid;
-  grid-template-columns: 1fr 420px;
-  grid-template-rows: auto 1fr;
-  gap: 1.5rem;
   width: 100%;
   padding: 2rem;
+  gap: 1.5rem;
+
+  grid-template-columns: ${({ mode }) => {
+    if (mode === "stack") return "minmax(0, 1fr)"; // 1열
+    if (mode === "compact") return "minmax(0, 1.5fr) 360px"; // 좁은 2열
+    return "minmax(0, 1.5fr) 420px"; // 기본 2열
+  }};
+
+  grid-template-rows: ${({ mode }) =>
+    mode === "stack" ? "auto auto auto" : "auto 1fr"};
 `;
-const Left = styled.section`
-  grid-row: 2;
+
+// 교안 리스트
+const Left = styled.section<{ mode: LayoutMode }>`
+  grid-row: ${({ mode }) => (mode === "stack" ? 2 : 2)};
+  grid-column: ${({ mode }) => (mode === "stack" ? "1 / -1" : "1 / 2")};
+
   display: flex;
   flex-direction: column;
   gap: 1rem;
 `;
-const Right = styled.aside`
-  grid-row: 2;
+
+// 메모
+const Right = styled.aside<{ mode: LayoutMode }>`
+  grid-row: ${({ mode }) => (mode === "stack" ? 3 : 2)};
+  grid-column: ${({ mode }) => (mode === "stack" ? "1 / -1" : "2 / 3")};
+
   min-width: 280px;
 `;
+
 const SrOnly = styled.h2`
   position: absolute;
   width: 1px;
