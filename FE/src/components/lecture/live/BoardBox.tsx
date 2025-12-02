@@ -18,11 +18,11 @@ import {
 import MarkdownText from "./MarkdownText";
 
 type Props = {
-  docId: number; // WS 채널 키
-  pageId: number; // API 호출 키
-  assetBase?: string; // 정적 파일 prefix (ex. VITE_BASE_URL)
-  token?: string | null; // access token (없으면 localStorage)
-  wsBase?: string; // ws(s)://HOST[:PORT] (없으면 VITE_BASE_URL → ws 변환)
+  docId: number;
+  pageId: number;
+  assetBase?: string;
+  token?: string | null;
+  wsBase?: string;
 };
 
 export default function BoardBox({
@@ -39,6 +39,9 @@ export default function BoardBox({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [preview, setPreview] = useState<{ src: string; alt: string } | null>(
+    null
+  );
 
   const fileRef = useRef<HTMLInputElement | null>(null);
   const toUrl = (p: string | null) =>
@@ -49,7 +52,17 @@ export default function BoardBox({
     wsBase ??
     (import.meta.env.VITE_BASE_URL as string).replace(/^http(s?)/, "ws$1");
 
-  // 초기 로드
+  useEffect(() => {
+    if (!preview) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setPreview(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [preview]);
+
   const load = async () => {
     setLoading(true);
     setError(null);
@@ -62,7 +75,6 @@ export default function BoardBox({
     load();
   }, [pageId]);
 
-  // 실시간: 수신 처리
   const { sendBoardEvent } = useDocLiveSync({
     serverBase: wsServer,
     docId,
@@ -98,7 +110,6 @@ export default function BoardBox({
       const created = await uploadBoardImage(pageId, file);
       setList((prev) => [created, ...prev]);
 
-      // 서버로도 created 전송 (선택)
       sendBoardEvent("created", {
         boardId: created.boardId,
         image: created.image,
@@ -129,7 +140,6 @@ export default function BoardBox({
       );
       setEditingId(null);
 
-      // 서버로도 updated 전송
       sendBoardEvent("updated", {
         boardId,
         image: updated.image ?? null,
@@ -152,7 +162,6 @@ export default function BoardBox({
       setList((prev) => prev.filter((b) => b.boardId !== boardId));
       if (editingId === boardId) setEditingId(null);
 
-      // 서버로도 deleted 전송
       sendBoardEvent("deleted", { boardId });
     } catch (e) {
       console.error(e);
@@ -163,106 +172,138 @@ export default function BoardBox({
   };
 
   return (
-    <Wrap>
-      <Uploader
-        role="button"
-        tabIndex={0}
-        onClick={() => fileRef.current?.click()}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={onDrop}
-        aria-label="사진 업로드 또는 드래그 앤 드롭"
-      >
-        <span>{uploading ? "업로드 중" : "사진 업로드"}</span>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          onChange={(e) => handleFiles(e.target.files?.[0] ?? undefined)}
-          hidden
-        />
-      </Uploader>
+    <>
+      <Wrap>
+        <Uploader
+          role="button"
+          tabIndex={0}
+          onClick={() => fileRef.current?.click()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={onDrop}
+          aria-label="사진 업로드 또는 드래그 앤 드롭"
+        >
+          <span>{uploading ? "업로드 중" : "사진 업로드"}</span>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => handleFiles(e.target.files?.[0] ?? undefined)}
+            hidden
+          />
+        </Uploader>
 
-      {loading && <Hint>불러오는 중…</Hint>}
-      {error && <Error role="alert">{error}</Error>}
+        {loading && <Hint>불러오는 중…</Hint>}
+        {error && <Error role="alert">{error}</Error>}
 
-      <List role="list" aria-busy={loading || uploading}>
-        {list.map((b) => {
-          const isEditing = editingId === b.boardId;
-          const isSaving = savingId === b.boardId;
-          const isDeleting = deletingId === b.boardId;
+        <List role="list" aria-busy={loading || uploading}>
+          {list.map((b) => {
+            const isEditing = editingId === b.boardId;
+            const isSaving = savingId === b.boardId;
+            const isDeleting = deletingId === b.boardId;
 
-          return (
-            <Item key={b.boardId} role="listitem">
-              {b.image && <Thumb src={toUrl(b.image)} alt="추가자료 이미지" />}
+            const src = b.image ? toUrl(b.image) : "";
 
-              <Row>
-                <Actions>
-                  {isEditing ? (
-                    <>
-                      <Button
-                        type="button"
-                        aria-label="설명 저장"
-                        disabled={isSaving}
-                        onClick={() => {
-                          const textarea = document.getElementById(
-                            `edit-${b.boardId}`
-                          ) as HTMLTextAreaElement | null;
-                          if (textarea)
-                            saveText(b.boardId, textarea.value.trim());
-                        }}
-                      >
-                        {isSaving ? "저장중…" : "저장"}
-                      </Button>
-                      <Button
-                        type="button"
-                        aria-label="편집 취소"
-                        onClick={() => setEditingId(null)}
-                        $variant="ghost"
-                      >
-                        취소
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button
-                        type="button"
-                        onClick={() => setEditingId(b.boardId)}
-                      >
-                        수정
-                      </Button>
-                      <DangerBtn
-                        type="button"
-                        onClick={() => remove(b.boardId)}
-                        disabled={isDeleting}
-                        aria-label="추가 자료 삭제"
-                      >
-                        {isDeleting ? "삭제중…" : "삭제"}
-                      </DangerBtn>
-                    </>
-                  )}
-                </Actions>
-              </Row>
+            return (
+              <Item key={b.boardId} role="listitem">
+                {b.image && (
+                  <ThumbButton
+                    type="button"
+                    onClick={() => setPreview({ src, alt: "추가자료 이미지" })}
+                    aria-label="이미지 크게 보기"
+                  >
+                    <Thumb src={src} alt="추가자료 이미지" />
+                  </ThumbButton>
+                )}
 
-              {isEditing ? (
-                <EditArea
-                  id={`edit-${b.boardId}`}
-                  defaultValue={b.text ?? ""}
-                  placeholder="이미지에 대한 설명이나 텍스트를 입력하세요"
-                />
-              ) : b.text ? (
-                <MarkdownText>{b.text}</MarkdownText>
-              ) : (
-                <EmptyLine>설명이 없습니다.</EmptyLine>
-              )}
-            </Item>
-          );
-        })}
+                <Row>
+                  <Actions>
+                    {isEditing ? (
+                      <>
+                        <Button
+                          type="button"
+                          aria-label="설명 저장"
+                          disabled={isSaving}
+                          onClick={() => {
+                            const textarea = document.getElementById(
+                              `edit-${b.boardId}`
+                            ) as HTMLTextAreaElement | null;
+                            if (textarea)
+                              saveText(b.boardId, textarea.value.trim());
+                          }}
+                        >
+                          {isSaving ? "저장중…" : "저장"}
+                        </Button>
+                        <Button
+                          type="button"
+                          aria-label="편집 취소"
+                          onClick={() => setEditingId(null)}
+                          $variant="ghost"
+                        >
+                          취소
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          type="button"
+                          onClick={() => setEditingId(b.boardId)}
+                        >
+                          수정
+                        </Button>
+                        <DangerBtn
+                          type="button"
+                          onClick={() => remove(b.boardId)}
+                          disabled={isDeleting}
+                          aria-label="추가 자료 삭제"
+                        >
+                          {isDeleting ? "삭제중…" : "삭제"}
+                        </DangerBtn>
+                      </>
+                    )}
+                  </Actions>
+                </Row>
 
-        {!loading && list.length === 0 && (
-          <Empty>아직 업로드된 추가 자료가 없어요.</Empty>
-        )}
-      </List>
-    </Wrap>
+                {isEditing ? (
+                  <EditArea
+                    id={`edit-${b.boardId}`}
+                    defaultValue={b.text ?? ""}
+                    placeholder="이미지에 대한 설명이나 텍스트를 입력하세요"
+                  />
+                ) : b.text ? (
+                  <MarkdownText>{b.text}</MarkdownText>
+                ) : (
+                  <EmptyLine>설명이 없습니다.</EmptyLine>
+                )}
+              </Item>
+            );
+          })}
+
+          {!loading && list.length === 0 && (
+            <Empty>아직 업로드된 추가 자료가 없어요.</Empty>
+          )}
+        </List>
+      </Wrap>
+
+      {preview && (
+        <Overlay
+          role="dialog"
+          aria-modal="true"
+          aria-label="이미지 미리보기"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setPreview(null);
+            }
+          }}
+        >
+          <PreviewInner>
+            <PreviewImg src={preview.src} alt={preview.alt} />
+            <CloseBtn type="button" onClick={() => setPreview(null)}>
+              닫기
+            </CloseBtn>
+          </PreviewInner>
+        </Overlay>
+      )}
+    </>
   );
 }
 
@@ -272,7 +313,9 @@ const Wrap = styled.section`
   flex-direction: column;
   gap: 12px;
   height: ${PANEL_FIXED_H_LIVE};
+  min-width: 0;
 `;
+
 const Uploader = styled.div`
   border: 2px dashed #d1d5db;
   border-radius: 12px;
@@ -284,49 +327,71 @@ const Uploader = styled.div`
     background: var(--c-white);
   }
 `;
+
 const Hint = styled.p`
   margin: 0;
   color: #6b7280;
   font-size: 0.875rem;
 `;
+
 const Error = styled.p`
   margin: 0;
   color: #b91c1c;
   font-size: 0.875rem;
 `;
+
 const List = styled.div`
   display: grid;
   gap: 12px;
   overflow: auto;
 `;
+
 const Item = styled.article`
-  background: #fff;
+  background: var(--c-white);
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   padding: 10px;
+  min-width: 0;
 `;
+
+const ThumbButton = styled.button`
+  all: unset;
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  margin-bottom: 8px;
+
+  &:focus-visible {
+    outline: 3px solid var(--c-blue);
+    outline-offset: 2px;
+    border-radius: 10px;
+  }
+`;
+
 const Thumb = styled.img`
   display: block;
   width: 100%;
   max-height: 220px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 8px;
-  margin-bottom: 8px;
 `;
+
 const Row = styled.div`
   display: flex;
   justify-content: flex-end;
   align-items: center;
   margin-bottom: 8px;
 `;
+
 const Actions = styled.div`
   display: inline-flex;
   gap: 8px;
 `;
+
 const Button = styled.button<{ $variant?: "ghost" }>`
-  border: 2px solid #2563eb;
-  color: #2563eb;
-  background: #fff;
+  border: 2px solid var(--c-blue);
+  color: var(--c-blue);
+  background: var(--c-white);
   border-radius: 999px;
   ${fonts.regular20};
   padding: 4px 10px;
@@ -334,10 +399,12 @@ const Button = styled.button<{ $variant?: "ghost" }>`
   ${({ $variant }) =>
     $variant === "ghost" && `border-color:#e5e7eb;color:#374151;`}
 `;
+
 const DangerBtn = styled(Button)`
   border-color: #ef4444;
   color: #ef4444;
 `;
+
 const EditArea = styled.textarea`
   width: 100%;
   min-height: 150px;
@@ -346,19 +413,63 @@ const EditArea = styled.textarea`
   border-radius: 8px;
   padding: 8px;
   ${fonts.regular17};
-  &:focus {
-    outline: none;
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  &:focus-visible {
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
   }
 `;
+
 const EmptyLine = styled.p`
   margin: 0;
-  color: #6b7280;
+  color: var(--c-grayD);
 `;
+
 const Empty = styled.p`
   margin: 0;
-  color: #6b7280;
+  color: var(--c-grayD);
   font-size: 0.9rem;
   text-align: center;
+`;
+
+/* 이미지 확대 오버레이 */
+const Overlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+`;
+
+const PreviewInner = styled.div`
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+`;
+
+const PreviewImg = styled.img`
+  max-width: min(100vw - 48px, 960px);
+  max-height: min(100vh - 96px, 720px);
+  border-radius: 12px;
+  display: block;
+  background: #0f172a;
+`;
+
+const CloseBtn = styled.button`
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: none;
+  border-radius: 999px;
+  padding: 4px 10px;
+  ${fonts.regular17};
+  background: rgba(15, 23, 42, 0.85);
+  color: #f9fafb;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(15, 23, 42, 1);
+  }
 `;

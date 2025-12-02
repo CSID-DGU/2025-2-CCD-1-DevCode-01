@@ -83,47 +83,56 @@ export default function MarkdownText({ children }: { children: string }) {
 /* ---- styles ---- */
 const Root = styled.div`
   line-height: 1.7;
-  color: ${({ theme }) => theme.colors.base.black};
+  color: var(--c-black);
   word-break: break-word;
   white-space: normal;
   ${fonts.regular20}
 `;
+
 const P = styled.p`
   ${fonts.regular20}
 `;
+
 const H1 = styled.h1`
   ${fonts.medium26}
 `;
+
 const H2 = styled.h2`
   font-size: 1.25rem;
   margin: 0.6rem 0;
   ${fonts.medium26}
 `;
+
 const H3 = styled.h3`
   font-size: 1.1rem;
   margin: 0.6rem 0;
   ${fonts.medium26}
 `;
+
 const UL = styled.ul`
   padding-left: 1.25rem;
   ${fonts.regular20}
   margin: 0.4rem 0;
 `;
+
 const OL = styled.ol`
   padding-left: 1.25rem;
   margin: 0.4rem 0;
   ${fonts.regular20}
 `;
+
 const LI = styled.li`
   margin: 0.2rem 0;
   ${fonts.regular20}
 `;
+
 const CodeInline = styled.code`
   padding: 0 4px;
   border-radius: 4px;
   background: #f3f4f6;
   ${fonts.regular20}
 `;
+
 const CodeBlock = styled.pre`
   padding: 10px;
   border-radius: 8px;
