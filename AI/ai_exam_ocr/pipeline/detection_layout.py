@@ -5,7 +5,7 @@ import re
 
 import cv2
 import requests
-from ai_exam_ocr.src.exam_ocr.ocr_hybrid import enhance_for_ocr, paddle_ocr_with_newlines
+from ai_exam_ocr.pipeline.ocr_hybrid import enhance_for_ocr, paddle_ocr_with_newlines
 
 
 # ==============================
