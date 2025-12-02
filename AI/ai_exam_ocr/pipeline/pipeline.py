@@ -185,4 +185,3 @@ if __name__ == "__main__":
     out_dir = sys.argv[2] if len(sys.argv) >= 3 else "exam_outputs"
 
     result = process_exam(img_path, out_dir, base_url=None, save_json=True)
-

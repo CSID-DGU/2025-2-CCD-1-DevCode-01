@@ -1,11 +1,14 @@
-# Roboflow + qnum 그룹
-
 from typing import List, Dict, Any, Tuple
 import re
-
+import base64
 import cv2
 import requests
-from ai_exam_ocr.pipeline.ocr_hybrid import enhance_for_ocr, paddle_ocr_with_newlines
+
+from ai_exam_ocr.pipeline.ocr_hybrid import (
+    enhance_for_ocr,
+    get_openai,
+    _extract_text_from_openai_message,
+)
 
 
 # ==============================
@@ -15,14 +18,16 @@ from ai_exam_ocr.pipeline.ocr_hybrid import enhance_for_ocr, paddle_ocr_with_new
 def detect_boxes_with_roboflow(img_path: str,
                                api_key: str,
                                model_id: str) -> Tuple[Any, List[Dict[str, Any]]]:
+
     img_bgr = cv2.imread(img_path)
     if img_bgr is None:
         raise FileNotFoundError(img_path)
 
     with open(img_path, "rb") as f:
         resp = requests.post(
-            f"https://detect.roboflow.com/{model_id}?api_key={api_key}&format=json",
-            files={"file": f},
+            f"https://detect.roboflow.com/{model_id}"
+            f"?api_key={api_key}&format=json&confidence=0.2&overlap=0.1",
+            files={"file": f}
         )
 
     data = resp.json()
@@ -44,26 +49,64 @@ def detect_boxes_with_roboflow(img_path: str,
 
 
 # ==============================
-# 2. qnum 정제 + 레이아웃 / 문항 묶기
+# 2. qnum 전용 OCR (Paddle 제거 → GPT Vision으로 숫자만 읽기)
 # ==============================
 
 def ocr_qnum_only(img_bgr, bbox) -> Tuple[int | None, str]:
-    """qnum 박스 왼쪽 일부만 잘라 숫자만 읽기."""
+    """
+    문항 번호(qnum)는 숫자 1개만 필요하므로
+    PaddleOCR → GPT Vision(가볍고 빠름) 으로 교체.
+    """
     x1, y1, x2, y2 = bbox
-    w_box = x2 - x1
-    x2_small = x1 + int(w_box * 0.4)
-    crop = img_bgr[y1:y2, x1:x2_small]
-    crop = enhance_for_ocr(crop, scale=4, pad=4)
-    raw = paddle_ocr_with_newlines(crop)
-    m = re.search(r"\d+", raw)
-    if m:
-        return int(m.group(0)), raw
-    return None, raw
 
+    crop = img_bgr[y1:y2, x1:x2]
+    if crop is None:
+        return None, ""
+
+    # 이미지 base64 인코딩
+    _, buf = cv2.imencode(".jpg", crop)
+    b64 = base64.b64encode(buf).decode("utf-8")
+    data_url = f"data:image/jpeg;base64,{b64}"
+
+    client = get_openai()
+
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "너는 시험지의 '문항 번호(숫자)'만 읽어주는 초정밀 OCR 보정기다.\n"
+                    "문항 번호 1개만 출력해라. 다른 글자나 문장은 절대 출력하지 마라.\n"
+                    "예: '3', '12'\n"
+                )
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                    {"type": "text", "text": "이미지에서 숫자(문항 번호)만 정확히 추출해 주세요."}
+                ]
+            }
+        ]
+    )
+
+    txt = _extract_text_from_openai_message(resp.choices[0].message)
+    m = re.search(r"\d+", txt)
+    if m:
+        return int(m.group(0)), txt
+
+    return None, txt
+
+
+# ==============================
+# 3. 레이아웃 검출
+# ==============================
 
 def detect_layout_and_mid_x(qnum_boxes: List[Dict[str, Any]],
                             img_width: int,
                             min_gap_ratio: float = 0.15) -> Tuple[str, float | None]:
+
     centers = sorted(((b["bbox"][0] + b["bbox"][2]) / 2.0 for b in qnum_boxes))
     if len(centers) < 3:
         return "single", None
@@ -91,9 +134,14 @@ def split_by_mid_x(boxes: List[Dict[str, Any]], mid_x: float):
     return left, right
 
 
+# ==============================
+# 4. qnum 구간에 따라 content 묶기
+# ==============================
+
 def assign_by_qnum_spans(content_boxes: List[Dict[str, Any]],
                          qnums: List[Dict[str, Any]],
                          img_height: int):
+
     if not qnums:
         return [], {}
 
@@ -116,6 +164,10 @@ def assign_by_qnum_spans(content_boxes: List[Dict[str, Any]],
 
     return spans, groups
 
+
+# ==============================
+# 5. 최종 structured_questions 생성
+# ==============================
 
 def build_structured(spans, groups):
     structured = []
@@ -140,25 +192,34 @@ def build_structured(spans, groups):
             cls = b["class_name"]
             if cls in q:
                 q[cls].append(b)
+
         structured.append(q)
+
     return structured
 
 
 def build_structured_questions(img_bgr,
                                all_boxes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    Roboflow 박스 전체 → 문항 단위 structured_questions
-    """
+
     h, w, _ = img_bgr.shape
 
     qnum_boxes = [b for b in all_boxes if b["class_name"] == "qnum"]
     content_boxes = [b for b in all_boxes if b["class_name"] != "qnum"]
 
+    # -----------------------
+    # qnum OCR (GPT Vision)
+    # -----------------------
     clean_qnums = []
     demoted_to_text = []
+
+    print(f"[PIPE] qnum 개수: {len(qnum_boxes)}")
+
     for b in qnum_boxes:
+        print(f"[PIPE] qnum OCR 실행 중: bbox={b['bbox']}")
         qnum, raw = ocr_qnum_only(img_bgr, b["bbox"])
+
         if qnum is None:
+            # 숫자 없음 → text로 강등
             demoted_to_text.append(
                 {"class_name": "text", "bbox": b["bbox"], "from_qnum": True, "raw_qnum_text": raw}
             )
@@ -170,23 +231,31 @@ def build_structured_questions(img_bgr,
     qnum_boxes = clean_qnums
     content_boxes += demoted_to_text
 
+    # -----------------------
+    # 레이아웃(single / double)
+    # -----------------------
     layout, mid_x = detect_layout_and_mid_x(qnum_boxes, w)
 
     if layout == "single":
         left_qnums, right_qnums = qnum_boxes, []
         left_contents, right_contents = content_boxes, []
     else:
-        left_qnums, right_qnums = split_by_mid_x(qnum_boxes, mid_x)  
+        left_qnums, right_qnums = split_by_mid_x(qnum_boxes, mid_x)
         left_contents, right_contents = split_by_mid_x(content_boxes, mid_x)
 
     left_spans, left_groups = assign_by_qnum_spans(left_contents, left_qnums, h)
+
     if layout == "double":
         right_spans, right_groups = assign_by_qnum_spans(right_contents, right_qnums, h)
     else:
         right_spans, right_groups = [], {}
 
+    # -----------------------
+    # 구조화
+    # -----------------------
     left_struct = build_structured(left_spans, left_groups)
     right_struct = build_structured(right_spans, right_groups)
+
     structured_questions = left_struct + right_struct
     structured_questions = sorted(
         structured_questions,

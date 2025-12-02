@@ -94,5 +94,5 @@ tests/samples/
 test_imgs/
 test_outputs/
 tmp/
-
+exam_temp/
 .venv_bak/

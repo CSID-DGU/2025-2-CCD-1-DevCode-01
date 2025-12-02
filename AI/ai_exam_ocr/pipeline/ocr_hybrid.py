@@ -7,7 +7,7 @@ from typing import List, Dict, Any
 
 import cv2
 import numpy as np
-from paddleocr import PaddleOCR
+#from paddleocr import PaddleOCR
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -17,12 +17,32 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY 환경변수를 설정해 주세요.")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+_OPENAI_CLIENT = None
+
+def get_openai():
+    global _OPENAI_CLIENT
+    if _OPENAI_CLIENT is None:
+        _OPENAI_CLIENT = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    return _OPENAI_CLIENT
 
 TEXTUAL_CLASSES = {"qnum", "text", "choice", "code"}
 VISUAL_CLASSES = {"chart", "table"}
 
-ocr = PaddleOCR(lang="korean", use_angle_cls=True)
+# ==============================
+# Lazy PaddleOCR (mac hang 방지)
+# ==============================
+# _OCR_INSTANCE = None
+
+# def get_paddle_ocr():
+#     global _OCR_INSTANCE
+#     if _OCR_INSTANCE is None:
+#         _OCR_INSTANCE = PaddleOCR(
+#             lang="korean",
+#             ocr_version="PP-OCRv3",
+#             use_angle_cls=False,
+#         )
+#     return _OCR_INSTANCE
+
 
 
 # ==============================
@@ -101,8 +121,8 @@ def enhance_for_choice(crop_bgr: np.ndarray, scale: int = 4, pad: int = 8) -> np
     return crop_big
 
 
-def paddle_ocr_with_newlines(crop_bgr: np.ndarray) -> str:
-    """PaddleOCR 줄 단위 추출."""
+def paddle_ocr_with_newlines(crop_bgr):
+    ocr = get_paddle_ocr()
     result = ocr.ocr(crop_bgr, cls=True)
     if not result or not result[0]:
         return ""
@@ -181,6 +201,8 @@ def hybrid_gpt_vision_with_paddle(img_path: str,
             f"[Paddle 시작]\n{paddle_text}\n[Paddle 끝]"
         )
 
+    client = get_openai()
+
     resp = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
@@ -194,6 +216,7 @@ def hybrid_gpt_vision_with_paddle(img_path: str,
             },
         ],
     )
+
     return _extract_text_from_openai_message(resp.choices[0].message)
 
 
@@ -293,29 +316,26 @@ def build_reading_text(kind: str, raw: str) -> str:
 # ==============================
 
 def run_hybrid_ocr_on_seq_meta(seq_meta: List[Dict[str, Any]]):
-    """
-    seq_meta: build_sequential_crops 결과
-      [
-        {
-          "question_number": 1,
-          "items": [
-             {"index":0,"kind":"qnum","path":...,"bbox":...},
-             ...
-          ]
-        },
-        ...
-      ]
-    """
+    total_items = sum(len(q["items"]) for q in seq_meta)
+    processed = 0
+
     for q in seq_meta:
+        qnum = q.get("question_number", "unknown")
+        print(f"\n[HYBRID] === 문항 {qnum} 시작 ===")
+
         for item in q["items"]:
+            processed += 1
             kind = item["kind"]
             path = item["path"]
 
+
             if kind not in TEXTUAL_CLASSES:
+                print("    → 시각요소(chart/table)라 OCR 생략")
                 continue
 
             crop = cv2.imread(path)
             if crop is None:
+                print("    → 이미지 로드 실패 (건너뜀)")
                 item["gpt_hybrid_text"] = ""
                 continue
 
@@ -326,7 +346,10 @@ def run_hybrid_ocr_on_seq_meta(seq_meta: List[Dict[str, Any]]):
             else:
                 crop_for_paddle = enhance_for_ocr(crop)
 
-            paddle_text = paddle_ocr_with_newlines(crop_for_paddle)
+           
+            paddle_text = ""  # 지금은 안 씀
+
+           
             gpt_text = hybrid_gpt_vision_with_paddle(path, paddle_text, kind=kind)
             item["gpt_hybrid_text"] = gpt_text
 
