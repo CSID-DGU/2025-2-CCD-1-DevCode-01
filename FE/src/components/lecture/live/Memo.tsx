@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { type PageReview } from "@apis/lecture/review.api";
-import { createNote, updateNote, type Note } from "@apis/lecture/note.api";
+import {
+  createNote,
+  updateNote,
+  fetchNoteByPage,
+  type Note,
+} from "@apis/lecture/note.api";
 import { fonts } from "@styles/fonts";
 
 export type MemoBoxProps = {
@@ -38,14 +43,9 @@ export default function MemoBox({
     }
   };
 
-  /* ---------- review.note 기반으로 초기화 ---------- */
+  /* ---------- 1) review.note 기반 초기화 ---------- */
   useEffect(() => {
-    if (!review) {
-      setNoteId(null);
-      setContent("");
-      setDirty(false);
-      return;
-    }
+    if (!review) return;
 
     if (review.note) {
       setNoteId(review.note.note_id);
@@ -58,6 +58,49 @@ export default function MemoBox({
     }
   }, [review]);
 
+  /* ---------- 2) review가 없을 때 API로 메모 조회 ---------- */
+  useEffect(() => {
+    if (review) return;
+
+    let cancelled = false;
+
+    const load = async () => {
+      setStatus("loading");
+      setErrMsg(null);
+      try {
+        console.log("[Memo] GET /note/ 조회...", pageId);
+
+        const note = await fetchNoteByPage(pageId);
+        if (cancelled) return;
+
+        if (note) {
+          console.log("[Memo] ▶ 메모 있음:", note);
+          // 메모가 있으면 이후 PATCH 사용
+          setNoteId(note.note_id);
+          setContent(note.content ?? "");
+        } else {
+          // 메모가 없으면 noteId = null → 이후 첫 저장은 POST
+          setNoteId(null);
+          setContent("");
+        }
+        setDirty(false);
+        setStatus("idle");
+      } catch (e) {
+        if (cancelled) return;
+        console.error(e);
+        setStatus("error");
+        setErrMsg("메모를 불러오지 못했어요. 잠시 후 다시 시도해주세요.");
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pageId, review]);
+
+  /* ---------- 저장 로직: noteId 유무에 따라 POST / PATCH ---------- */
   const saveOnce = async () => {
     if (!dirty) return;
 
@@ -71,11 +114,17 @@ export default function MemoBox({
     setErrMsg(null);
 
     let saved: Note | null = null;
-    if (noteId == null) {
-      saved = await createNote(pageId, content);
-      if (saved) setNoteId(saved.id);
-    } else {
-      saved = await updateNote(noteId, content);
+    try {
+      if (noteId == null) {
+        // 메모 없던 상태 → POST /class/{pageId}/note/
+        saved = await createNote(pageId, content);
+        if (saved) setNoteId(saved.note_id);
+      } else {
+        // 메모 이미 있던 상태 → PATCH /class/note/{noteId}/
+        saved = await updateNote(noteId, content);
+      }
+    } catch (e) {
+      console.error(e);
     }
 
     if (!saved) {
@@ -90,6 +139,7 @@ export default function MemoBox({
     setTimeout(() => setStatus("idle"), 1500);
   };
 
+  /* ---------- 자동 저장 타이머 ---------- */
   useEffect(() => {
     clearTimer();
     if (dirty) {

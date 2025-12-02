@@ -1,7 +1,7 @@
 import { getResponse, postResponse, patchResponse } from "@apis/instance";
 
 export type Note = {
-  id: number;
+  note_id: number;
   content: string;
 };
 
