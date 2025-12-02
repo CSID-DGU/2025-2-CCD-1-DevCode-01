@@ -53,9 +53,19 @@ class DocUploadView(APIView):
         if not file:
             return Response({"error": "file 필드가 비어 있습니다."},
                             status=status.HTTP_400_BAD_REQUEST)
+        
+        # 교안 제목 TTS 생성
+        try:
+            tts_url = text_to_speech(file.name, user=request.user, s3_folder="tts/doc/")
+        except Exception as e:
+            return Response({"error": f"TTS 오류: {e}"}, status=500)
 
         # Doc 레코드 생성
-        doc = Doc.objects.create(lecture=lecture, title=file.name)
+        doc = Doc.objects.create(
+            lecture=lecture, 
+            title=file.name,
+            doc_tts = tts_url,
+            )
         pdf_bytes = file.read() 
 
         pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
