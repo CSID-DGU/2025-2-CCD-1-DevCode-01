@@ -225,7 +225,7 @@ class NoteTTSView(APIView):
             }, status=200)
         
         try:
-            tts_url = text_to_speech(note.content, request.user, s3_folder="tts/notes/")
+            tts_url = text_to_speech(content, request.user, s3_folder="tts/notes/")
         except Exception as e:
             return Response({"error": f"TTS 오류: {e}"}, status=500)
         
