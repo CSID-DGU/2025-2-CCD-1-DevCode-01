@@ -474,6 +474,57 @@ export default function PreClass() {
     stop,
   ]);
 
+  //메모 tts
+  const handlePlayMemoTts = useCallback(
+    async ({
+      content,
+      tts,
+    }: {
+      content: string;
+      tts?: { female?: string | null; male?: string | null } | null;
+    }) => {
+      try {
+        // 1) 로컬 TTS / 기존 서버 오디오 모두 정지
+        stop();
+        stopServerAudio();
+
+        const url =
+          tts && (tts.female || tts.male)
+            ? soundVoice === "여성"
+              ? tts.female ?? tts.male ?? null
+              : tts.male ?? tts.female ?? null
+            : null;
+
+        if (!url) {
+          // 🔁 서버 TTS가 아직 없으면 로컬 TTS로 fallback
+          speakWithStop(content);
+          return;
+        }
+
+        const audio = sumAudioRef.current;
+        if (!audio) return;
+
+        try {
+          audio.pause();
+        } catch {
+          // ignore
+        }
+
+        audio.src = url;
+        applyPlaybackRate(audio, soundRate);
+        audio.currentTime = 0;
+        await audio.play();
+
+        announce("메모 음성을 재생합니다.");
+      } catch (e) {
+        console.error("[PreClass] 메모 음성 재생 실패:", e);
+        toast.error("메모 음성 재생에 실패했습니다.");
+        announce("메모 음성을 불러오지 못했습니다.");
+      }
+    },
+    [stop, stopServerAudio, soundVoice, soundRate, speakWithStop, announce]
+  );
+
   /* 강의 시작 */
   const onStartClass = () => {
     if (!docIdNum) {
@@ -543,6 +594,7 @@ export default function PreClass() {
               }}
               onSummaryOpen={() => setSummaryRequested(true)}
               onSummaryTtsPlay={handlePlaySummaryTts}
+              onPlayMemoTts={handlePlayMemoTts}
             />
           )}
         </Grid>

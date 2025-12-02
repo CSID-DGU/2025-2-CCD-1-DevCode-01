@@ -5,6 +5,7 @@ import { fonts } from "@styles/fonts";
 import SummaryPane from "../pre/SummaryPane";
 import { PANEL_FIXED_H_LIVE } from "@pages/class/pre/styles";
 import BoardBox from "./BoardBox";
+import type { NoteTts } from "@apis/lecture/note.api";
 
 type Role = "student" | "assistant";
 type TabKey = "memo" | "board" | "summary";
@@ -34,6 +35,7 @@ type Props = {
   onSummaryOpen?: () => void;
   onSummaryTtsPlay?: () => void;
   summaryTtsLoading?: boolean;
+  onPlayMemoTts?: (payload: { content: string; tts?: NoteTts }) => void;
 };
 
 export default function RightTabs({
@@ -47,6 +49,7 @@ export default function RightTabs({
   onSummaryOpen,
   onSummaryTtsPlay,
   summaryTtsLoading,
+  onPlayMemoTts,
 }: Props) {
   const [tab, setTab] = useState<TabKey>(activeInitial);
 
@@ -120,7 +123,12 @@ export default function RightTabs({
         hidden={tab !== "memo"}
       >
         {typeof memo.pageId === "number" && memo.pageId > 0 ? (
-          <MemoBox docId={memo.docId} pageId={memo.pageId} />
+          <MemoBox
+            docId={memo.docId}
+            pageId={memo.pageId}
+            autoReadOnFocus
+            onPlayMemoTts={onPlayMemoTts}
+          />
         ) : (
           <EmptyState role="status" aria-live="polite">
             이 페이지는 아직 메모를 사용할 수 없어요. 조금만 기다려주세요.

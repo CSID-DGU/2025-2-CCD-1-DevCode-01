@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FocusEvent } from "react";
 import styled from "styled-components";
 import { type PageReview } from "@apis/lecture/review.api";
 import {
@@ -6,6 +6,7 @@ import {
   updateNote,
   fetchNoteByPage,
   type Note,
+  type NoteTts,
 } from "@apis/lecture/note.api";
 import { fonts } from "@styles/fonts";
 
@@ -15,6 +16,8 @@ export type MemoBoxProps = {
   review?: PageReview | null;
   autoSaveDebounceMs?: number;
   saveOnUnmount?: boolean;
+  autoReadOnFocus?: boolean;
+  onPlayMemoTts?: (payload: { content: string; tts?: NoteTts }) => void;
 };
 
 export default function MemoBox({
@@ -23,9 +26,12 @@ export default function MemoBox({
   review,
   autoSaveDebounceMs = 1200,
   saveOnUnmount = true,
+  autoReadOnFocus = true,
+  onPlayMemoTts,
 }: MemoBoxProps) {
   const [noteId, setNoteId] = useState<number | null>(null);
   const [content, setContent] = useState("");
+  const [noteTts, setNoteTts] = useState<NoteTts | null>(null);
   const [dirty, setDirty] = useState(false);
 
   const [status, setStatus] = useState<
@@ -50,6 +56,7 @@ export default function MemoBox({
     if (review.note) {
       setNoteId(review.note.note_id);
       setContent(review.note.content ?? "");
+      setNoteTts(review.note.note_tts ?? null);
       setDirty(false);
     } else {
       setNoteId(null);
@@ -78,6 +85,7 @@ export default function MemoBox({
           // 메모가 있으면 이후 PATCH 사용
           setNoteId(note.note_id);
           setContent(note.content ?? "");
+          setNoteTts(note.note_tts ?? null);
         } else {
           // 메모가 없으면 noteId = null → 이후 첫 저장은 POST
           setNoteId(null);
@@ -134,6 +142,7 @@ export default function MemoBox({
     }
 
     setContent(saved.content ?? content);
+    setNoteTts(saved.note_tts ?? noteTts);
     setDirty(false);
     setStatus("saved");
     setTimeout(() => setStatus("idle"), 1500);
@@ -171,6 +180,21 @@ export default function MemoBox({
     void saveOnce();
   };
 
+  /* ---------- 포커스 TTS 핸들러 ---------- */
+  const handleFocus: React.FocusEventHandler<HTMLTextAreaElement> = (
+    e: FocusEvent<HTMLTextAreaElement>
+  ) => {
+    // textarea 자체에 포커스가 들어온 경우만
+    if (e.currentTarget !== e.target) return;
+    if (!autoReadOnFocus) return;
+    if (!onPlayMemoTts) return;
+
+    const text = content.trim();
+    if (!text) return;
+
+    onPlayMemoTts({ content: text, tts: noteTts });
+  };
+
   return (
     <section
       data-doc-id={docId}
@@ -196,6 +220,7 @@ export default function MemoBox({
           setDirty(true);
         }}
         onBlur={onBlur}
+        onFocus={handleFocus}
       />
 
       <BtnRow>

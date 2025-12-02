@@ -1,8 +1,14 @@
 import { getResponse, postResponse, patchResponse } from "@apis/instance";
 
+export type NoteTts = {
+  female?: string | null;
+  male?: string | null;
+} | null;
+
 export type Note = {
   note_id: number;
   content: string;
+  note_tts?: NoteTts;
 };
 
 export async function fetchNoteByPage(pageId: number): Promise<Note | null> {
