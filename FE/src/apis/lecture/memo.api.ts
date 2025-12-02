@@ -2,11 +2,16 @@ import { getResponse, postResponse } from "@apis/instance";
 
 export type UserRole = "student" | "assistant" | string;
 
+export type NoteTts = {
+  female?: string | null;
+  male?: string | null;
+};
+
 export type LectureNote = {
   note_id: number;
   user_role: UserRole;
   content: string;
-  note_tts?: string;
+  note_tts?: NoteTts;
   created_at: string;
 };
 

@@ -1,13 +1,16 @@
 import re
 import tempfile
 import wave
+from bs4 import BeautifulSoup
 from google.cloud import speech, storage
-from google.cloud import texttospeech
+from google.cloud import texttospeech, translate_v2 as translate
 import boto3
 from django.conf import settings
 import io, os
 import uuid
 from datetime import datetime, timedelta
+from groq import Groq
+import markdown
 import numpy as np
 
 from users.models import User
@@ -49,6 +52,10 @@ symbol_map = {
 }
 
 symbol_pattern = re.compile("|".join(re.escape(k) for k in symbol_map.keys()))
+code_pattern = re.compile(r"<코드>(.*?)</코드>", re.DOTALL)
+math_pattern = re.compile(r"<수식>(.*?)</수식>", re.DOTALL)
+
+client = Groq(api_key=settings.GROQ_API_KEY)
 
 def upload_to_gcs(file_bytes: bytes, filename: str, bucket_name: str) -> str:
     """GCS 버킷에 파일 업로드 후 URI 반환"""
@@ -251,6 +258,69 @@ def preprocess_code(code_text: str) -> str:
 
     # 5) 줄바꿈 처리
     return " 줄바꿈 ".join(processed_lines)
+
+def preprocess_text(processed_math):
+    
+    def replace_code(match):
+        code_text = match.group(1)
+        # 코드 전처리
+        processed_code = preprocess_code(code_text)
+        return processed_code
+    
+    def translate_math(match):
+        english_math = match.group(1)
+        # 수식 번역
+        korean_math = translate(english_math)
+        return korean_math
+
+    # 최종 전처리 텍스트
+    processed_text = code_pattern.sub(replace_code, processed_math)
+    processed_text = math_pattern.sub(translate_math, processed_text)
+
+    return processed_text
+
+def translate(text: str) -> str:
+    prompt = f"""
+    너는 영어 수식을 한국어로 번역하는 전문가이다.
+    아래는 영어로 표현된 수식이다:
+    ---
+    {text}
+    ---
+    
+    이 수식을 한국어로 자연스럽게 번역한다.
+    번역 규칙은 다음과 같다:
+
+    1) 수식의 기호, 구조, 관계를 한국어로 정확히 표현한다.
+    2) 수식을 설명하거나 해석하지 않고, 제공된 수식 자체만 번역한다.
+    3) '~입니다', '~합니다', '~됩니다' 등 문어체 종결을 사용하지 않는다.
+    4) 출력은 번역된 한국어 텍스트만 제공한다.
+
+    번역문:
+    """
+
+    response = client.chat.completions.create(
+        model="openai/gpt-oss-20b",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.1,
+    )
+    
+    result = response.choices[0].message.content.strip()
+    
+    return result
+
+def markdown_to_text(md_text: str) -> str:
+    if not md_text or md_text.strip() == "":
+        raise ValueError("변환할 마크다운 텍스트가 비어 있습니다.")
+    
+    html = markdown.markdown(md_text)
+
+    soup = BeautifulSoup(html, "lxml")
+    text = soup.get_text(separator="\n")
+
+    text = re.sub(r'\n\s*\n', '\n', text).strip()
+
+    return text
+
 
 def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     

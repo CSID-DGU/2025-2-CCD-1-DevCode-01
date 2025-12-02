@@ -17,12 +17,16 @@ const RightActions = ({
   soundSrc,
   eyeSrc,
   onOpenSound,
+  logoutSrc,
+  onLogout,
 }: {
   isHC: boolean;
   onOpenA11y: () => void;
   soundSrc: string;
   eyeSrc: string;
+  logoutSrc: string;
   onOpenSound: () => void;
+  onLogout: () => void;
 }) => (
   <>
     <s.ActionButton
@@ -43,6 +47,15 @@ const RightActions = ({
     >
       <img src={eyeSrc} alt="" aria-hidden />
       <em>화면 설정</em>
+    </s.ActionButton>
+    <s.ActionButton
+      type="button"
+      onClick={onLogout}
+      aria-label="로그아웃"
+      title="로그아웃"
+    >
+      <img src={logoutSrc} alt="" aria-hidden />
+      <em>로그아웃</em>
     </s.ActionButton>
   </>
 );
@@ -69,6 +82,14 @@ const Nav = ({ variant, title }: Props) => {
   const sound = useContrastImage("/img/nav/sound");
   const eye = useContrastImage("/img/nav/eye");
   const back = useContrastImage("/img/nav/back");
+  const logout = useContrastImage("/img/nav/logout");
+
+  const handleLogout = () => {
+    localStorage.clear();
+
+    toast.success("로그아웃 되었어요.");
+    nav("/login", { replace: true });
+  };
 
   /* ---------- 1) 로그인/회원가입: 왼쪽 로고만 ---------- */
   if (variant === "auth") {
@@ -83,6 +104,47 @@ const Nav = ({ variant, title }: Props) => {
           <s.BrandText>{title ?? "캠퍼스 메이트"}</s.BrandText>
         </s.BrandArea>
         {/* Right 없음 */}
+      </s.NavWrapper>
+    );
+  }
+
+  //시험
+
+  if (variant === "exam") {
+    return (
+      <s.NavWrapper data-variant="folder">
+        <s.FolderLeft>
+          <img src={logo} alt="캠퍼스 메이트 로고" />
+          <s.TabNav role="tablist" aria-label="메인 탭">
+            {/* 경로는 기존 라우트 유지, 라벨만 변경 */}
+            <s.TabLink to="/" end>
+              강의실
+            </s.TabLink>
+          </s.TabNav>
+        </s.FolderLeft>
+
+        <s.Title aria-live="polite">{title ?? " "}</s.Title>
+
+        <s.Right>
+          <RightActions
+            isHC={isHC}
+            onOpenA11y={() => setA11yOpen(true)}
+            soundSrc={sound}
+            eyeSrc={eye}
+            logoutSrc={logout}
+            onOpenSound={() => setSoundOpen(true)}
+            onLogout={handleLogout}
+          />
+        </s.Right>
+
+        <A11yModal open={a11yOpen} onClose={() => setA11yOpen(false)} />
+        <SoundModal
+          open={soundOpen}
+          onClose={() => setSoundOpen(false)}
+          onApplied={({ rate, voice }) => {
+            toast.success(`${voice}, ${rate}로 적용했어요`);
+          }}
+        />
       </s.NavWrapper>
     );
   }
@@ -110,7 +172,9 @@ const Nav = ({ variant, title }: Props) => {
             onOpenA11y={() => setA11yOpen(true)}
             soundSrc={sound}
             eyeSrc={eye}
+            logoutSrc={logout}
             onOpenSound={() => setSoundOpen(true)}
+            onLogout={handleLogout}
           />
         </s.Right>
 
@@ -153,6 +217,8 @@ const Nav = ({ variant, title }: Props) => {
           soundSrc={sound}
           eyeSrc={eye}
           onOpenSound={() => setSoundOpen(true)}
+          logoutSrc={logout}
+          onLogout={handleLogout}
         />
       </s.Right>
 

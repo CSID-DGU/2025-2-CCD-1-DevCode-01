@@ -1,10 +1,8 @@
 import { DOC_TEXT_MEASURE, PANEL_FIXED_H } from "@pages/class/pre/styles";
 import { fonts } from "@styles/fonts";
+import { RichOcrContent } from "src/components/common/RichOcrContent";
 import Spinner from "src/components/common/Spinner";
 import styled from "styled-components";
-import { useEffect, useMemo, useRef } from "react";
-import type { OcrSegment } from "@shared/ocr/types";
-import { parseOcrSegments } from "@shared/ocr/parse";
 
 type Props = {
   mode: "ocr" | "image";
@@ -12,8 +10,8 @@ type Props = {
   imageUrl?: string | null;
   docBodyRef: React.RefObject<HTMLDivElement | null>;
   mainRegionRef: React.RefObject<HTMLDivElement | null>;
-  onPlayOcrTts: () => void;
-  ocrTtsLoading: boolean;
+  onPlayOcrTts?: () => void;
+  ocrTtsLoading?: boolean;
 };
 
 export default function DocPane({
@@ -35,7 +33,7 @@ export default function DocPane({
       aria-label={mode === "ocr" ? "교안 본문 텍스트" : "교안 원본 이미지"}
       tabIndex={0}
       onFocus={() => {
-        if (mode === "ocr" && !isOcrLoading) {
+        if (onPlayOcrTts && mode === "ocr" && !isOcrLoading) {
           onPlayOcrTts();
         }
       }}
@@ -57,7 +55,7 @@ export default function DocPane({
           )
         ) : (
           <section>
-            {!isOcrLoading && (
+            {onPlayOcrTts && !isOcrLoading && (
               <SrOnlyFocusable
                 type="button"
                 onClick={onPlayOcrTts}
@@ -65,9 +63,7 @@ export default function DocPane({
                 aria-label={
                   ocrTtsLoading ? "본문 음성을 준비 중입니다" : "본문 TTS 재생"
                 }
-              >
-                본문 듣기
-              </SrOnlyFocusable>
+              />
             )}
 
             {isOcrLoading ? (
@@ -76,77 +72,12 @@ export default function DocPane({
                 <span>본문을 처리하는 중입니다...</span>
               </LoadingBox>
             ) : (
-              <OcrRichContent text={ocrText} />
+              <RichOcrContent text={ocrText} />
             )}
           </section>
         )}
       </Body>
     </Pane>
-  );
-}
-
-/* ---------- OCR 리치 렌더러 ---------- */
-
-type OcrRichContentProps = {
-  text: string;
-};
-
-function OcrRichContent({ text }: OcrRichContentProps) {
-  const segments: OcrSegment[] = useMemo(() => parseOcrSegments(text), [text]);
-
-  return (
-    <div>
-      {segments.map((seg, idx) => {
-        if (seg.type === "text") {
-          return seg.content
-            .split(/\n{2,}/)
-            .map((block, i) => (
-              <Paragraph key={`${idx}-text-${i}`}>{block.trim()}</Paragraph>
-            ));
-        }
-
-        if (seg.type === "code") {
-          return (
-            <CodeBlock key={`${idx}-code`}>
-              <code>{seg.content}</code>
-            </CodeBlock>
-          );
-        }
-
-        if (seg.type === "math") {
-          return <MathBlock key={`${idx}-math`} latex={seg.content} />;
-        }
-
-        return null;
-      })}
-    </div>
-  );
-}
-
-type MathBlockProps = {
-  latex: string;
-};
-
-function MathBlock({ latex }: MathBlockProps) {
-  const ref = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const mj = (
-      window as unknown as {
-        MathJax?: { typesetPromise?: (nodes: Element[]) => Promise<unknown> };
-      }
-    ).MathJax;
-    if (!mj?.typesetPromise || !ref.current) return;
-
-    mj.typesetPromise([ref.current]).catch((err) => {
-      console.error("[MathJax] typeset 실패:", err);
-    });
-  }, [latex]);
-
-  return (
-    <MathContainer ref={ref} aria-label={`수식: ${latex}`}>
-      {"$$ " + latex + " $$"}
-    </MathContainer>
   );
 }
 
@@ -189,37 +120,6 @@ const Image = styled.img`
   background: #fafafa;
 `;
 
-const Paragraph = styled.p`
-  white-space: pre-wrap;
-  line-height: 1.7;
-  ${fonts.medium26};
-  color: var(--c-black);
-  letter-spacing: 0.002em;
-  max-width: ${DOC_TEXT_MEASURE}ch;
-  margin-bottom: 0.75rem;
-`;
-
-const CodeBlock = styled.pre`
-  max-width: ${DOC_TEXT_MEASURE}ch;
-  margin: 1rem 0;
-  padding: 0.75rem 1rem;
-  background: var(--c-grayL);
-  ${fonts.regular20};
-  color: var(--c-black);
-  border-radius: 8px;
-  overflow-x: auto;
-`;
-
-const MathContainer = styled.div`
-  max-width: ${DOC_TEXT_MEASURE}ch;
-  margin: 1rem 0;
-  padding: 0.75rem 1rem;
-  background: var(--c-grayL);
-  border-radius: 8px;
-  ${fonts.medium26};
-  color: var(--c-black);
-`;
-
 const LoadingBox = styled.div`
   border: 1px solid #d6e2f0;
   border-radius: 10px;
@@ -237,7 +137,7 @@ const LoadingBox = styled.div`
   }
 `;
 
-const SrOnlyFocusable = styled.button`
+const SrOnlyFocusable = styled.button.attrs({ tabIndex: -1 })`
   position: absolute;
   width: 1px;
   height: 1px;

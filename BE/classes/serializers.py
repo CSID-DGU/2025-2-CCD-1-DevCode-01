@@ -26,11 +26,10 @@ class SpeechSerializer(serializers.ModelSerializer):
 
 class NoteSerializer(serializers.ModelSerializer):
     note_id = serializers.IntegerField(source="id", read_only=True)
-    note_tts = serializers.JSONField(read_only=True)
     
     class Meta:
         model = Note
-        fields = ["note_id", "content", "note_tts"]
+        fields = ["note_id", "content"]
 
 
 

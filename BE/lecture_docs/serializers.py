@@ -1,22 +1,28 @@
 from rest_framework import serializers
 from .models import Doc, Page, Board, SpeechSummary
-
+from classes.models import Speech
 
 class DocSerializer(serializers.ModelSerializer):
     docId = serializers.IntegerField(source="id")
     review = serializers.SerializerMethodField()
     createdAt = serializers.SerializerMethodField()
-    timestamp = serializers.CharField(source="end_time")
+    timestamp = serializers.SerializerMethodField()  
 
     class Meta:
         model = Doc
-        fields = ["docId", "title", "review", "createdAt", "timestamp"]
+        fields = ["docId", "title", "doc_tts", "review", "createdAt", "timestamp"]
 
     def get_review(self, obj):
-        return True if obj.end_time else False
+        return self.get_timestamp(obj) is not None
 
     def get_createdAt(self, obj):
         return obj.created_at.strftime("%Y-%m-%d %H:%M")
+    
+    #가장 최근 endtime
+    def get_timestamp(self, obj):
+        latest = Speech.objects.filter(page__doc=obj).order_by("-end_time").first()
+        return latest.end_time if latest else None
+
 
 class DocUpdateSerializer(serializers.ModelSerializer):
     docId = serializers.IntegerField(source="id", read_only=True)
@@ -41,7 +47,7 @@ class PageSerializer(serializers.ModelSerializer):
             "pagId",
             "image",
             "ocr",
-            "status",
+            "status"
         ]
 
     def get_totalPage(self, obj):
@@ -49,6 +55,7 @@ class PageSerializer(serializers.ModelSerializer):
 
     def get_status(self, obj):
         return "done" if obj.ocr else "processing"
+
 
 
 class BoardCreateSerializer(serializers.Serializer):
@@ -61,6 +68,14 @@ class BoardSerializer(serializers.ModelSerializer):
     class Meta:
         model = Board
         fields = ["boardId", "image", "text"]
+
+class BoardReviewSerializer(serializers.ModelSerializer):
+    boardId = serializers.IntegerField(source='id')
+    board_tts = serializers.JSONField(read_only=True)
+
+    class Meta:
+        model = Board
+        fields = ["boardId", "image", "text", "board_tts"]
 
 class SpeechSummaryListSerializer(serializers.ModelSerializer):
     speechSummaryId = serializers.IntegerField(source="id")

@@ -16,8 +16,8 @@ type Props = {
   summary: {
     text: string;
     ttsUrl?: string;
-    sumAudioRef: React.RefObject<HTMLAudioElement | null>;
-    sidePaneRef: React.RefObject<HTMLDivElement | null>;
+    sumAudioRef?: React.RefObject<HTMLAudioElement | null>;
+    sidePaneRef?: React.RefObject<HTMLDivElement | null>;
     loading?: boolean;
   };
   memo: {
@@ -32,6 +32,8 @@ type Props = {
   };
   showBoard?: boolean;
   onSummaryOpen?: () => void;
+  onSummaryTtsPlay?: () => void;
+  summaryTtsLoading?: boolean;
 };
 
 export default function RightTabs({
@@ -43,6 +45,8 @@ export default function RightTabs({
   summary,
   showBoard = true,
   onSummaryOpen,
+  onSummaryTtsPlay,
+  summaryTtsLoading,
 }: Props) {
   const [tab, setTab] = useState<TabKey>(activeInitial);
 
@@ -92,7 +96,7 @@ export default function RightTabs({
             onClick={() => setTab("board")}
             type="button"
           >
-            판서
+            추가 자료
           </Tab>
         )}
 
@@ -124,7 +128,7 @@ export default function RightTabs({
         )}
       </Panel>
 
-      {/* 판서 패널: pre에선 아예 렌더 X → BoardBox API도 절대 안 돈다 */}
+      {/* 판서 패널*/}
       {hasBoard && (
         <Panel
           id={panelIds.board}
@@ -161,14 +165,15 @@ export default function RightTabs({
           sidePaneRef={summary.sidePaneRef}
           stack={stack}
           panelHeight={PANEL_FIXED_H_LIVE}
-          loading={summary.loading}
+          loading={summary.loading || summaryTtsLoading}
+          autoPlayOnFocus
+          onPlaySummaryTts={onSummaryTtsPlay}
         />
       </Panel>
     </Aside>
   );
 }
 
-/* --- 스타일 --- */
 const Aside = styled.aside<{ $stack: boolean }>`
   position: ${({ $stack }) => ($stack ? "static" : "sticky")};
   top: 16px;

@@ -1,10 +1,11 @@
+import toast from "react-hot-toast";
 import { Navigate, Outlet } from "react-router-dom";
 
 const PrivateRoute = () => {
   const accessToken = localStorage.getItem("access");
 
   if (!accessToken) {
-    alert("로그인이 필요해요!");
+    toast.error("로그인이 필요합니다.");
     return <Navigate to="/login" replace />;
   }
 

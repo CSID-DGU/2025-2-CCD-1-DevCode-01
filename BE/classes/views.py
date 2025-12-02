@@ -1,4 +1,5 @@
 from django.http import JsonResponse
+from lectures.permissions import IsLectureMember
 from classes.tasks import run_speech, save_temp_audio
 from classes.serializers import *
 from classes.models import Bookmark, Note, Speech
@@ -12,14 +13,14 @@ from rest_framework.views import APIView
 
 
 class SpeechView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
 
     def post(self, request, pageId):
         try:
             page = Page.objects.get(id=pageId)
         except Page.DoesNotExist:
             return Response({"error": "해당 페이지를 찾을 수 없습니다."}, status=404)
-        
+        self.check_object_permissions(request, page)
         serializer = SpeechCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -75,14 +76,14 @@ class TTSTestView(APIView):
             )
         
 class BookmarkView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
 
     def post(self, request, pageId):
         try:
             page = Page.objects.get(id=pageId)
         except Page.DoesNotExist:
-            return JsonResponse({"error": "해당 페이지를 찾을 수 없습니다."}, status=404)\
-            
+            return JsonResponse({"error": "해당 페이지를 찾을 수 없습니다."}, status=404)
+        self.check_object_permissions(request, page)    
         timestamp = request.data['timestamp']
 
         if not timestamp:
@@ -104,14 +105,14 @@ class BookmarkView(APIView):
         }, status=200)
     
 class BookmarkDetailView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
 
     def get(self, request, bookmarkId):
         try:
             bookmark = Bookmark.objects.get(id=bookmarkId)
         except Bookmark.DoesNotExist:
             return JsonResponse({"error": "해당 북마크를 찾을 수 없습니다."}, status=404)
-        
+        self.check_object_permissions(request, bookmark)
         # 해당 북마크와 매칭되는 Speech 찾기
         speeches = Speech.objects.filter(page=bookmark.page)
         matched_speech = next(
@@ -124,30 +125,52 @@ class BookmarkDetailView(APIView):
 
         stt_tts = matched_speech.stt_tts if matched_speech else None
 
-        return JsonResponse({
-            "stt_tts": stt_tts,
-            "relative_time": bookmark.relative_time,
-            "text": bookmark.text,
-        }, status=200)
+        if stt_tts:
+            return JsonResponse({
+                "stt_tts": stt_tts,
+                "relative_time": bookmark.relative_time,
+                "text": bookmark.text,
+            }, status=200)
+        else:
+            return JsonResponse({
+                "error": "해당 북마크에 매칭되는 발화를 찾을 수 없습니다."
+            }, status=404)
     
     def delete(self, request, bookmarkId):
         try:
             bookmark = Bookmark.objects.get(id=bookmarkId)
         except Bookmark.DoesNotExist:
             return JsonResponse({"error": "해당 북마크를 찾을 수 없습니다."}, status=404)
-        
+        self.check_object_permissions(request, bookmark)
         bookmark.delete()
         return JsonResponse({"message": "북마크가 삭제되었습니다."}, status=200)
 
 class NoteView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
 
-    def post(self, request, pageId):
+    def get(self, request, pageId):
         try:
             page = Page.objects.get(id=pageId)
         except Page.DoesNotExist:
             return Response({"error": "해당 페이지를 찾을 수 없습니다."}, status=404)
 
+
+        self.check_object_permissions(request, page)
+
+        user = request.user
+
+        note = Note.objects.filter(page=page, user=user).first()
+        if not note:
+            return Response({"note": None}, status=200)
+
+        return Response(NoteSerializer(note).data, status=200)   
+    
+    def post(self, request, pageId):
+        try:
+            page = Page.objects.get(id=pageId)
+        except Page.DoesNotExist:
+            return Response({"error": "해당 페이지를 찾을 수 없습니다."}, status=404)
+        self.check_object_permissions(request, page)
         user = request.user
         content = request.data.get("content")
 
@@ -163,7 +186,7 @@ class NoteView(APIView):
         return Response(NoteSerializer(note).data, status=201)
     
 class NoteDetailView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
 
     def patch(self, request, noteId):
         note = Note.objects.filter(id=noteId).first()
@@ -172,7 +195,7 @@ class NoteDetailView(APIView):
 
         if note.user != request.user:
             return Response({"error": "본인이 작성한 노트만 수정할 수 있습니다."}, status=403)
-        
+        self.check_object_permissions(request, note)
         content = request.data.get("content", "").strip()
         note.content = content
 
@@ -180,3 +203,4 @@ class NoteDetailView(APIView):
 
         return Response(NoteSerializer(note).data, status=200)
     
+

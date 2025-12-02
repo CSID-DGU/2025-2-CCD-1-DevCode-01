@@ -1,4 +1,3 @@
-// src/components/lecture/live/BoardBox.tsx
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import {
@@ -60,7 +59,7 @@ export default function BoardBox({
     setLoading(false);
   };
   useEffect(() => {
-    load(); /* eslint-disable-line react-hooks/exhaustive-deps */
+    load();
   }, [pageId]);
 
   // 실시간: 수신 처리
@@ -146,7 +145,7 @@ export default function BoardBox({
 
   // 삭제
   const remove = async (boardId: number) => {
-    if (!confirm("이 판서를 삭제할까요?")) return;
+    if (!confirm("이 추가 자료를 삭제할까요?")) return;
     try {
       setDeletingId(boardId);
       await deleteBoard(boardId);
@@ -194,7 +193,7 @@ export default function BoardBox({
 
           return (
             <Item key={b.boardId} role="listitem">
-              {b.image && <Thumb src={toUrl(b.image)} alt="판서 이미지" />}
+              {b.image && <Thumb src={toUrl(b.image)} alt="추가자료 이미지" />}
 
               <Row>
                 <Actions>
@@ -235,7 +234,7 @@ export default function BoardBox({
                         type="button"
                         onClick={() => remove(b.boardId)}
                         disabled={isDeleting}
-                        aria-label="판서 삭제"
+                        aria-label="추가 자료 삭제"
                       >
                         {isDeleting ? "삭제중…" : "삭제"}
                       </DangerBtn>
@@ -260,7 +259,7 @@ export default function BoardBox({
         })}
 
         {!loading && list.length === 0 && (
-          <Empty>아직 업로드된 판서가 없어요.</Empty>
+          <Empty>아직 업로드된 추가 자료가 없어요.</Empty>
         )}
       </List>
     </Wrap>

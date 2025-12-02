@@ -10,7 +10,10 @@ import { useLectureMemoList } from "src/hooks/useLectureMemoList";
 
 import type { LectureDoc } from "src/entities/doc/types";
 import ReviewRecordModal from "src/components/lecture/pre/ReviewRecordModal";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
+import { useOcrTtsAutoStop } from "src/hooks/useOcrTtsAutoStop";
+import type { LectureNote } from "@apis/lecture/memo.api";
 
 type RouteParams = { courseId?: string };
 
@@ -34,6 +37,15 @@ export default function LectureDocs() {
 
   const [reviewDoc, setReviewDoc] = useState<LectureDoc | null>(null);
 
+  const memoAreaRef = useRef<HTMLElement | null>(null);
+  const memoAudioRef = useRef<HTMLAudioElement | null>(null);
+  const { soundRate, soundVoice } = useSoundOptions();
+
+  useOcrTtsAutoStop(memoAudioRef, {
+    areaRef: memoAreaRef as React.RefObject<HTMLElement | null>,
+    stopMessageOnBlur: "메모 음성 재생이 중지되었습니다.",
+  });
+
   const fmtDate = (iso: string) => {
     try {
       const d = new Date(iso);
@@ -45,6 +57,41 @@ export default function LectureDocs() {
       return iso;
     }
   };
+
+  const playNoteTts = useCallback(
+    async (note: LectureNote) => {
+      const tts = note.note_tts;
+      if (!tts) return;
+
+      const femaleUrl = tts.female ?? undefined;
+      const maleUrl = tts.male ?? undefined;
+
+      let url: string | undefined;
+      if (soundVoice === "여성") {
+        url = femaleUrl ?? maleUrl;
+      } else {
+        url = maleUrl ?? femaleUrl;
+      }
+      if (!url) return;
+
+      const audio = memoAudioRef.current;
+      if (!audio) return;
+
+      if (!audio.src || audio.src !== url) {
+        audio.src = url;
+      }
+
+      applyPlaybackRate(audio, soundRate);
+      audio.currentTime = 0;
+
+      try {
+        await audio.play();
+      } catch (err) {
+        console.error("[LectureDocs] 메모 TTS 재생 실패:", err);
+      }
+    },
+    [soundRate, soundVoice]
+  );
 
   return (
     <Wrap
@@ -74,7 +121,10 @@ export default function LectureDocs() {
                     setReviewDoc(d);
                   } else {
                     nav(`/lecture/doc/${d.id}`, {
-                      state: { navTitle: d.title },
+                      state: {
+                        navTitle: d.title,
+                        resumeClock: d.timestamp ?? null,
+                      },
                     });
                   }
                 }}
@@ -90,7 +140,8 @@ export default function LectureDocs() {
         </DocList>
       </Left>
 
-      <Right role="complementary" aria-label="메모">
+      <Right ref={memoAreaRef} role="complementary" aria-label="메모">
+        <audio ref={memoAudioRef} preload="none" />
         <MemoListCard
           items={items}
           onSaveAll={async (lines) => {
@@ -99,6 +150,7 @@ export default function LectureDocs() {
           }}
           iconOf={iconOf}
           stickyTop="1rem"
+          onFocusNote={playNoteTts}
         />
       </Right>
       <ReviewRecordModal
@@ -107,14 +159,20 @@ export default function LectureDocs() {
         onReview={() => {
           if (!reviewDoc) return;
           nav(`/lecture/doc/${reviewDoc.id}/post`, {
-            state: { navTitle: reviewDoc.title },
+            state: {
+              navTitle: reviewDoc.title,
+              resumeClock: reviewDoc.timestamp ?? null,
+            },
           });
           setReviewDoc(null);
         }}
         onContinue={() => {
           if (!reviewDoc) return;
           nav(`/lecture/doc/${reviewDoc.id}`, {
-            state: { navTitle: reviewDoc.title },
+            state: {
+              navTitle: reviewDoc.title,
+              resumeClock: reviewDoc.timestamp ?? null,
+            },
           });
           setReviewDoc(null);
         }}

@@ -1,4 +1,5 @@
 from django.shortcuts import render
+from lectures.permissions import IsLectureMember
 from rest_framework import permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -159,13 +160,14 @@ class LectureJoinView(APIView):
         }, status=status.HTTP_200_OK)
 
 class SharedNoteView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
 
     def get(self, request, lectureId):
         """공유 노트 조회"""
         lecture = Lecture.objects.filter(id=lectureId).first()
         if not lecture:
             return Response({"error": "해당 강의를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+        self.check_object_permissions(request, lecture)
 
         shared_notes = lecture.shared_notes.all()
         return Response([
@@ -183,6 +185,7 @@ class SharedNoteView(APIView):
         lecture = Lecture.objects.filter(id=lectureId).first()
         if not lecture:
             return Response({"error": "해당 강의를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+        self.check_object_permissions(request, lecture)
 
         content = request.data.get("content")
         user = request.user
@@ -202,7 +205,7 @@ class SharedNoteView(APIView):
         }, status=status.HTTP_201_CREATED)
     
 # class SharedNoteDetailView(APIView):
-#     permission_classes = [permissions.IsAuthenticated]
+#     permission_classes = [permissions.IsAuthenticated, IsLectureMember]
 
 #     def patch(self, request, noteId):
 #         """공유 노트 수정"""
