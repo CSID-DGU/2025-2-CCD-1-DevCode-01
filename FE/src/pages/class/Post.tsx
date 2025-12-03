@@ -715,6 +715,7 @@ export default function PostClass() {
             onPlayMemoTts={handlePlayMemoTts}
             readOnFocus={readOnFocus}
             onFocusReviewTts={handleFocusReviewTts}
+            buildBoardTtsText={buildTtsText}
           />
         </Grid>
       </Container>

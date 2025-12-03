@@ -6,6 +6,7 @@ import {
   patchBoardText,
   deleteBoard,
   type BoardItem,
+  patchBoardTextWithTts,
 } from "@apis/lecture/board.api";
 
 import { PANEL_FIXED_H_LIVE } from "@pages/class/pre/styles";
@@ -25,6 +26,7 @@ type Props = {
   assetBase?: string;
   token?: string | null;
   wsBase?: string;
+  buildBoardTtsText?: (raw: string) => Promise<string>;
 };
 
 export default function BoardBox({
@@ -33,6 +35,7 @@ export default function BoardBox({
   assetBase = "",
   token,
   wsBase,
+  buildBoardTtsText,
 }: Props) {
   const [list, setList] = useState<BoardItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -177,19 +180,53 @@ export default function BoardBox({
   };
 
   // 수정 저장
+  // 수정 저장
   const saveText = async (boardId: number, nextText: string) => {
     try {
       setSavingId(boardId);
-      const updated = await patchBoardText(boardId, nextText);
-      setList((prev) =>
-        prev.map((b) => (b.boardId === boardId ? { ...b, ...updated } : b))
-      );
+
+      // ✅ Post 화면: TTS까지 생성하는 엔드포인트 사용
+      if (buildBoardTtsText) {
+        const processed = await buildBoardTtsText(nextText);
+
+        const updated = await patchBoardTextWithTts(boardId, {
+          board_text: nextText,
+          processed_text: processed,
+        });
+
+        setList((prev) =>
+          prev.map((b) =>
+            b.boardId === boardId
+              ? {
+                  ...b,
+                  text: updated.board_text,
+                  board_tts: updated.board_tts, // ✅ 새 TTS 반영
+                }
+              : b
+          )
+        );
+      } else {
+        // ✅ Live 화면: 기존 patch만 사용 (TTS 없음)
+        const updated = await patchBoardText(boardId, nextText);
+        setList((prev) =>
+          prev.map((b) => (b.boardId === boardId ? { ...b, ...updated } : b))
+        );
+      }
+
       setEditingId(null);
 
-      sendBoardEvent("updated", {
-        boardId,
-        image: updated.image ?? null,
-        text: updated.text ?? null,
+      // 소켓은 예전처럼 텍스트/이미지만 전파
+      setList((current) => {
+        const updatedItem = current.find((b) => b.boardId === boardId);
+        if (!updatedItem) return current;
+
+        sendBoardEvent("updated", {
+          boardId,
+          image: updatedItem.image ?? null,
+          text: updatedItem.text ?? null,
+        });
+
+        return current;
       });
     } catch (e) {
       console.error(e);

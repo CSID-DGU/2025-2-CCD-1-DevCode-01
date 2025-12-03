@@ -34,6 +34,7 @@ type Props = {
     fallbackText?: string;
   }) => void;
   onStopAllTts?: () => void;
+  buildBoardTtsText?: (raw: string) => Promise<string>;
 };
 
 const TAB_ORDER: TabKey[] = ["class", "memo", "board", "summary"];
@@ -61,6 +62,7 @@ export default function RightTabsPost({
   onPlayMemoTts,
   readOnFocus,
   onStopAllTts,
+  buildBoardTtsText,
 }: Props) {
   const [tab, setTab] = useState<TabKey>("class");
   const baseId = useId();
@@ -260,6 +262,7 @@ export default function RightTabsPost({
             pageId={board.pageId}
             assetBase={import.meta.env.VITE_BASE_URL}
             token={localStorage.getItem("access")}
+            buildBoardTtsText={buildBoardTtsText}
           />
         ) : (
           <Empty>이 페이지는 아직 판서를 사용할 수 없어요.</Empty>
