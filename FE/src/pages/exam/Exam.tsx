@@ -1,4 +1,10 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import {
+  useEffect,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+  useRef,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import toast from "react-hot-toast";
@@ -11,6 +17,7 @@ import {
   type ExamResultResponse,
 } from "@apis/exam/exam.api";
 import { fonts } from "@styles/fonts";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 type CaptureMode = "camera" | "file";
 
@@ -22,6 +29,11 @@ const Exam = () => {
   const [endTime, setEndTime] = useState("");
   const [images, setImages] = useState<File[]>([]);
   const [mode, setMode] = useState<CaptureMode>("file");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const focusSpeak = useFocusSpeak();
+
+  const liveRef = useRef<HTMLDivElement | null>(null);
 
   /* ---------- 1) 현재 시험 상태 확인 ---------- */
   useEffect(() => {
@@ -53,7 +65,7 @@ const Exam = () => {
   /* ---------- 3) 카메라 캡처 ---------- */
   const handleCapture = (file: File) => {
     setImages((prev) => [...prev, file]);
-    toast.success("사진이 추가되었습니다.");
+    toast.success("시험지 사진이 추가되었습니다.");
   };
 
   const handleRemoveImage = (index: number) => {
@@ -91,28 +103,50 @@ const Exam = () => {
 
   const isLoading = initialChecking || submitting;
 
-  /* ---------- 렌더 ---------- */
+  /* ---------- 탭(촬영/사진선택) 키보드 전환 핸들러 ---------- */
+  const handleModeKeyDown: React.KeyboardEventHandler<HTMLButtonElement> = (
+    e
+  ) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+
+    e.preventDefault();
+    setMode((prev) => {
+      if (prev === "camera") return "file";
+      return "camera";
+    });
+  };
+
   return (
-    <PageContainer>
+    <PageContainer role="main" aria-labelledby="exam-title">
+      <SrLive
+        ref={liveRef}
+        id="exam-live"
+        aria-live="polite"
+        aria-atomic="true"
+      />
+
       {isLoading && (
-        <Overlay>
+        <Overlay role="status" aria-live="polite" aria-busy="true">
           <SpinnerWrapper>
             <Spinner />
-            <p>시험지를 분석하는 중입니다.</p>
+            <p>시험지를 분석하는 중입니다. 잠시만 기다려주세요.</p>
           </SpinnerWrapper>
         </Overlay>
       )}
 
       <Inner $dimmed={isLoading}>
-        <Title>시험 시작</Title>
-        <Description>
+        <Title id="exam-title" {...focusSpeak}>
+          시험 시작
+        </Title>
+
+        <Description {...focusSpeak}>
           시험 종료 시간을 설정하고, 시험지 사진을 촬영하거나 선택해
           업로드해주세요.
           <br />
           촬영한 사진은 바로 서버로 전송되며, 기기에는 저장되지 않습니다.
         </Description>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} aria-describedby="exam-desc">
           {/* 종료 시간 */}
           <Field>
             <Label htmlFor="endTime">시험 종료 시간</Label>
@@ -122,20 +156,34 @@ const Exam = () => {
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
               required
+              aria-required="true"
+              aria-describedby="endTime-hint"
+              aria-label="시험 종료 시간을 입력해주세요"
+              {...focusSpeak}
             />
-            <Hint>예: 13:30</Hint>
+            <Hint id="endTime-hint">
+              예: 13:30 (현재 시각 기준으로 실제 종료 시각을 입력해 주세요.)
+            </Hint>
           </Field>
 
           {/* 모드 선택 : 촬영 / 사진 선택 */}
           <Field>
             <Label as="p">사진 입력 방식</Label>
-            <ModeSwitch role="tablist" aria-label="사진 입력 방식 선택">
+            <ModeSwitch
+              role="tablist"
+              aria-label="사진 입력 방식 선택"
+              {...focusSpeak}
+            >
               <ModeButton
                 type="button"
                 role="tab"
                 aria-selected={mode === "camera"}
+                aria-controls="exam-image-input-camera"
                 $active={mode === "camera"}
                 onClick={() => setMode("camera")}
+                onKeyDown={handleModeKeyDown}
+                aria-label="카메라로 시험지 촬영하기"
+                {...focusSpeak}
               >
                 촬영
               </ModeButton>
@@ -143,8 +191,12 @@ const Exam = () => {
                 type="button"
                 role="tab"
                 aria-selected={mode === "file"}
+                aria-controls="exam-image-input-file"
                 $active={mode === "file"}
                 onClick={() => setMode("file")}
+                onKeyDown={handleModeKeyDown}
+                aria-label="기기에 저장된 시험지 사진 선택하기"
+                {...focusSpeak}
               >
                 사진 선택
               </ModeButton>
@@ -157,7 +209,7 @@ const Exam = () => {
 
           {/* 모드별 입력 영역 */}
           {mode === "camera" ? (
-            <Field>
+            <Field id="exam-image-input-camera">
               <Label as="p">카메라로 시험지 촬영</Label>
               <CameraCapture
                 onCapture={handleCapture}
@@ -168,11 +220,17 @@ const Exam = () => {
               </Hint>
             </Field>
           ) : (
-            <Field>
+            <Field id="exam-image-input-file">
               <Label>기기에서 사진 선택</Label>
-              <FileInputLabel>
+              <FileInputLabel
+                onClick={() => fileInputRef.current?.click()}
+                type="button"
+                aria-label="기기에 저장된 시험지 사진 선택하기"
+                {...focusSpeak}
+              >
                 <span>사진 선택하기</span>
                 <HiddenFileInput
+                  ref={fileInputRef}
                   type="file"
                   accept="image/*"
                   multiple
@@ -185,15 +243,21 @@ const Exam = () => {
 
           {/* 선택/촬영된 이미지 리스트 */}
           {images.length > 0 && (
-            <ImageList>
+            <ImageList
+              aria-label="선택된 시험지 사진 목록"
+              role="list"
+              {...focusSpeak}
+            >
               {images.map((file, idx) => (
-                <ImageItem key={`${file.name}-${idx}`}>
+                <ImageItem key={`${file.name}-${idx}`} role="listitem">
                   <Thumb
                     src={URL.createObjectURL(file)}
                     alt={`시험지 사진 ${idx + 1}`}
                   />
                   <ImageMeta>
-                    <p className="name">{file.name || `사진 ${idx + 1}`}</p>
+                    <p className="name">
+                      {file.name || `시험지 사진 ${idx + 1}`}
+                    </p>
                     <p className="size">
                       {(file.size / 1024 / 1024).toFixed(2)} MB
                     </p>
@@ -201,6 +265,8 @@ const Exam = () => {
                   <RemoveButton
                     type="button"
                     onClick={() => handleRemoveImage(idx)}
+                    aria-label={`시험지 사진 ${idx + 1} 삭제`}
+                    {...focusSpeak}
                   >
                     삭제
                   </RemoveButton>
@@ -212,6 +278,9 @@ const Exam = () => {
           <SubmitButton
             type="submit"
             disabled={isLoading || !endTime || images.length === 0}
+            aria-disabled={isLoading || !endTime || images.length === 0}
+            aria-label="시험 시작하기"
+            {...focusSpeak}
           >
             시험 시작하기
           </SubmitButton>
@@ -222,6 +291,8 @@ const Exam = () => {
 };
 
 export default Exam;
+
+/* ---------- styled ---------- */
 
 const SpinnerWrapper = styled.div`
   display: flex;
@@ -280,7 +351,6 @@ const Description = styled.p`
 `;
 
 const Field = styled.div`
-  margin-bottom: 18px;
   margin-bottom: 20px;
 `;
 
@@ -355,7 +425,7 @@ const ModeButton = styled.button<{ $active: boolean }>`
   }
 `;
 
-const FileInputLabel = styled.label`
+const FileInputLabel = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -374,6 +444,11 @@ const FileInputLabel = styled.label`
   @media (min-width: 768px) {
     font-size: 1.2rem;
     padding: 11px 16px;
+  }
+
+  &:focus-visible {
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
   }
 `;
 
@@ -513,4 +588,16 @@ const Overlay = styled.div`
   align-items: center;
   justify-content: center;
   z-index: 40;
+`;
+
+// 스크린리더용 live 영역
+const SrLive = styled.div`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  border: 0;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 `;
