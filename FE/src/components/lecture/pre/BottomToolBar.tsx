@@ -296,6 +296,7 @@ const Bar = styled.div`
   z-index: 999;
   width: max-content;
 `;
+
 const Group = styled.div`
   display: inline-flex;
   align-items: center;
@@ -305,11 +306,13 @@ const Group = styled.div`
     ${fonts.medium26};
   }
 `;
+
 const Divider = styled.div`
   width: 1px;
   height: 1.25rem;
   background: #ffffff55;
 `;
+
 const Btn = styled.button`
   border: 2px solid var(--c-white);
   ${fonts.medium26};
@@ -323,13 +326,15 @@ const Btn = styled.button`
     cursor: not-allowed;
   }
   &:focus-visible {
-    outline: 5px solid var(--c-blue);
+    outline: 5px solid var(--c-white);
     outline-offset: 2px;
   }
 `;
+
 const Slash = styled.span`
   ${fonts.medium26};
 `;
+
 const Primary = styled.button`
   background: var(--c-blue);
   color: var(--c-white);
@@ -342,7 +347,13 @@ const Primary = styled.button`
     opacity: 0.55;
     cursor: not-allowed;
   }
+
+  &:focus-visible {
+    outline: 5px solid var(--c-white);
+    outline-offset: 2px;
+  }
 `;
+
 const PageInputWrap = styled.div`
   display: inline-flex;
   align-items: center;
@@ -351,6 +362,7 @@ const PageInputWrap = styled.div`
   padding: 0.1rem 0.4rem;
   background: #ffffff22;
 `;
+
 const PageInput = styled.input`
   width: 3.2ch;
   text-align: center;
