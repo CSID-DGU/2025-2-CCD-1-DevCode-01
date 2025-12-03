@@ -14,6 +14,7 @@ type Props = {
   onDelete: (doc: LectureDoc) => void;
   fmtDate: (iso: string) => string;
   onTitleUpdated: (id: number, title: string) => void;
+  onFocusTitle?: () => void;
 };
 
 export default function DocItem({
@@ -22,6 +23,7 @@ export default function DocItem({
   onDelete,
   fmtDate,
   onTitleUpdated,
+  onFocusTitle,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -108,6 +110,9 @@ export default function DocItem({
           type="button"
           onClick={() => onOpen(doc)}
           aria-labelledby={`doc-title-${doc.id}`}
+          onFocus={() => {
+            onFocusTitle?.();
+          }}
         >
           <span id={`doc-title-${doc.id}`}>{doc.title}</span>
         </TitleBtn>
