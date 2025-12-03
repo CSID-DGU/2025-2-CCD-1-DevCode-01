@@ -307,11 +307,14 @@ class BoardView(APIView):
         self.check_object_permissions(request, page)
         boards = Board.objects.filter(page=page).order_by("-created_at")
         serializer = BoardSerializer(boards, many=True)
+        data = serializer.data
+        for obj, item in zip(boards, data):
+            item["board_tts"] = obj.board_tts
 
         return Response(
             {
                 "pageId": page.id,
-                "boards": serializer.data
+                "boards": data
             },
             status=status.HTTP_200_OK
         )
