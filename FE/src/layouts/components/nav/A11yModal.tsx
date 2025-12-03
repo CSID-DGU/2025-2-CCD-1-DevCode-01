@@ -12,6 +12,8 @@ import { setA11yAndApply } from "@shared/a11y/initA11y";
 import { patchAccessibility } from "@apis/nav/a11y";
 import { lockBodyScroll, unlockBodyScroll } from "@shared/ui/scrollLock";
 import Portal from "@shared/ui/portal";
+import { useModalFocusTrap } from "src/hooks/useModalFocusTrap";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 type Props = {
   open: boolean;
@@ -19,7 +21,7 @@ type Props = {
   onApplied?: (v: { font: string; high_contrast: boolean }) => void;
 };
 
-export default function A11yModal({ open, onClose }: Props) {
+export default function A11yModal({ open, onClose, onApplied }: Props) {
   useEffect(() => {
     if (!open) return;
     lockBodyScroll();
@@ -50,15 +52,17 @@ export default function A11yModal({ open, onClose }: Props) {
     onClose();
   }, [isHC, toggleMode, onClose]);
 
-  const cardRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") handleCancel();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, handleCancel]);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const firstFocusRef = useRef<HTMLDivElement | null>(null);
+
+  const focusSpeak = useFocusSpeak();
+
+  const { handleKeyDown } = useModalFocusTrap({
+    open,
+    containerRef: cardRef,
+    initialFocusRef: firstFocusRef,
+    onClose: handleCancel,
+  });
 
   const onOverlayMouseDown: React.MouseEventHandler<HTMLDivElement> = (e) => {
     if (!cardRef.current) return;
@@ -73,6 +77,7 @@ export default function A11yModal({ open, onClose }: Props) {
   const handleSave = async () => {
     setA11yAndApply({ font: draftFont, high_contrast: isHC });
     window.dispatchEvent(new Event("a11y-font-change"));
+
     const res = await patchAccessibility({
       font: draftFont,
       high_contrast: isHC,
@@ -82,6 +87,7 @@ export default function A11yModal({ open, onClose }: Props) {
       console.error("접근성 설정 PATCH 실패", res);
     }
 
+    onApplied?.({ font: draftFont, high_contrast: isHC });
     onClose();
   };
 
@@ -99,10 +105,17 @@ export default function A11yModal({ open, onClose }: Props) {
           aria-labelledby="a11y-title"
           aria-describedby="a11y-desc"
           tabIndex={-1}
+          onKeyDown={handleKeyDown}
         >
           <Header>
             <h2 id="a11y-title">화면 설정</h2>
-            <CloseBtn aria-label="닫기" title="닫기" onClick={handleCancel}>
+            <CloseBtn
+              type="button"
+              aria-label="모달 닫기"
+              title="닫기"
+              onClick={handleCancel}
+              {...focusSpeak}
+            >
               ×
             </CloseBtn>
           </Header>
@@ -114,8 +127,10 @@ export default function A11yModal({ open, onClose }: Props) {
           <Section>
             <SecTitle>고대비 모드</SecTitle>
             <Switch
+              ref={firstFocusRef}
               role="switch"
               aria-checked={isHC}
+              aria-label={`고대비 모드 ${isHC ? "켜짐" : "꺼짐"}`}
               tabIndex={0}
               onClick={onToggleHC}
               onKeyDown={(e) => {
@@ -125,6 +140,7 @@ export default function A11yModal({ open, onClose }: Props) {
                 }
               }}
               $on={isHC}
+              {...focusSpeak}
             >
               <span className="track" />
               <span className="thumb" />
@@ -144,6 +160,8 @@ export default function A11yModal({ open, onClose }: Props) {
                     value={opt.valuePct}
                     checked={currentScaleNum === Number(opt.valuePct)}
                     onChange={() => setDraftFont(opt.valuePct)}
+                    aria-label={`글자 크기 ${opt.label}`}
+                    {...focusSpeak}
                   />
                   <label htmlFor={`fz-${opt.valuePct}`}>{opt.label}</label>
                 </RadioItem>
@@ -156,10 +174,21 @@ export default function A11yModal({ open, onClose }: Props) {
           </Section>
 
           <Footer>
-            <Btn type="button" data-variant="ghost" onClick={handleCancel}>
+            <Btn
+              type="button"
+              data-variant="ghost"
+              onClick={handleCancel}
+              aria-label="닫기"
+              {...focusSpeak}
+            >
               취소
             </Btn>
-            <Btn type="button" onClick={handleSave}>
+            <Btn
+              type="button"
+              onClick={handleSave}
+              aria-label="적용하기"
+              {...focusSpeak}
+            >
               적용하기
             </Btn>
           </Footer>
@@ -169,7 +198,7 @@ export default function A11yModal({ open, onClose }: Props) {
   );
 }
 
-/* ---------------- styled ---------------- */
+/* ---------- styled ---------- */
 const Overlay = styled.div`
   position: fixed;
   inset: 0;
@@ -179,7 +208,6 @@ const Overlay = styled.div`
   place-items: center;
   z-index: 1000;
   padding: clamp(12px, 4vh, 24px);
-
   touch-action: none;
 `;
 
@@ -193,9 +221,7 @@ const Card = styled.div`
   color: var(--c-black);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
   padding: 24px 28px 20px;
-  transition: background 0.25s, color 0.25s;
   border: 1px solid var(--c-black);
-
   &:focus-within {
     outline: 2px solid var(--c-blue);
     outline-offset: 2px;
@@ -207,7 +233,6 @@ const Header = styled.div`
   align-items: center;
   justify-content: space-between;
   margin-bottom: 6px;
-
   h2 {
     ${fonts.bold32};
     margin: 0;
@@ -220,9 +245,6 @@ const CloseBtn = styled.button`
   ${fonts.bold26};
   line-height: 1;
   padding: 0 6px;
-  color: var(--c-black);
-  transition: transform 0.15s;
-
   &:hover {
     transform: scale(1.1);
   }
@@ -235,126 +257,84 @@ const Desc = styled.p`
 `;
 
 const Section = styled.section`
-  border: 1px solid ${({ theme }) => theme.colors.base.grayD};
+  border: 1px solid var(--c-grayD);
   border-radius: 16px;
   padding: 16px;
   margin-top: 14px;
-  background: ${({ theme }) => theme.colors.base.white};
-  transition: background 0.25s;
+  background: #fff;
 `;
 
 const SecTitle = styled.h3`
   ${fonts.bold20};
   margin: 0 0 12px;
-  color: ${({ theme }) => theme.colors.base.black};
-
-  html.hc & {
-    color: var(--c-white);
-  }
+  color: black;
 `;
 
 const Switch = styled.div<{ $on: boolean }>`
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.5rem;
   cursor: pointer;
-  user-select: none;
-  position: relative;
-  transition: color 0.3s;
-
-  /* 트랙 */
   .track {
-    width: 56px;
-    height: 28px;
+    width: 46px;
+    height: 24px;
     border-radius: 999px;
-    position: relative;
-    overflow: hidden;
-    background: ${({ theme }) => theme.colors.base.grayL};
-    box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.2);
-    transition: background 0.35s ease;
+    background: ${({ $on }) => ($on ? "#2563eb" : "#d1d5db")};
+    transition: background 0.15s ease;
   }
-
   .thumb {
     position: absolute;
-    top: 7px;
-    left: ${({ $on }) => ($on ? "30px" : "3px")};
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: ${({ theme }) => theme.colors.base.blue};
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 0.35s ease;
-
-    /* html.hc & {
-      background: var(--c-black);
-    } */
+    left: ${({ $on }) => ($on ? "26px" : "4px")};
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: white;
+    border: 1px solid #9ca3af;
+    transition: left 0.15s ease;
   }
-
   .label {
     ${fonts.medium24};
-    min-width: 42px;
-    text-align: left;
-    color: ${({ theme }) => theme.colors.base.black};
-    transition: color 0.3s;
-
-    /* html.hc & {
-      color: ${({ $on }) => ($on ? "var(--c-yellowM)" : "var(--c-beige)")};
-    } */
+    color: #111827;
+  }
+  &:focus-visible {
+    outline: 3px solid var(--c-blue);
+    outline-offset: 3px;
   }
 `;
 
 const RadioRow = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 12px;
+  margin-top: 8px;
 `;
 
 const RadioItem = styled.div`
-  border: 1px solid ${({ theme }) => theme.colors.base.grayD};
-  border-radius: 999px;
-  padding: 6px 10px;
   display: inline-flex;
   align-items: center;
+  color: black;
   gap: 6px;
-  background: var(--c-white);
-  transition: background 0.25s;
-
-  html.hc & {
-    background: var(--c-grayX);
-  }
-
-  input {
+  ${fonts.medium24};
+  input[type="radio"] {
+    width: 20px;
+    height: 20px;
     accent-color: var(--c-yellowM);
-  }
-  html.hc input {
-    accent-color: var(--c-yellowM);
-  }
-
-  label {
-    ${fonts.regular17};
     cursor: pointer;
-    color: var(--c-black);
-
-    html.hc & {
-      color: var(--c-white);
+    &:focus-visible {
+      outline: 3px solid var(--c-blue);
+      outline-offset: 2px;
     }
   }
 `;
 
 const ScalePreview = styled.div`
-  border: 1px dashed ${({ theme }) => theme.colors.base.grayD};
+  margin-top: 12px;
+  padding: 10px 12px;
   border-radius: 10px;
-  padding: 12px;
-  ${fonts.medium26};
-  color: var(--c-black);
   background: var(--c-white);
-  transition: background 0.25s, color 0.25s;
-
-  html.hc & {
-    color: var(--c-white);
-    background: var(--c-grayX);
-  }
+  ${fonts.regular20};
+  color: var(--c-black);
 `;
 
 const Footer = styled.div`
@@ -371,27 +351,13 @@ const Btn = styled.button`
   border-radius: 999px;
   cursor: pointer;
   border: none;
-  background: ${({ theme }) => theme.colors.base.blue};
-  color: ${({ theme }) => theme.colors.base.white};
-  transition: background 0.25s, color 0.25s;
-
+  background: var(--c-blue);
+  color: var(--c-white);
   &[data-variant="ghost"] {
     background: transparent;
     color: var(--c-blue);
     border: 2px solid var(--c-blue);
   }
-
-  html.hc & {
-    background: var(--c-black);
-    color: var(--c-white);
-
-    &[data-variant="ghost"] {
-      color: var(--c-yellowM);
-      border-color: var(--c-yellowM);
-      background: transparent;
-    }
-  }
-
   &:hover {
     opacity: 0.9;
   }
