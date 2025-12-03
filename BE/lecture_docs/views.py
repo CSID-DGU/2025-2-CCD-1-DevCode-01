@@ -95,7 +95,7 @@ class DocUploadView(APIView):
         }
 
         try:
-            resp = requests.post(ai_ocr_url, files=files, data=data, timeout=10)
+            resp = requests.post(ai_ocr_url, files=files, data=data, timeout=60)
             resp.raise_for_status()
         except Exception as e:
             return Response(

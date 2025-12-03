@@ -36,19 +36,18 @@ def upload_s3(image_bytes: bytes, key: str, content_type: str = "image/png") -> 
 def run_pdf_ocr(doc_id: int, pdf_bytes: bytes, callback_url: str):
 
     pages = pdf_to_images(pdf_bytes)
-
+    
     mem = ContextMemory(max_history=3)
 
     for page_number, img_bytes in pages:
 
         s3_key = f"docs/{doc_id}/pages/{page_number}.png"
         image_url = upload_s3(img_bytes, s3_key, content_type="image/png")
-        
+        #컨텍스트를 불러옴
         context = mem.get_context()
+        #교안 분석
         ocr_text = analyze_page_with_context(img_bytes, context)
-        mini = make_mini_summary(ocr_text)
-        mem.add_summary(page_number, mini)
-
+        #callback
         try:
             resp = requests.post(
                 callback_url,
@@ -63,5 +62,7 @@ def run_pdf_ocr(doc_id: int, pdf_bytes: bytes, callback_url: str):
             resp.raise_for_status()
         except Exception as e:
             print(f"[AI OCR] callback 실패: doc={doc_id}, page={page_number}, error={e}")
-
+        #요약
+        mini = make_mini_summary(ocr_text)
+        mem.add_summary(page_number, mini)
     return True
