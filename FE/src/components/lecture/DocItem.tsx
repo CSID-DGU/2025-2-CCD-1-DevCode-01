@@ -1,4 +1,3 @@
-// src/components/lecture/DocItem.tsx
 import styled from "styled-components";
 import { fonts } from "@styles/fonts";
 import { OptionsMenu } from "src/components/home/OptionsMenu";
@@ -52,6 +51,24 @@ export default function DocItem({
   }, [menuOpen]);
 
   useEffect(() => {
+    if (!menuOpen) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        e.preventDefault();
+        setMenuOpen(false);
+        menuBtnRef.current?.focus();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
     if (menuOpen) {
       const t = setTimeout(() => firstMenuItemRef.current?.focus(), 0);
       return () => clearTimeout(t);
@@ -74,8 +91,6 @@ export default function DocItem({
     requestAnimationFrame(() => {
       if (by === "enter") {
         titleBtnRef.current?.focus({ preventScroll: true });
-      } else {
-        (document.activeElement as HTMLElement | null)?.blur();
       }
     });
 
@@ -90,7 +105,7 @@ export default function DocItem({
           onChange={(e) => setNewTitle(e.target.value)}
           onBlur={() => void saveEdit("blur")}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key === "Enter" && e.ctrlKey) {
               e.preventDefault();
               e.stopPropagation();
               void saveEdit("enter");
@@ -98,6 +113,7 @@ export default function DocItem({
               e.preventDefault();
               e.stopPropagation();
               setEditing(false);
+              setNewTitle(doc.title);
               titleBtnRef.current?.focus();
             }
           }}
