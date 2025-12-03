@@ -1,4 +1,4 @@
-import React, { useId, useState } from "react";
+import React, { useId, useRef, useState } from "react";
 import styled from "styled-components";
 import { fonts } from "@styles/fonts";
 import SummaryPane from "../pre/SummaryPane";
@@ -7,6 +7,7 @@ import { PANEL_FIXED_H_LIVE } from "@pages/class/pre/styles";
 import MemoBox from "../live/Memo";
 import BoardBox from "../live/BoardBox";
 import type { PageReview, TtsPair } from "@apis/lecture/review.api";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 type TabKey = "class" | "memo" | "board" | "summary";
 type Role = "student" | "assistant";
@@ -35,9 +36,22 @@ type Props = {
   onStopAllTts?: () => void;
 };
 
+const TAB_ORDER: TabKey[] = ["class", "memo", "board", "summary"];
+
+const label = (k: TabKey) =>
+  k === "class"
+    ? "수업"
+    : k === "memo"
+    ? "메모"
+    : k === "board"
+    ? "추가 자료"
+    : "요약";
+
+const FOCUSABLE_SELECTOR =
+  'button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])';
+
 export default function RightTabsPost({
   stack,
-  // role,
   review,
   memo,
   board,
@@ -47,37 +61,60 @@ export default function RightTabsPost({
   onPlayMemoTts,
   readOnFocus,
   onStopAllTts,
-}: // onFocusReviewTts,
-// readOnFocus,
-Props) {
+}: Props) {
   const [tab, setTab] = useState<TabKey>("class");
   const baseId = useId();
+
+  const asideRef = useRef<HTMLElement | null>(null);
+  const tablistRef = useRef<HTMLDivElement | null>(null);
+
   const id = (k: TabKey) => ({
     tab: `${baseId}-tab-${k}`,
     panel: `${baseId}-panel-${k}`,
   });
 
-  const handleTabClick = (k: TabKey) => {
-    // 1) 탭 바꿀 때는 모든 TTS 정지
-    onStopAllTts?.();
+  const focusBottomToolbar = (): boolean => {
+    const bottom = document.querySelector<HTMLElement>(
+      "[data-area='bottom-toolbar']"
+    );
+    if (!bottom) return false;
 
-    // 2) 현재 활성 탭 변경
+    const all = Array.from(
+      bottom.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+    );
+
+    const target = all.find((el) => {
+      if (el.getAttribute("aria-hidden") === "true") return false;
+      if (el.getAttribute("aria-disabled") === "true") return false;
+      if (el instanceof HTMLButtonElement && el.disabled) return false;
+      if (el instanceof HTMLInputElement && el.disabled) return false;
+      if (el instanceof HTMLSelectElement && el.disabled) return false;
+      if (el instanceof HTMLTextAreaElement && el.disabled) return false;
+
+      return true;
+    });
+
+    if (!target) return false;
+
+    target.focus();
+    return true;
+  };
+
+  /* ---------- 탭 클릭 시: 탭 전환 + 패널 안으로 진입 ---------- */
+  const handleTabClick = (k: TabKey) => {
+    onStopAllTts?.();
     setTab(k);
 
-    // 3) 다음 렌더 후 각 탭에 맞는 포커스 이동
     setTimeout(() => {
-      // 요약 탭: 기존처럼 sidePaneRef에 포커스 → SummaryPane에서 autoPlayOnFocus
       if (k === "summary") {
         summary.sidePaneRef.current?.focus();
         return;
       }
 
-      // 메모/수업/판서: 패널 DOM 안에서 포커스 타겟 찾기
       const panelId = id(k).panel;
       const panelEl = document.getElementById(panelId);
       if (!panelEl) return;
 
-      // 우선순위: data-focus-initial > textarea > button > [tabindex]
       const focusTarget =
         panelEl.querySelector<HTMLElement>("[data-focus-initial='true']") ||
         panelEl.querySelector<HTMLElement>("textarea") ||
@@ -87,14 +124,81 @@ Props) {
     }, 0);
   };
 
+  /* ---------- Tab 키: 탭 버튼 위에서는 "옆 탭으로만" 이동 ---------- */
+  const makeTabButtonKeyDown =
+    (k: TabKey): React.KeyboardEventHandler<HTMLButtonElement> =>
+    (e) => {
+      if (e.key !== "Tab" || e.altKey || e.ctrlKey || e.metaKey) return;
+
+      const tablistEl = tablistRef.current;
+      if (!tablistEl) return;
+      if (!tablistEl.contains(e.currentTarget)) return;
+
+      const idx = TAB_ORDER.indexOf(k);
+      if (idx === -1) return;
+
+      if (k === "summary" && !e.shiftKey) {
+        const moved = focusBottomToolbar();
+        if (moved) {
+          e.preventDefault();
+        }
+        return;
+      }
+
+      e.preventDefault();
+
+      let nextIdx: number;
+      if (e.shiftKey) {
+        nextIdx = (idx - 1 + TAB_ORDER.length) % TAB_ORDER.length;
+      } else {
+        nextIdx = (idx + 1) % TAB_ORDER.length;
+      }
+
+      const nextKey = TAB_ORDER[nextIdx];
+      const nextTabId = id(nextKey).tab;
+      const nextTabEl = document.getElementById(
+        nextTabId
+      ) as HTMLButtonElement | null;
+
+      nextTabEl?.focus();
+    };
+
+  /* ---------- 패널 안에서의 Tab ----------
+   *  이제는 Tab으로 탭 전환 안 함.
+   *  → Tab은 브라우저 기본 동작: 패널 안 포커스 요소들 → 그 다음(보통 BottomToolbar)
+   */
+  const handleAsideKeyDown: React.KeyboardEventHandler<HTMLElement> = (e) => {
+    if (e.key !== "Tab" || e.altKey || e.ctrlKey || e.metaKey) return;
+
+    const root = asideRef.current;
+    const tablist = tablistRef.current;
+    if (!root || !tablist) return;
+
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    if (!root.contains(target)) return;
+    if (tablist.contains(target)) return;
+  };
+
+  const tabSpeak = useFocusSpeak();
+
   return (
     <Aside
+      ref={asideRef}
       $stack={stack}
       aria-label="수업/메모/판서/요약 패널"
       data-area="review-pane"
+      onKeyDown={handleAsideKeyDown}
     >
-      <Tablist role="tablist" aria-label="우측 기능">
-        {(["class", "memo", "board", "summary"] as TabKey[]).map((k) => (
+      {/* 탭 헤더 */}
+      <Tablist
+        ref={tablistRef}
+        role="tablist"
+        aria-label="우측 기능"
+        aria-orientation="horizontal"
+      >
+        {TAB_ORDER.map((k) => (
           <Tab
             key={k}
             id={id(k).tab}
@@ -103,6 +207,9 @@ Props) {
             aria-controls={id(k).panel}
             type="button"
             onClick={() => handleTabClick(k)}
+            onKeyDown={makeTabButtonKeyDown(k)}
+            aria-label={label(k)}
+            {...tabSpeak}
           >
             {label(k)}
           </Tab>
@@ -115,7 +222,6 @@ Props) {
         role="tabpanel"
         aria-labelledby={id("class").tab}
         hidden={tab !== "class"}
-        tabIndex={0}
       >
         <ClassPane review={review} isActive={tab === "class"} />
       </Panel>
@@ -128,21 +234,14 @@ Props) {
         hidden={tab !== "memo"}
       >
         {typeof memo.pageId === "number" && memo.pageId > 0 ? (
-          <>
-            {console.log("[RightTabsPost] Memo panel 렌더링", {
-              pageId: memo.pageId,
-              hasReview: !!review,
-              hasOnPlayMemoTts: !!onPlayMemoTts,
-            })}
-            <MemoBox
-              docId={memo.docId}
-              pageId={memo.pageId}
-              review={review}
-              onPlayMemoTts={onPlayMemoTts}
-              autoReadOnFocus={!!readOnFocus}
-              updateWithTts
-            />
-          </>
+          <MemoBox
+            docId={memo.docId}
+            pageId={memo.pageId}
+            review={review}
+            onPlayMemoTts={onPlayMemoTts}
+            autoReadOnFocus={!!readOnFocus}
+            updateWithTts
+          />
         ) : (
           <Empty>이 페이지는 아직 메모를 사용할 수 없어요.</Empty>
         )}
@@ -189,15 +288,6 @@ Props) {
     </Aside>
   );
 }
-
-const label = (k: TabKey) =>
-  k === "class"
-    ? "수업"
-    : k === "memo"
-    ? "메모"
-    : k === "board"
-    ? "추가 자료"
-    : "요약";
 
 const Aside = styled.aside<{ $stack: boolean }>`
   position: ${({ $stack }) => ($stack ? "static" : "sticky")};

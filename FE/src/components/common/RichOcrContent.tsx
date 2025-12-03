@@ -71,7 +71,7 @@ function MathBlock({ latex }: MathBlockProps) {
     mj.typesetPromise([root])
       .then(() => {
         const focusableSelector =
-          'a, button, input, textarea, select, [tabindex], [contenteditable="true"], svg[focusable="true"]';
+          'a, button, input, textarea, select, [contenteditable="true"], svg[focusable="true"]';
 
         root.querySelectorAll<HTMLElement>(focusableSelector).forEach((el) => {
           el.setAttribute("aria-hidden", "true");
@@ -83,7 +83,12 @@ function MathBlock({ latex }: MathBlockProps) {
   }, [latex]);
 
   return (
-    <MathContainer ref={ref} aria-hidden="true" data-skip-focus-tts="true">
+    <MathContainer
+      ref={ref}
+      tabIndex={-1}
+      aria-hidden="true"
+      data-skip-focus-tts="true"
+    >
       {"$$ " + latex + " $$"}
     </MathContainer>
   );
@@ -101,7 +106,11 @@ const Paragraph = styled.p`
   margin-bottom: 0.75rem;
 `;
 
-const CodeBlock = styled.pre`
+const CodeBlock = styled.pre.attrs({
+  tabIndex: -1,
+  "aria-hidden": true,
+  "data-skip-focus-tts": true,
+})`
   max-width: ${DOC_TEXT_MEASURE}ch;
   margin: 1rem 0;
   padding: 0.75rem 1rem;

@@ -120,7 +120,11 @@ export default function BottomToolbar({
     !!onStartLive && !(typeof startPageId === "number" && startPageId > 0);
 
   return (
-    <Bar role="toolbar" aria-label="페이지 및 강의 조작">
+    <Bar
+      role="toolbar"
+      aria-label="페이지 및 강의 조작"
+      data-area="bottom-toolbar"
+    >
       <Group>
         <Btn
           onClick={() => {
