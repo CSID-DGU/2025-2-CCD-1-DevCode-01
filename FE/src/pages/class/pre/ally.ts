@@ -1,4 +1,3 @@
-// src/pages/class/Pre/a11y.ts
 import type { RefObject } from "react";
 
 /** 접근성 관련 localStorage 키 */
@@ -8,7 +7,7 @@ export const A11Y_STORAGE_KEYS = {
 } as const;
 
 /** 기본 폰트 배율 (%) */
-const DEFAULT_FONT_PCT = 125;
+const DEFAULT_FONT_PCT = 100;
 
 /** 저장된 폰트 배율 읽기 */
 export const readFontPct = (): number => {
@@ -24,9 +23,15 @@ export const readFontPct = (): number => {
 /** 포커스 시 읽기 활성화 여부 읽기 */
 export const readReadOnFocus = (): boolean => {
   try {
-    return localStorage.getItem(A11Y_STORAGE_KEYS.readOnFocus) === "1";
+    const v = localStorage.getItem(A11Y_STORAGE_KEYS.readOnFocus);
+
+    // 아직 한번도 설정 안 했으면 기본값을 "켜짐"으로
+    if (v === null) return true;
+
+    return v === "1";
   } catch {
-    return false;
+    // 에러 나도 기본값은 켜짐
+    return true;
   }
 };
 

@@ -125,11 +125,16 @@ class BookmarkDetailView(APIView):
 
         stt_tts = matched_speech.stt_tts if matched_speech else None
 
-        return JsonResponse({
-            "stt_tts": stt_tts,
-            "relative_time": bookmark.relative_time,
-            "text": bookmark.text,
-        }, status=200)
+        if stt_tts:
+            return JsonResponse({
+                "stt_tts": stt_tts,
+                "relative_time": bookmark.relative_time,
+                "text": bookmark.text,
+            }, status=200)
+        else:
+            return JsonResponse({
+                "error": "해당 북마크에 매칭되는 발화를 찾을 수 없습니다."
+            }, status=404)
     
     def delete(self, request, bookmarkId):
         try:
@@ -143,6 +148,23 @@ class BookmarkDetailView(APIView):
 class NoteView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsLectureMember]
 
+    def get(self, request, pageId):
+        try:
+            page = Page.objects.get(id=pageId)
+        except Page.DoesNotExist:
+            return Response({"error": "해당 페이지를 찾을 수 없습니다."}, status=404)
+
+
+        self.check_object_permissions(request, page)
+
+        user = request.user
+
+        note = Note.objects.filter(page=page, user=user).first()
+        if not note:
+            return Response({"note": None}, status=200)
+
+        return Response(NoteSerializer(note).data, status=200)   
+    
     def post(self, request, pageId):
         try:
             page = Page.objects.get(id=pageId)
@@ -177,8 +199,44 @@ class NoteDetailView(APIView):
         content = request.data.get("content", "").strip()
         note.content = content
 
-        note.save()
+        note.save(update_fields=['content'])
 
         return Response(NoteSerializer(note).data, status=200)
     
+class NoteTTSView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
+
+    def patch(self, request, noteId):
+        note = Note.objects.filter(id=noteId).first()
+        if not note:
+            return Response({"error": "해당 노트를 찾을 수 없습니다."}, status=404)
+        
+        if note.user != request.user:
+            return Response({"error": "본인이 작성한 노트만 수정할 수 있습니다."}, status=403)
+        self.check_object_permissions(request, note)
+        
+        content = request.data.get("content", "").strip()
+
+        # content가 비어있으면 TTS 변환하지 않음
+        if not content:
+            return Response({
+                "note_id": note.id,
+                "note_tts": None
+            }, status=200)
+        
+        try:
+            tts_url = text_to_speech(content, request.user, s3_folder="tts/notes/")
+        except Exception as e:
+            return Response({"error": f"TTS 오류: {e}"}, status=500)
+        
+        note.content = content
+        note.note_tts = tts_url
+
+        note.save(update_fields=['content', 'note_tts'])
+
+        return Response({
+            "note_id": note.id,
+            "content": note.content,
+            "note_tts": tts_url
+        }, status=200)
 

@@ -29,6 +29,7 @@ import {
 import { postBookmarkClock, toHHMMSS } from "@apis/lecture/bookmark.api";
 import { uploadSpeechQueued } from "@apis/lecture/speech.api";
 import { useAudioRecorder } from "@shared/useAudioRecorder";
+import { requestDocSpeechSummary } from "@apis/lecture/profTts.api";
 
 type RouteParams = { courseId?: string; docId?: string };
 type NavState = {
@@ -141,7 +142,7 @@ export default function LiveClass() {
     const onReadCustom = () => setReadOnFocus(readReadOnFocus());
 
     window.addEventListener("storage", onStorage);
-    window.addEventListener("a11y:font-change", onFontCustom as EventListener);
+    window.addEventListener("a11y-font-change", onFontCustom as EventListener);
     window.addEventListener(
       "a11y:read-on-focus-change",
       onReadCustom as EventListener
@@ -149,7 +150,7 @@ export default function LiveClass() {
     return () => {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener(
-        "a11y:font-change",
+        "a11y-font-change",
         onFontCustom as EventListener
       );
       window.removeEventListener(
@@ -203,8 +204,6 @@ export default function LiveClass() {
             nextDefaultMode === "ocr" ? "본문" : "원본"
           } 보기`
         );
-
-        setTimeout(() => mainRegionRef.current?.focus(), 0);
       } catch (err) {
         if (!cancelled) {
           toast.error("데이터 로드 중 오류가 발생했습니다.");
@@ -529,6 +528,12 @@ export default function LiveClass() {
       }
     }
 
+    console.log("[cut] prevPageId, endHHMMSS, recPersist =", {
+      prevPageId,
+      endHHMMSS,
+      rec: loadRec(dId),
+    });
+
     // 녹음 상태 갱신 및 재시작
     saveRec(dId, {
       status: "paused",
@@ -547,6 +552,13 @@ export default function LiveClass() {
 
   // 강의 종료
   const onEndLecture = async () => {
+    console.log("[onEndLecture] docId, docPage, pageId =", {
+      docId,
+      docPage,
+      pageId: docPage?.pageId,
+      recPersist: Number.isFinite(docId) ? loadRec(Number(docId)) : null,
+    });
+
     try {
       if (!Number.isFinite(docId)) throw new Error("잘못된 문서 ID");
       const dId = Number(docId);
@@ -579,12 +591,36 @@ export default function LiveClass() {
         console.warn("[end] empty blob → skip upload");
       }
 
+      void requestDocSpeechSummary(dId, endHHMMSS);
+
+      if (!pageId) {
+        console.warn(
+          "[onEndLecture] pageId 없음. 업로드 스킵하고 그냥 종료 이동"
+        );
+        clearRec(dId);
+        navigate(`/lecture/doc/${docId}/post`, {
+          replace: true,
+          state: {
+            docId: dId,
+            totalPage,
+            navTitle: state?.navTitle,
+            resumeClock: endHHMMSS,
+          },
+        });
+        return;
+      }
+
       clearRec(dId);
       toast.success("강의를 종료합니다.");
       announce("강의 종료");
       navigate(`/lecture/doc/${docId}/post`, {
         replace: true,
-        state: { docId: dId, totalPage },
+        state: {
+          docId: dId,
+          totalPage,
+          navTitle: state?.navTitle,
+          resumeClock: endHHMMSS,
+        },
       });
     } catch (e) {
       console.error(e);
@@ -622,7 +658,6 @@ export default function LiveClass() {
     setMode((prev) => {
       const next = prev === "ocr" ? "image" : "ocr";
       announce(next === "image" ? "원본 보기" : "본문 보기");
-      setTimeout(() => mainRegionRef.current?.focus(), 0);
       return next;
     });
 

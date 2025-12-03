@@ -8,6 +8,7 @@ import {
   type DocPage,
   type PageSummary,
   fetchPageTTS,
+  fetchSummaryTTS,
 } from "@apis/lecture/lecture.api";
 
 import { formatOcr } from "@shared/formatOcr";
@@ -68,7 +69,7 @@ function useA11ySettings() {
     };
 
     window.addEventListener("storage", onStorage);
-    window.addEventListener("a11y:font-change", onFontCustom as EventListener);
+    window.addEventListener("a11y-font-change", onFontCustom as EventListener);
     window.addEventListener(
       "a11y:read-on-focus-change",
       onReadCustom as EventListener
@@ -78,7 +79,7 @@ function useA11ySettings() {
     return () => {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener(
-        "a11y:font-change",
+        "a11y-font-change",
         onFontCustom as EventListener
       );
       window.removeEventListener(
@@ -135,8 +136,13 @@ export default function PreClass() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryRequested, setSummaryRequested] = useState(false);
 
+  const [summaryTts, setSummaryTts] = useState<{
+    female?: string;
+    male?: string;
+  } | null>(null);
+
   /* local TTS */
-  const { speak } = useLocalTTS();
+  const { speak, stop } = useLocalTTS();
 
   /* page TTS */
   const [pageTtsLoading, setPageTtsLoading] = useState(false);
@@ -146,7 +152,39 @@ export default function PreClass() {
 
   const { soundRate, soundVoice } = useSoundOptions();
 
-  /* 페이지 로드 */
+  /* ---------- 공통: 서버 오디오 정지 도우미 ---------- */
+  const stopServerAudio = useCallback(() => {
+    const ocr = ocrAudioRef.current;
+    const sum = sumAudioRef.current;
+
+    if (ocr) {
+      try {
+        ocr.pause();
+        ocr.currentTime = 0;
+      } catch {
+        // ignore
+      }
+    }
+    if (sum) {
+      try {
+        sum.pause();
+        sum.currentTime = 0;
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  /* ---------- 공통: 로컬 TTS + 서버 오디오 정리 래퍼 ---------- */
+  const speakWithStop = useCallback(
+    (text: string) => {
+      stopServerAudio();
+      stop();
+      speak(text);
+    },
+    [speak, stop, stopServerAudio]
+  );
+
   useEffect(() => {
     if (!docIdNum) return;
 
@@ -176,10 +214,10 @@ export default function PreClass() {
           return;
         }
 
-        /* 완료 상태 */
         setSummary(null);
         setSummaryRequested(false);
         setSummaryLoading(false);
+        setSummaryTts(null);
 
         setMode(isAssistant ? "image" : "ocr");
 
@@ -209,32 +247,52 @@ export default function PreClass() {
 
     let cancelled = false;
 
-    const loadSummary = async () => {
+    const loadSummaryAndTts = async () => {
       try {
         setSummaryLoading(true);
+
+        // 1) 요약 텍스트
         const s = await fetchPageSummary(docPage.pageId);
-        if (!cancelled) setSummary(s);
-      } catch {
-        announce("요약을 불러오지 못했습니다.");
+        if (cancelled) return;
+        setSummary(s);
+
+        // 2) 요약 TTS 생성 요청
+        try {
+          const { female, male } = await fetchSummaryTTS(
+            docPage.pageId,
+            s.summary
+          );
+          if (cancelled) return;
+          setSummaryTts({ female, male });
+        } catch (e) {
+          console.error("[PreClass] 요약 TTS 생성 실패:", e);
+          if (!cancelled) {
+            setSummaryTts(null);
+            announce("요약 음성을 불러오지 못했습니다.");
+          }
+        }
+      } catch (e) {
+        console.error("[PreClass] 요약 불러오기 실패:", e);
+        if (!cancelled) {
+          announce("요약을 불러오지 못했습니다.");
+        }
       } finally {
         if (!cancelled) setSummaryLoading(false);
       }
     };
 
-    loadSummary();
+    loadSummaryAndTts();
 
     return () => {
       cancelled = true;
     };
   }, [docPage?.pageId, summaryRequested, docIdNum, announce]);
 
-  /* 문서 제목 */
   useEffect(() => {
     const t = `${state?.navTitle ?? "수업 전"} - p.${page}`;
     document.title = `캠퍼스 메이트 | ${t}`;
   }, [state?.navTitle, page]);
 
-  /* 포커스 TTS */
   useFocusTTS({
     enabled: readOnFocus,
     mode,
@@ -276,7 +334,6 @@ export default function PreClass() {
           ? "본문 보기가 활성화되었습니다."
           : "원본 이미지 보기가 활성화되었습니다."
       );
-      setTimeout(() => mainRegionRef.current?.focus(), 0);
       return next;
     });
   };
@@ -289,22 +346,47 @@ export default function PreClass() {
     }
 
     try {
+      // 1) 로컬 TTS 정지
+      stop();
+      // 2) 요약 오디오 정지
+      const sum = sumAudioRef.current;
+      if (sum) {
+        try {
+          sum.pause();
+          sum.currentTime = 0;
+        } catch {
+          // ignore
+        }
+      }
+
       setPageTtsLoading(true);
 
       const finalText = await buildTtsText(docPage.ocr);
 
       const { female, male } = await fetchPageTTS(docPage.pageId, finalText);
 
-      const url = soundVoice === "여성" ? female : male;
+      const url =
+        soundVoice === "여성" ? female ?? male ?? null : male ?? female ?? null;
 
-      if (ocrAudioRef.current) {
-        ocrAudioRef.current.src = url;
-
-        applyPlaybackRate(ocrAudioRef.current, soundRate);
-
-        ocrAudioRef.current.currentTime = 0;
-        await ocrAudioRef.current.play();
+      if (!url) {
+        toast.error("생성된 본문 음성이 없습니다.");
+        return;
       }
+
+      const audio = ocrAudioRef.current;
+      if (!audio) return;
+
+      try {
+        audio.pause();
+      } catch {
+        // ignore
+      }
+      audio.src = url;
+
+      applyPlaybackRate(audio, soundRate);
+
+      audio.currentTime = 0;
+      await audio.play();
 
       announce("본문 음성을 재생합니다.");
     } catch (e) {
@@ -321,6 +403,75 @@ export default function PreClass() {
     soundRate,
     buildTtsText,
     announce,
+    stop,
+  ]);
+
+  /* 요약 TTS 재생 */
+  const handlePlaySummaryTts = useCallback(async () => {
+    if (!docPage?.pageId) {
+      toast.error("페이지 정보가 없어 요약 음성을 재생할 수 없습니다.");
+      return;
+    }
+    if (!summary?.summary) {
+      toast.error("요약이 없어 음성을 재생할 수 없습니다.");
+      return;
+    }
+
+    try {
+      // 1) 로컬 TTS 정지
+      stop();
+      // 2) 본문 오디오 정지
+      const ocr = ocrAudioRef.current;
+      if (ocr) {
+        try {
+          ocr.pause();
+          ocr.currentTime = 0;
+        } catch {
+          // ignore
+        }
+      }
+
+      if (!summaryTts || (!summaryTts.female && !summaryTts.male)) {
+        setSummaryRequested(true);
+        toast("요약 음성을 준비하는 중입니다...");
+        return;
+      }
+
+      const url =
+        soundVoice === "여성"
+          ? summaryTts.female ?? summaryTts.male ?? null
+          : summaryTts.male ?? summaryTts.female ?? null;
+
+      if (!url) {
+        toast.error("생성된 요약 음성이 없습니다.");
+        return;
+      }
+
+      const audio = sumAudioRef.current;
+      if (!audio) return;
+
+      if (!audio.src || audio.src !== url) {
+        audio.src = url;
+      }
+
+      applyPlaybackRate(audio, soundRate);
+      audio.currentTime = 0;
+      await audio.play();
+
+      announce("요약 음성을 재생합니다.");
+    } catch (e) {
+      console.error(e);
+      toast.error("요약 음성 재생에 실패했습니다.");
+      announce("요약 음성을 불러오지 못했습니다.");
+    }
+  }, [
+    docPage?.pageId,
+    summary?.summary,
+    summaryTts,
+    soundVoice,
+    soundRate,
+    announce,
+    stop,
   ]);
 
   /* 강의 시작 */
@@ -329,6 +480,10 @@ export default function PreClass() {
       toast.error("문서가 없어 강의를 시작할 수 없어요.");
       return;
     }
+
+    // 페이지 이동 전에 TTS 모두 정지
+    stop();
+    stopServerAudio();
 
     console.log("[PreClass] resumeClock BEFORE NAVIGATE =", state?.resumeClock);
 
@@ -343,15 +498,17 @@ export default function PreClass() {
     });
   };
 
-  const summaryTtsUrl = summary?.summary_tts
-    ? soundVoice === "여성"
-      ? summary.summary_tts.female ?? null
-      : summary.summary_tts.male ?? null
-    : null;
+  const summaryTtsUrl =
+    summaryTts && (summaryTts.female || summaryTts.male)
+      ? soundVoice === "여성"
+        ? summaryTts.female ?? summaryTts.male ?? null
+        : summaryTts.male ?? summaryTts.female ?? null
+      : null;
 
   return (
     <Wrap aria-busy={loading}>
       <audio ref={ocrAudioRef} preload="none" />
+      <audio ref={sumAudioRef} preload="none" />
       <SrLive ref={liveRef} aria-live="polite" aria-atomic="true" />
 
       <Container>
@@ -385,6 +542,7 @@ export default function PreClass() {
                 loading: summaryLoading,
               }}
               onSummaryOpen={() => setSummaryRequested(true)}
+              onSummaryTtsPlay={handlePlaySummaryTts}
             />
           )}
         </Grid>
@@ -400,7 +558,7 @@ export default function PreClass() {
         onNext={() => setPage((p) => p + 1)}
         onToggleMode={toggleMode}
         onStart={onStartClass}
-        speak={speak}
+        speak={speakWithStop}
         onGoTo={(n) => setPage(n)}
       />
     </Wrap>

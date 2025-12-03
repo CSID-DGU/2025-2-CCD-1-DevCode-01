@@ -10,7 +10,7 @@ class DocSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Doc
-        fields = ["docId", "title", "review", "createdAt", "timestamp"]
+        fields = ["docId", "title", "doc_tts", "review", "createdAt", "timestamp"]
 
     def get_review(self, obj):
         return self.get_timestamp(obj) is not None
@@ -29,7 +29,7 @@ class DocUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Doc
-        fields = ["docId", "title"]
+        fields = ["docId", "title", "doc_tts"]
 
 
 class PageSerializer(serializers.ModelSerializer):

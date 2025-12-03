@@ -32,6 +32,8 @@ type Props = {
   };
   showBoard?: boolean;
   onSummaryOpen?: () => void;
+  onSummaryTtsPlay?: () => void;
+  summaryTtsLoading?: boolean;
 };
 
 export default function RightTabs({
@@ -43,6 +45,8 @@ export default function RightTabs({
   summary,
   showBoard = true,
   onSummaryOpen,
+  onSummaryTtsPlay,
+  summaryTtsLoading,
 }: Props) {
   const [tab, setTab] = useState<TabKey>(activeInitial);
 
@@ -92,7 +96,7 @@ export default function RightTabs({
             onClick={() => setTab("board")}
             type="button"
           >
-            판서
+            추가 자료
           </Tab>
         )}
 
@@ -161,7 +165,9 @@ export default function RightTabs({
           sidePaneRef={summary.sidePaneRef}
           stack={stack}
           panelHeight={PANEL_FIXED_H_LIVE}
-          loading={summary.loading}
+          loading={summary.loading || summaryTtsLoading}
+          autoPlayOnFocus
+          onPlaySummaryTts={onSummaryTtsPlay}
         />
       </Panel>
     </Aside>

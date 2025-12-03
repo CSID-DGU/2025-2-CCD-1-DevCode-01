@@ -7,6 +7,7 @@ import {
   fetchPageSummary,
   fetchPageTTS,
   type PageSummary,
+  fetchSummaryTTS,
 } from "@apis/lecture/lecture.api";
 import { fetchPageReview, type PageReview } from "@apis/lecture/review.api";
 import { formatOcr } from "@shared/formatOcr";
@@ -20,16 +21,21 @@ import {
 } from "./pre/ally";
 import { Container, Grid, SrLive, Wrap } from "./pre/styles";
 
-import { useFocusTTS } from "src/hooks/useFocusTTS";
 import { useTtsTextBuilder } from "src/hooks/useTtsTextBuilder";
 import { useOcrTtsAutoStop } from "src/hooks/useOcrTtsAutoStop";
 import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 
 import BottomToolbar from "src/components/lecture/pre/BottomToolBar";
 import RightTabsPost from "src/components/lecture/post/RightTabPost";
+import { useFocusTTS } from "src/hooks/useFocusTTS";
+import { fetchDocSpeechSummaries } from "@apis/lecture/profTts.api";
 
 type RouteParams = { courseId?: string; docId?: string };
-type NavState = { navTitle?: string; docId?: number };
+type NavState = {
+  navTitle?: string;
+  docId?: number;
+  resumeClock?: string | null;
+};
 type UserRole = "assistant" | "student";
 
 function useDocIdFromParamsAndState(params: RouteParams, state?: NavState) {
@@ -66,7 +72,7 @@ function useA11ySettings() {
     };
 
     window.addEventListener("storage", onStorage);
-    window.addEventListener("a11y:font-change", onFontCustom as EventListener);
+    window.addEventListener("a11y-font-change", onFontCustom as EventListener);
     window.addEventListener(
       "a11y:read-on-focus-change",
       onReadCustom as EventListener
@@ -76,7 +82,7 @@ function useA11ySettings() {
     return () => {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener(
-        "a11y:font-change",
+        "a11y-font-change",
         onFontCustom as EventListener
       );
       window.removeEventListener(
@@ -114,6 +120,13 @@ export default function PostClass() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [review, setReview] = useState<PageReview | null>(null);
 
+  const [summaryTts, setSummaryTts] = useState<{
+    female?: string;
+    male?: string;
+  } | null>(null);
+
+  const [summaryTtsLoading, setSummaryTtsLoading] = useState(false);
+
   const { fontPct, readOnFocus } = useA11ySettings();
   const stackByFont = fontPct >= 175;
 
@@ -128,7 +141,6 @@ export default function PostClass() {
   const sidePaneRef = useRef<HTMLDivElement | null>(null);
 
   const ocrAudioRef = useRef<HTMLAudioElement | null>(null);
-
   const sumAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const cleanOcr = useMemo(() => formatOcr(docPage?.ocr ?? ""), [docPage?.ocr]);
@@ -137,6 +149,18 @@ export default function PostClass() {
   const { soundRate, soundVoice } = useSoundOptions();
   const [pageTtsLoading, setPageTtsLoading] = useState(false);
 
+  useFocusTTS({
+    enabled: readOnFocus,
+    mode,
+    page,
+    docContainerRef: docBodyRef,
+    sumContainerRef: sidePaneRef,
+    ocrAudioRef,
+    sumAudioRef,
+    announce,
+  });
+
+  /* ---------------- 페이지 로드 + 요약/리뷰/요약TTS ---------------- */
   useEffect(() => {
     if (!docId) return;
 
@@ -152,7 +176,9 @@ export default function PostClass() {
         if (!dp) {
           setDocPage(null);
           setSummary(null);
+          setSummaryTts(null);
           setReview(null);
+          setSummaryLoading(false);
           toast.error("페이지 로드 실패");
           return;
         }
@@ -160,15 +186,69 @@ export default function PostClass() {
         setDocPage(dp);
         setTotalPage(dp.totalPage ?? null);
 
+        setSummary(null);
+        setSummaryTts(null);
+        setSummaryLoading(false);
+        setReview(null);
+
         if (dp.pageId) {
           setSummaryLoading(true);
           try {
-            const [sum, rev] = await Promise.all([
-              fetchPageSummary(dp.pageId),
-              fetchPageReview(dp.pageId),
-            ]);
+            const sumPromise = (async () => {
+              const s = await fetchPageSummary(dp.pageId);
+              if (cancelled) return null;
+              setSummary(s ?? null);
+
+              if (s?.summary) {
+                try {
+                  const { female, male } = await fetchSummaryTTS(
+                    dp.pageId,
+                    s.summary
+                  );
+                  if (!cancelled) {
+                    setSummaryTts({ female, male });
+                  }
+                } catch (err) {
+                  console.error("[PostClass] 요약 TTS 생성 실패:", err);
+                  if (!cancelled) {
+                    setSummaryTts(null);
+                    announce("요약 음성을 불러오지 못했습니다.");
+                  }
+                }
+              }
+              return s;
+            })();
+
+            const reviewPromise = (async (): Promise<PageReview | null> => {
+              const MAX_ATTEMPTS = 20;
+              let attempt = 0;
+
+              while (!cancelled && attempt < MAX_ATTEMPTS) {
+                const res = await fetchPageReview(dp.pageId);
+                if (!res) return null;
+
+                const hasData =
+                  !!res.note ||
+                  (res.speeches && res.speeches.length > 0) ||
+                  (res.bookmarks && res.bookmarks.length > 0) ||
+                  (res.boards && res.boards.length > 0);
+
+                const isDone = res.status === "done" || hasData;
+
+                if (isDone) {
+                  return res;
+                }
+
+                await new Promise((r) => setTimeout(r, 3000));
+                attempt += 1;
+              }
+
+              console.warn("[PageReview] polling timeout or cancelled");
+              return null;
+            })();
+
+            const [, rev] = await Promise.all([sumPromise, reviewPromise]);
             if (!cancelled) {
-              setSummary(sum ?? null);
               setReview(rev ?? null);
             }
           } finally {
@@ -176,6 +256,7 @@ export default function PostClass() {
           }
         } else {
           setSummary(null);
+          setSummaryTts(null);
           setReview(null);
           setSummaryLoading(false);
         }
@@ -188,12 +269,12 @@ export default function PostClass() {
             dp.totalPage ? ` / 총 ${dp.totalPage}` : ""
           }, ${nextDefault === "ocr" ? "본문" : "원본"} 보기`
         );
-        setTimeout(() => mainRegionRef.current?.focus(), 0);
       } catch (e) {
         if (!cancelled) {
           toast.error("데이터 로드 중 오류가 발생했습니다.");
           setDocPage(null);
           setSummary(null);
+          setSummaryTts(null);
           setReview(null);
           console.log(e);
         }
@@ -206,16 +287,6 @@ export default function PostClass() {
       cancelled = true;
     };
   }, [docId, page, isAssistant, announce]);
-  useFocusTTS({
-    enabled: readOnFocus,
-    mode,
-    page,
-    docContainerRef: docBodyRef,
-    sumContainerRef: sidePaneRef,
-    ocrAudioRef,
-    sumAudioRef,
-    announce,
-  });
 
   useOcrTtsAutoStop(ocrAudioRef, {
     pageKey: docPage?.pageId,
@@ -235,6 +306,13 @@ export default function PostClass() {
     stopMessageOnChange:
       "페이지 또는 보기 모드 변경으로 요약 음성을 중지합니다.",
   });
+
+  useEffect(() => {
+    const baseTitle = state?.navTitle ?? "수업 후";
+    const pageLabel = docPage?.pageNumber ?? page;
+    const t = `${baseTitle} - 수업 후 p.${pageLabel}`;
+    document.title = `캠퍼스 메이트 | ${t}`;
+  }, [state?.navTitle, docPage?.pageNumber, page]);
 
   /* 페이지 OCR → SRE → TTS 생성  */
   const handlePlayOcrTts = useCallback(async () => {
@@ -280,13 +358,74 @@ export default function PostClass() {
     announce,
   ]);
 
+  const handlePlaySummaryTts = useCallback(async () => {
+    if (!docPage?.pageId) {
+      toast.error("페이지 정보가 없어 요약 음성을 재생할 수 없습니다.");
+      return;
+    }
+    if (!summary?.summary) {
+      toast.error("요약 텍스트가 없습니다.");
+      return;
+    }
+    if (!sumAudioRef.current) {
+      console.warn("[PostClass] sumAudioRef.current가 없습니다.");
+      return;
+    }
+
+    try {
+      setSummaryTtsLoading(true);
+      let female = summaryTts?.female;
+      let male = summaryTts?.male;
+
+      if (!female && !male) {
+        const tts = await fetchSummaryTTS(docPage.pageId, summary.summary);
+        female = tts.female;
+        male = tts.male;
+        setSummaryTts(tts);
+      }
+
+      const url =
+        soundVoice === "여성" ? female || male || null : male || female || null;
+
+      if (!url) {
+        toast.error("생성된 요약 음성이 없습니다.");
+        return;
+      }
+
+      const audio = sumAudioRef.current;
+      if (!audio) return;
+
+      if (audio.src !== url) {
+        audio.src = url;
+      }
+
+      applyPlaybackRate(audio, soundRate);
+      audio.currentTime = 0;
+
+      await audio.play();
+      announce("요약 음성을 재생합니다.");
+    } catch (e) {
+      console.error("[PostClass] 요약 TTS 재생 실패:", e);
+      toast.error("요약 음성 재생에 실패했습니다.");
+      announce("요약 음성을 불러오지 못했습니다.");
+    } finally {
+      setSummaryTtsLoading(false);
+    }
+  }, [
+    docPage?.pageId,
+    summary?.summary,
+    summaryTts?.female,
+    summaryTts?.male,
+    soundVoice,
+    soundRate,
+    announce,
+  ]);
+
   const summaryTtsUrl =
-    summary?.summary_tts && typeof summary.summary_tts === "object"
+    summaryTts && (summaryTts.female || summaryTts.male)
       ? soundVoice === "여성"
-        ? summary.summary_tts.female ?? null
-        : summary.summary_tts.male ?? null
-      : typeof summary?.summary_tts === "string"
-      ? summary.summary_tts
+        ? summaryTts.female ?? summaryTts.male ?? null
+        : summaryTts.male ?? summaryTts.female ?? null
       : null;
 
   const clampPage = (n: number) =>
@@ -303,7 +442,6 @@ export default function PostClass() {
     setMode((prev) => {
       const next = prev === "ocr" ? "image" : "ocr";
       announce(next === "image" ? "원본 보기" : "본문 보기");
-      setTimeout(() => mainRegionRef.current?.focus(), 0);
       return next;
     });
 
@@ -354,6 +492,8 @@ export default function PostClass() {
               page,
               pageId: docPage?.pageId ?? null,
             }}
+            onSummaryTtsPlay={handlePlaySummaryTts}
+            summaryTtsLoading={summaryTtsLoading}
           />
         </Grid>
       </Container>
@@ -381,6 +521,28 @@ export default function PostClass() {
               startPage: page,
               pageId,
               autoRecord: true,
+              resumeClock: state?.resumeClock ?? null,
+            },
+          });
+        }}
+        onPostSummary={async () => {
+          if (!docId) {
+            toast.error("문서 정보가 없어 발화 요약을 확인할 수 없습니다.");
+            return;
+          }
+
+          const res = await fetchDocSpeechSummaries(docId);
+
+          if (!res) {
+            toast.error("발화 요약 목록을 불러오지 못했습니다.");
+            return;
+          }
+
+          navigate(`/lecture/doc/${docId}/post/summary`, {
+            state: {
+              docId,
+              summaries: res.summaries,
+              navTitle: state?.navTitle ?? "수업 후",
             },
           });
         }}

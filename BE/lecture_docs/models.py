@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 class Doc(models.Model):
     lecture = models.ForeignKey(Lecture, on_delete=models.CASCADE, related_name='docs', null=True, blank=True)
     title = models.CharField(max_length=100)
+    doc_tts = models.JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     end_time = models.CharField(max_length=10, blank=True, null=True)
     users = models.ManyToManyField("users.User", blank=True, related_name="hidden_docs")

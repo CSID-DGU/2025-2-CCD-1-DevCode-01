@@ -1,9 +1,8 @@
 import json
 import os
-import re
 from urllib.parse import unquote
 from io import BytesIO
-from django.http import HttpResponse
+import time
 from django.shortcuts import get_object_or_404
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -17,7 +16,7 @@ from rest_framework import status,permissions
 from rest_framework.response import Response
 from classes.models import Bookmark, Note, Speech
 from classes.models import Bookmark, Note, Speech
-from classes.utils import preprocess_text, text_to_speech
+from classes.utils import markdown_to_text, preprocess_text, text_to_speech
 from .models import Doc, Page, Board
 from lectures.models import Lecture
 from .utils import  *
@@ -54,9 +53,19 @@ class DocUploadView(APIView):
         if not file:
             return Response({"error": "file 필드가 비어 있습니다."},
                             status=status.HTTP_400_BAD_REQUEST)
+        
+        # 교안 제목 TTS 생성
+        try:
+            tts_url = text_to_speech(file.name, user=request.user, s3_folder="tts/doc/")
+        except Exception as e:
+            return Response({"error": f"TTS 오류: {e}"}, status=500)
 
         # Doc 레코드 생성
-        doc = Doc.objects.create(lecture=lecture, title=file.name)
+        doc = Doc.objects.create(
+            lecture=lecture, 
+            title=file.name,
+            doc_tts = tts_url,
+            )
         pdf_bytes = file.read() 
 
         pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -75,7 +84,7 @@ class DocUploadView(APIView):
         ai_ocr_url = settings.AI_OCR_URL
         callback_url = f"{settings.BACKEND_BASE_URL}/docs/{doc.id}/ocr-callback/"
         #로컬 테스트용
-        #callback_url = request.build_absolute_uri(f"/docs/{doc.id}/ocr-callback/")
+        # callback_url = request.build_absolute_uri(f"/docs/{doc.id}/ocr-callback/")
         files = {
             "file": (file.name, pdf_bytes, file.content_type),
         }
@@ -228,10 +237,27 @@ class DocDetailView(APIView):
     def patch(self, request, docId):
         doc = self.get_object(docId)
         self.check_object_permissions(request, doc)
-        serializer = DocUpdateSerializer(doc, data=request.data, partial=True)
+
+        title = request.data.get("title")
+
+        if not title.strip():
+            return Response({"error": "title 필드가 필요합니다."}, status=400)
+
+        try:
+            tts_url = text_to_speech(title, request.user, s3_folder="tts/doc/")
+        except Exception as e:
+            return Response({"error": f"TTS 오류: {e}"}, status=500)
+
+        serializer = DocUpdateSerializer(
+            doc, 
+            data={"title": title, "doc_tts": tts_url}, 
+            partial=True
+        )
+        
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=200)
+        
         return Response(serializer.errors, status=400)
     #교안 삭제
     def delete(self, request, docId):
@@ -397,6 +423,37 @@ class BoardView(APIView):
 
         return Response({"message": "판서가 삭제되었습니다."}, status=status.HTTP_200_OK)
 
+class BoardTTSView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsLectureMember]
+
+    def patch(self, request, boardId):
+        board = get_object_or_404(Board, id=boardId)
+        self.check_object_permissions(request, board)
+
+        board_text = request.data.get("board_text")
+
+        if not board_text.strip():
+            return Response({"error": "board_text 필드가 필요합니다."}, status=400)
+
+        processed_math = request.data.get("processed_text", board_text)
+        processed_text = preprocess_text(processed_math)
+
+        try:
+            tts_url = text_to_speech(markdown_to_text(processed_text), request.user, s3_folder="tts/boards/")
+        except Exception as e:
+            return Response({"error": f"TTS 오류: {e}"}, status=500)
+        
+        board.text = board_text
+        board.board_tts = tts_url
+            
+        board.save(update_fields=["text", "board_tts"])
+
+        return Response({
+            "board_id": board.id,
+            "board_text": board.text,
+            "board_tts": board.board_tts
+        }, status=200)
+
 
 # 교수발화 요약  
 class DocSttSummaryView(APIView):
@@ -503,13 +560,15 @@ class DocSttSummaryDetailView(APIView):
 class PageView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsLectureMember]
 
-    def get(self, request, pageId):
+    def post(self, request, pageId):
         try:
             page = Page.objects.get(id=pageId)
         except Page.DoesNotExist:
             return Response({"detail": "페이지를 찾을 수 없습니다."}, status=404)
         self.check_object_permissions(request, page)
+
         user = request.user
+        boards_input = request.data.get("boards", [])
 
         note = Note.objects.filter(page=page, user=user).first()
         speeches = Speech.objects.filter(page=page).order_by("-created_at")
@@ -539,9 +598,16 @@ class PageView(APIView):
             # board_tts 생성
             for board in boards:
                 if not board.board_tts:
+                    board_input = next((b for b in boards_input if b.get("boardId") == board.id), None)
+                    processed_math = board_input.get("text") if board_input else board.text
+
+                    if not processed_math:
+                        continue
+
                     try:
-                        board.board_tts = text_to_speech(board.text, user)
-                        board.save()
+                        processed_text = preprocess_text(processed_math)
+                        board.board_tts = text_to_speech(markdown_to_text(processed_text), user, s3_folder="tts/boards/")
+                        board.save(update_fields=["board_tts"])
                     except Exception as e:
                         print("추가 자료 TTS 생성 중 오류:", e)
 
@@ -601,21 +667,34 @@ class ExamStartView(APIView):
 
         # OCR 처리
         ai_url = settings.AI_EXAM_OCR_URL
+        #result_url = settings.AI_EXAM_OCR_RESULT_URL
         all_questions = []
 
         for image in images:
             files = {
                 "image": (image.name, image.read(), image.content_type)
             }
-            ai_resp = requests.post(ai_url, files=files, timeout=60)
+            ai_resp = requests.post(ai_url, files=files, timeout=300)
             ai_resp.raise_for_status()
 
-            ocr_json = ai_resp.json()
-            all_questions.extend(ocr_json.get("questions", []))
 
-        # 결과 저장
+            result_json = ai_resp.json()
+
+            # questions 추출 (AI 응답 형태 유연하게 대응)
+            questions = (
+                result_json.get("questions")
+                or result_json.get("data", {}).get("questions")
+                or []
+            )
+
+            if not isinstance(questions, list):
+                return Response({"error": "AI OCR 결과 형식 오류"}, status=500)
+
+            all_questions.extend(questions)
+
         ocr_key = f"exam_ocr:{user.id}"
         redis_client.set(ocr_key, json.dumps(all_questions))
+
 
         return Response({
             "endTime": end_time_kst.isoformat(),  
@@ -732,12 +811,14 @@ class ExamTTSView(APIView):
         if not text:
             return Response({"error": "item에 displayText 없음"}, status=400)
 
-        processed_text = preprocess_text(text)
+        processed_math = request.data.get("text", text)
+
+        preprocessed_text = preprocess_text(processed_math)
 
         # TTS 생성
         try:
             tts_url = text_to_speech(
-                processed_text,
+                preprocessed_text,
                 user=user,
                 s3_folder="tts/exam_items/"
             )

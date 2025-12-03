@@ -19,10 +19,6 @@ async def ocr_pdf(
         run_pdf_ocr.delay(doc_id, pdf_bytes, callback_url)
 
     except Exception as e:
-        print("\n🔥🔥🔥 FASTAPI INTERNAL ERROR 🔥🔥🔥")
-        print(traceback.format_exc())       
-        print("🔥🔥🔥 END FASTAPI ERROR 🔥🔥🔥\n")
-
         raise HTTPException(status_code=500, detail=str(e))
 
     return {"message": "OCR 작업이 큐에 등록되었습니다."}
