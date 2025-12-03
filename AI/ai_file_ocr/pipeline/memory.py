@@ -1,36 +1,38 @@
-from llama_index.core import SummaryIndex, Document
-from typing import Optional, List
+from typing import List, Dict
+
 
 class ContextMemory:
-    def __init__(self):
-        # SummaryIndex 자체가 LLM으로 문맥 자동 생성함
-        self.index = SummaryIndex([])
 
-    def add_page(self, page_number: int, page_text: str):
-        """
-        페이지 전체 텍스트를 그대로 넣음.
-        요약은 LlamaIndex 내부 LLM이 자동 수행.
-        """
-        if not page_text or not page_text.strip():
-            page_text = "(내용 없음)"
+    def __init__(self, max_history: int = 3):
+        self.max_history = max_history
+        self._history: List[Dict] = []
 
-        doc = Document(
-            text=page_text,
-            metadata={"page": page_number}
+    def add_summary(self, page_number: int, mini_summary: str) -> None:
+
+        if not mini_summary or not mini_summary.strip():
+            mini_summary = "(내용 없음)"
+
+        self._history.append(
+            {
+                "page": int(page_number),
+                "summary": mini_summary.strip(),
+            }
         )
 
-        # SummaryIndex에 삽입 → 자동 요약 발생
-        self.index.insert(doc)
+        if len(self._history) > self.max_history:
+            self._history = self._history[-self.max_history :]
 
-    def get_context(self, k: int = 5) -> str:
-        """SummaryIndex에서 자동 생성된 문맥을 k개 가져오기"""
+    def get_context(self) -> str:
+        if not self._history:
+            return "(이전 페이지 요약 없음)"
 
-        retriever = self.index.as_retriever(similarity_top_k=k)
-        nodes = retriever.retrieve("문맥 요청")
+        sorted_history = sorted(self._history, key=lambda x: x["page"])
 
-        nodes = sorted(nodes, key=lambda n: n.metadata.get("page", 0))
+        lines: List[str] = []
+        for h in sorted_history:
+            lines.append(f"[페이지 {h['page']} 요약]\n{h['summary']}")
 
-        return "\n\n".join(
-            f"[페이지 {n.metadata['page']}] {n.text}"
-            for n in nodes
-        )
+        return "\n\n".join(lines)
+
+    def reset(self) -> None:
+        self._history.clear()

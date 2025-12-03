@@ -4,8 +4,6 @@ from ai_lecture_ocr.router import router as lecture_ocr_router
 from ai_exam_ocr.router import router as exam_ocr_router
 from fastapi.staticfiles import StaticFiles
 import os
-import threading
-import time
 
 app = FastAPI(title="AI OCR Server")
 
