@@ -1,12 +1,20 @@
 import re
 from google.cloud import texttospeech
-from classes.utils import text_to_speech, time_to_seconds
+from classes.utils import text_to_speech, time_to_seconds, math_pattern
 from lecture_docs.models import *
 from project.vertexai import gemini_model
 from users.models import User
 from django.conf import settings
 from botocore.exceptions import NoCredentialsError
 import boto3
+
+latex_patterns = [
+    r'\\\((.*?)\\\)',
+    r'\\\[(.*?)\\\]',
+    r'\$\$(.*?)\$\$',
+    r'(\\begin\{.*?\}.*?\\end\{.*?\})',
+]
+code_pattern = r"```(.*?)```"
 
 def summarize_stt(doc_id: int, user: User) -> tuple[str, str]:
     """
@@ -73,7 +81,7 @@ def summarize_doc(doc_id: int, ocr_text: str) -> str:
         raise ValueError("요약할 OCR 데이터가 없습니다.")
 
     ocr_text = ocr_text.strip()
-
+   
     # 3️⃣ Gemini 프롬프트 생성
     prompt = f"""
     너는 '{lecture_title}' 강의의 '{doc_title}' 교안에 대한 전문가이다.
@@ -81,71 +89,75 @@ def summarize_doc(doc_id: int, ocr_text: str) -> str:
     요약 규칙:
     - 오탈자나 일부 누락이 있을 수 있으니 의미를 올바르게 해석한다.
     - 수식은 LaTeX 문법으로만 출력하라. (\(...\), \[...\], \begin{...}...\end{...} 그대로 유지)
-    - 코드(쉘 명령어 포함)는 plain text로 작성하되 언어명을 추가하지 마라. 
-    - 코드 위에 언어명(json, python 등)을 절대 추가하지 마라.
+    - 코드(쉘 명령어 포함)는 코드블록(```)으로 감싸서 출력하되 언어명은 작성하지 않는다.
     - 원문에 없는 새로운 사실은 추가하지 않는다.
     - 중복된 설명은 생략한다.
     - 중요하고 핵심적인 개념 위주로 정리한다.
     - 200자 이내로 요약한다.
     
     아래 내용을 요약해줘:
-    ---
     {ocr_text}
-    ---
     """
 
     response = summarize(prompt).strip()
 
-    response = latex_rewrite(response)
+    response = latex_rewrite(ocr_text)
     response = code_rewrite(response)
 
     return response
 
+# 수식 치환 함수
+def safe_sub(pattern, repl, text):
+    def wrapper(match):
+        start = match.start()
+        # 이미 <수식> 태그 안에 있는지 검사
+        open_tag = text.rfind("<수식>", 0, start)
+        close_tag = text.rfind("</수식>", 0, start)
+
+        # <수식>은 보였지만 </수식>이 안 보였다 → 수식 내부
+        if open_tag != -1 and (close_tag == -1 or close_tag < open_tag):
+            return match.group(0)
+        return repl(match)
+
+    return re.sub(pattern, wrapper, text, flags=re.DOTALL)
+
 #수식 후처리
 def latex_rewrite(text: str) -> str:
-    # \[ ... \]
-    text = re.sub(
-        r'\\\[(.*?)\\\]',
-        lambda m: f"<수식>\n{m.group(1).strip()}\n</수식>",
-        text,
-        flags=re.DOTALL
-    )
+    def latex_replace(match):
+        inner = match.group(1).strip()
+        return f"<수식>\n{inner}\n</수식>"
 
-    # $$ ... $$
-    text = re.sub(
-        r'\$\$(.*?)\$\$',
-        lambda m: f"<수식>\n{m.group(1).strip()}\n</수식>",
-        text,
-        flags=re.DOTALL
-    )
+    for pattern in latex_patterns:
+        text = safe_sub(pattern, latex_replace, text)
 
-    # \( ... \)
-    text = re.sub(
-        r'\\\((.*?)\\\)',
-        lambda m: f"<수식>\n{m.group(1).strip()}\n</수식>",
-        text
-    )
+    text = remove_tag(text)
 
-    # \begin{env} ... \end{env}
-    text = re.sub(
-        r'(\\begin\{.*?\}.*?\\end\{.*?\})',
-        lambda m: f"<수식>\n{m.group(1).strip()}\n</수식>",
-        text,
-        flags=re.DOTALL
-    )
+    return text
 
+#중첩된 수식 제거
+def remove_tag(text: str) -> str:
+    while True:
+        new_text = text
+        new_text = re.sub(r'<수식>\s*<수식>', '<수식>', new_text)
+        new_text = re.sub(r'</수식>\s*</수식>', '</수식>', new_text)
+        new_text = math_pattern.sub(
+            lambda m: f"<수식>\n{re.sub(r'</?수식>', '', m.group(1)).strip()}\n</수식>", 
+            new_text
+        )
+        
+        if new_text == text:
+            break
+        text = new_text
+        
     return text
 
 #코드 후처리
 def code_rewrite(text: str) -> str:
-
-    # ``` ... ``` 감지
-    text = re.sub(
-        r"```(.*?)```",
-        lambda m: f"<코드>\n{m.group(1).strip()}\n</코드>",
-        text,
-        flags=re.DOTALL
-    )
+    def code_replace(match):
+        inner = match.group(1).strip()
+        return f"<코드>\n{inner}\n</코드>"
+    
+    text = re.sub(code_pattern, code_replace, text, flags=re.DOTALL)
 
     return text
 
@@ -165,7 +177,7 @@ def summarize(prompt) -> str:
         summary_text = response.text.strip()
 
     except Exception as e:
-        raise RuntimeError(f"Gemini 요약 생성 중 오류 발생: {e}")
+        raise RuntimeError(f"Gemini 응답 생성 중 오류 발생: {e}")
 
     return summary_text
 
