@@ -1,10 +1,17 @@
 import instance, { getResponse } from "@apis/instance";
 
 /* ===== 타입 ===== */
+
+export type BoardTts = {
+  female?: string | null;
+  male?: string | null;
+};
+
 export type BoardItem = {
   boardId: number;
   image: string | null;
   text: string | null;
+  board_tts?: BoardTts | null;
 };
 
 export type BoardListResponse = {

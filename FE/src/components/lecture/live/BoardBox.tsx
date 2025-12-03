@@ -16,6 +16,8 @@ import {
   type BoardEventDataBase,
 } from "src/hooks/useDocLiveSync";
 import MarkdownText from "./MarkdownText";
+import { useSoundOptions, applyPlaybackRate } from "src/hooks/useSoundOption";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 type Props = {
   docId: number;
@@ -52,6 +54,38 @@ export default function BoardBox({
     wsBase ??
     (import.meta.env.VITE_BASE_URL as string).replace(/^http(s?)/, "ws$1");
 
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { soundRate, soundVoice } = useSoundOptions();
+
+  // ✅ 버튼/텍스트 포커스 시 로컬 낭독용
+  const focusSpeak = useFocusSpeak();
+
+  // ✅ 서버에서 내려온 board_tts로 추가 자료 읽어주기
+  const playBoardTts = async (item: BoardItem) => {
+    if (!audioRef.current) return;
+    const tts = item.board_tts;
+    if (!tts) return;
+
+    const female = tts.female ?? null;
+    const male = tts.male ?? null;
+    const url = soundVoice === "여성" ? female ?? male : male ?? female;
+    if (!url) return;
+
+    const audio = audioRef.current;
+
+    if (audio.src !== url) {
+      audio.src = url;
+    }
+
+    applyPlaybackRate(audio, soundRate);
+
+    try {
+      await audio.play();
+    } catch (e) {
+      console.error("[BoardBox] TTS 재생 실패:", e);
+    }
+  };
+
   useEffect(() => {
     if (!preview) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -67,10 +101,19 @@ export default function BoardBox({
     setLoading(true);
     setError(null);
     const res = await fetchBoards(pageId);
-    if (!res) setError("판서 목록을 불러오지 못했습니다.");
-    setList(res?.boards ?? []);
+
+    if (!res) {
+      setError("판서 목록을 불러오지 못했습니다.");
+      setList([]);
+      setLoading(false);
+      return;
+    }
+
+    const boards = [...res.boards].sort((a, b) => a.boardId - b.boardId);
+    setList(boards);
     setLoading(false);
   };
+
   useEffect(() => {
     load();
   }, [pageId]);
@@ -80,11 +123,12 @@ export default function BoardBox({
     docId,
     token: accessToken,
     onBoardCreated: (data: BoardEventCreatedOrUpdated) => {
-      setList((prev) =>
-        prev.some((b) => b.boardId === data.boardId)
-          ? prev
-          : [{ ...data }, ...prev]
-      );
+      setList((prev) => {
+        const exists = prev.some((b) => b.boardId === data.boardId);
+        if (exists) return prev;
+        // ✅ 최신을 맨 아래에
+        return [...prev, { ...data }];
+      });
     },
     onBoardUpdated: (data: BoardEventCreatedOrUpdated) => {
       setList((prev) =>
@@ -108,7 +152,12 @@ export default function BoardBox({
       setUploading(true);
       setError(null);
       const created = await uploadBoardImage(pageId, file);
-      setList((prev) => [created, ...prev]);
+
+      setList((prev) => {
+        const exists = prev.some((b) => b.boardId === created.boardId);
+        if (exists) return prev;
+        return [...prev, created];
+      });
 
       sendBoardEvent("created", {
         boardId: created.boardId,
@@ -173,6 +222,7 @@ export default function BoardBox({
 
   return (
     <>
+      <audio ref={audioRef} preload="none" style={{ display: "none" }} />
       <Wrap>
         <Uploader
           role="button"
@@ -180,7 +230,8 @@ export default function BoardBox({
           onClick={() => fileRef.current?.click()}
           onDragOver={(e) => e.preventDefault()}
           onDrop={onDrop}
-          aria-label="사진 업로드 또는 드래그 앤 드롭"
+          aria-label="사진 업로드"
+          {...focusSpeak}
         >
           <span>{uploading ? "업로드 중" : "사진 업로드"}</span>
           <input
@@ -210,6 +261,7 @@ export default function BoardBox({
                     type="button"
                     onClick={() => setPreview({ src, alt: "추가자료 이미지" })}
                     aria-label="이미지 크게 보기"
+                    {...focusSpeak}
                   >
                     <Thumb src={src} alt="추가자료 이미지" />
                   </ThumbButton>
@@ -217,6 +269,18 @@ export default function BoardBox({
 
                 <Row>
                   <Actions>
+                    {/* ✅ 서버 TTS: 추가 자료 텍스트 읽어주기 */}
+                    {/* {b.board_tts && ( */}
+                    <Button
+                      type="button"
+                      onClick={() => playBoardTts(b)}
+                      aria-label="추가 자료 설명 듣기"
+                      {...focusSpeak}
+                    >
+                      듣기
+                    </Button>
+                    {/* )} */}
+
                     {isEditing ? (
                       <>
                         <Button
@@ -230,6 +294,7 @@ export default function BoardBox({
                             if (textarea)
                               saveText(b.boardId, textarea.value.trim());
                           }}
+                          {...focusSpeak}
                         >
                           {isSaving ? "저장중…" : "저장"}
                         </Button>
@@ -238,6 +303,7 @@ export default function BoardBox({
                           aria-label="편집 취소"
                           onClick={() => setEditingId(null)}
                           $variant="ghost"
+                          {...focusSpeak}
                         >
                           취소
                         </Button>
@@ -247,6 +313,8 @@ export default function BoardBox({
                         <Button
                           type="button"
                           onClick={() => setEditingId(b.boardId)}
+                          aria-label="설명 수정"
+                          {...focusSpeak}
                         >
                           수정
                         </Button>
@@ -255,6 +323,7 @@ export default function BoardBox({
                           onClick={() => remove(b.boardId)}
                           disabled={isDeleting}
                           aria-label="추가 자료 삭제"
+                          {...focusSpeak}
                         >
                           {isDeleting ? "삭제중…" : "삭제"}
                         </DangerBtn>
@@ -272,14 +341,21 @@ export default function BoardBox({
                 ) : b.text ? (
                   <MarkdownText>{b.text}</MarkdownText>
                 ) : (
-                  <EmptyLine>설명이 없습니다.</EmptyLine>
+                  <EmptyLine {...focusSpeak} aria-label="설명이 없습니다.">
+                    설명이 없습니다.
+                  </EmptyLine>
                 )}
               </Item>
             );
           })}
 
           {!loading && list.length === 0 && (
-            <Empty>아직 업로드된 추가 자료가 없어요.</Empty>
+            <Empty
+              {...focusSpeak}
+              aria-label="아직 업로드된 추가 자료가 없습니다."
+            >
+              아직 업로드된 추가 자료가 없어요.
+            </Empty>
           )}
         </List>
       </Wrap>
@@ -348,7 +424,7 @@ const List = styled.div`
 
 const Item = styled.article`
   background: var(--c-white);
-  border: 1px solid #e5e7eb;
+  border: 2px solid var(--c-grayD);
   border-radius: 12px;
   padding: 10px;
   min-width: 0;
