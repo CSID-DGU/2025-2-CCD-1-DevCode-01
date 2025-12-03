@@ -1,4 +1,6 @@
 import { fonts } from "@styles/fonts";
+import { useRef } from "react";
+import { useModalFocusTrap } from "src/hooks/useModalFocusTrap";
 import styled from "styled-components";
 
 type Props = {
@@ -14,11 +16,26 @@ export default function ReviewRecordModal({
   onReview,
   onContinue,
 }: Props) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const reviewBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  const { handleKeyDown } = useModalFocusTrap({
+    open,
+    containerRef: dialogRef,
+    initialFocusRef: reviewBtnRef,
+    onClose,
+  });
+
   if (!open) return null;
 
   return (
     <Backdrop role="dialog" aria-modal="true" onClick={onClose}>
-      <Card onClick={(e) => e.stopPropagation()} aria-label="수업 기록 안내">
+      <Card
+        ref={dialogRef}
+        onClick={(e) => e.stopPropagation()}
+        aria-label="수업 기록 안내"
+        onKeyDown={handleKeyDown}
+      >
         <IconCircle src="/img/lecture/check.png" aria-hidden="true" />
 
         <Title>수업 기록이 있습니다!</Title>
@@ -26,7 +43,7 @@ export default function ReviewRecordModal({
         <Divider />
 
         <ButtonRow>
-          <ActionButton type="button" onClick={onReview}>
+          <ActionButton type="button" onClick={onReview} ref={reviewBtnRef}>
             복습 하기
           </ActionButton>
           <VerticalDivider />
