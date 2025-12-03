@@ -18,6 +18,7 @@ import { useLocalTTS } from "src/hooks/useLocalTTS";
 
 import * as S from "./ExamLive.styles";
 import { readFontPct } from "@pages/class/pre/ally";
+import { RichOcrContent } from "src/components/common/RichOcrContent";
 
 const ExamTake = () => {
   const navigate = useNavigate();
@@ -816,24 +817,16 @@ function ItemTextContent({ item }: { item: ExamItem }) {
         if (!cancelled) {
           setText(processed);
         }
-      } catch (err) {
-        console.error("[ItemTextContent] buildTtsText 실패:", err);
-        if (!cancelled) {
-          setText(item.displayText ?? "");
-        }
+      } catch {
+        if (!cancelled) setText(item.displayText ?? "");
       }
     };
 
     void run();
-
     return () => {
       cancelled = true;
     };
   }, [item.displayText, buildTtsText]);
 
-  return (
-    <S.ItemText as={item.kind === "code" ? "pre" : "p"} $kind={item.kind}>
-      {text}
-    </S.ItemText>
-  );
+  return <RichOcrContent text={text} />;
 }
