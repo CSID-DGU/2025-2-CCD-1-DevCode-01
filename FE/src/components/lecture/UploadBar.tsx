@@ -16,21 +16,26 @@ export default function UploadBar({ onSelectFile, busy }: Props) {
   const onChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const file = e.target.files?.[0];
     if (file) onSelectFile(file);
-    e.currentTarget.value = ""; // 같은 파일 재선택 대비 초기화
+    e.currentTarget.value = "";
   };
 
   return (
     <AddBar role="region" aria-label="자료 추가 영역" aria-busy={!!busy}>
-      <AddBtn
-        type="button"
-        onClick={openPicker}
-        aria-controls="doc-file-input"
-        aria-describedby="doc-file-desc"
-      >
-        <Plus aria-hidden>＋</Plus>
-        <span>자료 추가</span>
-      </AddBtn>
-
+      <AddBarTop>
+        <AddBtn
+          type="button"
+          onClick={openPicker}
+          aria-controls="doc-file-input"
+          aria-describedby="doc-file-desc"
+        >
+          <Plus aria-hidden>＋</Plus>
+          <span>자료 추가</span>
+        </AddBtn>
+        <p>
+          * AI 분석 결과는 참고용이며 오류가 있을 수 있습니다. <br />* 교안
+          텍스트는 ai 분석 결과로, 일부 내용이 정확하지 않을 수 있습니다.
+        </p>
+      </AddBarTop>
       <VisuallyHidden id="doc-file-desc">
         PDF 또는 파워포인트 파일을 선택합니다.
       </VisuallyHidden>
@@ -64,6 +69,20 @@ const AddBar = styled.div`
   background: var(--c-white);
   display: flex;
   justify-content: center;
+`;
+
+const AddBarTop = styled.div`
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 10px;
+
+  p {
+    display: flex;
+    justify-content: flex-start;
+    ${fonts.regular17}
+    color: var(--c-grayD)
+  }
 `;
 
 const AddBtn = styled.button`
