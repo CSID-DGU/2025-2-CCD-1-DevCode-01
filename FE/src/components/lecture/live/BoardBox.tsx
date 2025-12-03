@@ -557,7 +557,7 @@ const Overlay = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: 99;
   padding: 16px;
 `;
 
@@ -565,14 +565,16 @@ const PreviewInner = styled.div`
   position: relative;
   max-width: 100%;
   max-height: 100%;
+  z-index: 99;
 `;
 
 const PreviewImg = styled.img`
   max-width: min(100vw - 48px, 960px);
-  max-height: min(100vh - 96px, 720px);
+  max-height: min(100vh - 96px, 500px);
   border-radius: 12px;
   display: block;
   background: #0f172a;
+  z-index: 99;
 `;
 
 const CloseBtn = styled.button`

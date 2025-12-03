@@ -297,7 +297,7 @@ const Bar = styled.div`
   color: var(--c-white);
   border-radius: 0.5rem;
   box-shadow: 0 6px 10px rgba(0, 0, 0, 0.12);
-  z-index: 999;
+  z-index: 10;
   width: max-content;
 `;
 
