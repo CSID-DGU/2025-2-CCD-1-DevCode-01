@@ -8,7 +8,7 @@ import BoardBox from "./BoardBox";
 import type { NoteTts } from "@apis/lecture/note.api";
 
 type Role = "student" | "assistant";
-type TabKey = "memo" | "board" | "summary";
+export type TabKey = "memo" | "board" | "summary";
 
 type Props = {
   stack: boolean;
@@ -38,6 +38,9 @@ type Props = {
   memoAutoReadOnFocus?: boolean;
   memoUpdateWithTts?: boolean;
   onPlayMemoTts?: (payload: { content: string; tts?: NoteTts | null }) => void;
+  activeTab?: TabKey;
+  onTabChange?: (tab: TabKey) => void;
+  onStopAllTts?: () => void;
 };
 
 export default function RightTabs({
@@ -54,8 +57,23 @@ export default function RightTabs({
   memoAutoReadOnFocus,
   memoUpdateWithTts,
   onPlayMemoTts,
+  activeTab,
+  onTabChange,
+  onStopAllTts,
 }: Props) {
-  const [tab, setTab] = useState<TabKey>(activeInitial);
+  const [innerTab, setInnerTab] = useState<TabKey>(activeInitial);
+
+  const isControlled = activeTab != null;
+  const currentTab: TabKey = isControlled ? (activeTab as TabKey) : innerTab;
+
+  const changeTab = (next: TabKey) => {
+    onStopAllTts?.();
+
+    if (!isControlled) {
+      setInnerTab(next);
+    }
+    onTabChange?.(next);
+  };
 
   const baseId = useId();
   const tabIds: Record<TabKey, string> = {
@@ -72,7 +90,7 @@ export default function RightTabs({
   const hasBoard = showBoard && board;
 
   const handleClickSummary = () => {
-    setTab("summary");
+    changeTab("summary");
     onSummaryOpen?.();
   };
 
@@ -86,9 +104,9 @@ export default function RightTabs({
         <Tab
           id={tabIds.memo}
           role="tab"
-          aria-selected={tab === "memo"}
+          aria-selected={currentTab === "memo"}
           aria-controls={panelIds.memo}
-          onClick={() => setTab("memo")}
+          onClick={() => changeTab("memo")}
           type="button"
         >
           메모
@@ -98,9 +116,9 @@ export default function RightTabs({
           <Tab
             id={tabIds.board}
             role="tab"
-            aria-selected={tab === "board"}
+            aria-selected={currentTab === "board"}
             aria-controls={panelIds.board}
-            onClick={() => setTab("board")}
+            onClick={() => changeTab("board")}
             type="button"
           >
             추가 자료
@@ -110,7 +128,7 @@ export default function RightTabs({
         <Tab
           id={tabIds.summary}
           role="tab"
-          aria-selected={tab === "summary"}
+          aria-selected={currentTab === "summary"}
           aria-controls={panelIds.summary}
           onClick={handleClickSummary}
           type="button"
@@ -124,7 +142,7 @@ export default function RightTabs({
         id={panelIds.memo}
         role="tabpanel"
         aria-labelledby={tabIds.memo}
-        hidden={tab !== "memo"}
+        hidden={currentTab !== "memo"}
       >
         {typeof memo.pageId === "number" && memo.pageId > 0 ? (
           <MemoBox
@@ -147,7 +165,7 @@ export default function RightTabs({
           id={panelIds.board}
           role="tabpanel"
           aria-labelledby={tabIds.board}
-          hidden={tab !== "board"}
+          hidden={currentTab !== "board"}
         >
           {typeof board?.pageId === "number" && board.pageId > 0 ? (
             <BoardBox
@@ -169,7 +187,7 @@ export default function RightTabs({
         id={panelIds.summary}
         role="tabpanel"
         aria-labelledby={tabIds.summary}
-        hidden={tab !== "summary"}
+        hidden={currentTab !== "summary"}
       >
         <SummaryPane
           summaryText={summary.text ?? null}
