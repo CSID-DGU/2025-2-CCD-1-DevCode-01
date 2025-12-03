@@ -14,11 +14,10 @@ celery_app = Celery(
 )
 
 
-celery_app.autodiscover_tasks(['ai_file_ocr', 'ai_exam_ocr'], force=True)
+celery_app.autodiscover_tasks(['ai_file_ocr'], force=True)
 
 celery_app.conf.update(
     task_routes={
-        "ai_file_ocr.tasks.run_pdf_ocr": {"queue": "ai"},
-        "ai_exam_ocr.tasks.run_exam_ocr": {"queue": "exam"},
+        "ai_file_ocr.tasks.run_pdf_ocr": {"queue": "ai"}
     }
 )
