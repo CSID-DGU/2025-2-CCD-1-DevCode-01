@@ -82,9 +82,9 @@ class DocUploadView(APIView):
         )
         # AI로 전송
         ai_ocr_url = settings.AI_OCR_URL
-        #callback_url = f"{settings.BACKEND_BASE_URL}/docs/{doc.id}/ocr-callback/"
+        callback_url = f"{settings.BACKEND_BASE_URL}/docs/{doc.id}/ocr-callback/"
         #로컬 테스트용
-        callback_url = request.build_absolute_uri(f"/docs/{doc.id}/ocr-callback/")
+        #callback_url = request.build_absolute_uri(f"/docs/{doc.id}/ocr-callback/")
         files = {
             "file": (file.name, pdf_bytes, file.content_type),
         }
@@ -307,11 +307,14 @@ class BoardView(APIView):
         self.check_object_permissions(request, page)
         boards = Board.objects.filter(page=page).order_by("-created_at")
         serializer = BoardSerializer(boards, many=True)
+        data = serializer.data
+        for obj, item in zip(boards, data):
+            item["board_tts"] = obj.board_tts
 
         return Response(
             {
                 "pageId": page.id,
-                "boards": serializer.data
+                "boards": data
             },
             status=status.HTTP_200_OK
         )

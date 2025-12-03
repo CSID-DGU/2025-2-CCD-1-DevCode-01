@@ -1,5 +1,18 @@
 
 import re
+import time
+
+TEXT_COMMANDS = [
+    "textbf", "textit", "textrm", "textsf",
+    "texttt", "text", "mathrm", "mathbf"
+]
+
+MATH_PATTERNS = [
+    r'\\\((.*?)\\\)',
+    r'\\\[(.*?)\\\]',
+    r'\$\$(.*?)\$\$',
+    r'\\begin\{.*?\}.*?\\end\{.*?\}'
+]
 
 # 수식 치환 함수
 def safe_sub(pattern, repl, text):
@@ -16,6 +29,30 @@ def safe_sub(pattern, repl, text):
 
     return re.sub(pattern, wrapper, text, flags=re.DOTALL)
 
+#수식 밖 Latex 제거
+def remove_text(text: str) -> str:
+    math_spans = []
+    for pattern in MATH_PATTERNS:
+        for m in re.finditer(pattern, text, flags=re.DOTALL):
+            math_spans.append((m.start(), m.end()))
+
+    def is_inside_math(pos):
+        for start, end in math_spans:
+            if start <= pos < end:
+                return True
+        return False
+
+    def replacer(match):
+        cmd = match.group(1)
+        inner = match.group(2)
+        start = match.start()
+
+        if is_inside_math(start):
+            return match.group(0)
+        return inner
+
+    pattern = r'\\(' + '|'.join(TEXT_COMMANDS) + r')\{([^{}]+)\}'
+    return re.sub(pattern, replacer, text)
 
 def latex_rewrite(text: str) -> str:
     # \( ... \)
@@ -64,6 +101,11 @@ def rewrite_nesting_fixed(text: str) -> str:
 
     text = re.sub(r'<수식>([\s\S]*?)</수식>', remove_inner, text)
 
+    return text
+
+def process_latex(text: str) -> str:
+    text = remove_text(text)       # 텍스트용 LaTeX 제거
+    text = latex_rewrite(text)     # 수식 변환
     return text
 
 #코드 후처리
