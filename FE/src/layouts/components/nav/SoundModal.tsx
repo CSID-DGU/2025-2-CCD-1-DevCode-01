@@ -21,6 +21,8 @@ import {
 } from "@shared/a11y/soundOptions";
 import { lockBodyScroll, unlockBodyScroll } from "@shared/ui/scrollLock";
 import { TTSContext } from "@shared/tts/TTSProvider";
+import { useModalFocusTrap } from "src/hooks/useModalFocusTrap";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 type HTMLAudioWithPitch = HTMLAudioElement & {
   preservesPitch?: boolean;
@@ -34,18 +36,23 @@ type Props = {
 };
 
 const rateToPlayback: Record<SoundRate, number> = {
-  느림: 0.85,
+  느림: 0.6,
   보통: 1.0,
-  빠름: 1.15,
+  빠름: 1.4,
 };
 const voiceToFile: Record<SoundVoice, string> = {
-  여성: "/audio/tts/female.mp3",
-  남성: "/audio/tts/male.mp3",
+  여성: "/audio/female.mp3",
+  남성: "/audio/male.mp3",
 };
 
 export default function SoundModal({ open, onClose, onApplied }: Props) {
   const tts = useContext(TTSContext);
+
+  // 모달 카드 전체 영역
   const cardRef = useRef<HTMLDivElement | null>(null);
+  // 처음 포커스 줄 요소 (첫 번째 속도 라디오 버튼)
+  const firstRateRef = useRef<HTMLInputElement | null>(null);
+
   const audioRef = useRef<HTMLAudioWithPitch | null>(null);
 
   const [rate, setRate] = useState<SoundRate>(() => readRateFromLS());
@@ -54,16 +61,12 @@ export default function SoundModal({ open, onClose, onApplied }: Props) {
   const playback = useMemo(() => rateToPlayback[rate], [rate]);
   const file = useMemo(() => voiceToFile[voice], [voice]);
 
-  /* ----- 모달 라이프사이클 ----- */
+  const focusSpeak = useFocusSpeak();
+
   useEffect(() => {
     if (!open) return;
     lockBodyScroll();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") handleCancel();
-    };
-    window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("keydown", onKey);
       unlockBodyScroll();
     };
   }, [open]);
@@ -89,6 +92,13 @@ export default function SoundModal({ open, onClose, onApplied }: Props) {
 
   useEffect(() => () => stopAudio(), []);
 
+  const { handleKeyDown } = useModalFocusTrap({
+    open,
+    containerRef: cardRef,
+    initialFocusRef: firstRateRef,
+    onClose: handleCancel,
+  });
+
   /* ----- 미리듣기 ----- */
   const play = () => {
     stopAudio();
@@ -111,7 +121,7 @@ export default function SoundModal({ open, onClose, onApplied }: Props) {
     writeSoundToLS(rate, voice);
 
     tts?.applyOptions?.({
-      rate: playback, // number
+      rate: playback,
       voiceId: voice === "여성" ? "female" : "male",
     });
 
@@ -132,29 +142,37 @@ export default function SoundModal({ open, onClose, onApplied }: Props) {
           aria-labelledby="sound-title"
           aria-describedby="sound-desc"
           tabIndex={-1}
+          onKeyDown={handleKeyDown}
         >
           <Header>
             <h2 id="sound-title">음성 설정</h2>
-            <CloseBtn aria-label="닫기" title="닫기" onClick={handleCancel}>
+            <CloseBtn
+              type="button"
+              aria-label="음성 설정 닫기"
+              title="닫기"
+              onClick={handleCancel}
+              {...focusSpeak}
+            >
               ×
             </CloseBtn>
           </Header>
 
-          <Desc id="sound-desc">
-            읽기 속도와 목소리를 선택하고 미리듣기로 확인하세요.
-          </Desc>
+          <Desc id="sound-desc">읽기 속도와 목소리를 선택할 수 있습니다.</Desc>
 
           <Section>
             <SecTitle>속도</SecTitle>
             <Options role="radiogroup" aria-label="읽기 속도 선택">
-              {SOUND_RATES.map((label) => (
+              {SOUND_RATES.map((label, idx) => (
                 <Row key={label}>
                   <Radio
+                    ref={idx === 0 ? firstRateRef : undefined}
                     id={`rate-${label}`}
                     name="ttsRate"
                     value={label}
                     checked={rate === label}
                     onChange={() => setRate(label)}
+                    aria-label={`${label}`}
+                    {...focusSpeak}
                   />
                   <label htmlFor={`rate-${label}`}>{label}</label>
                 </Row>
@@ -173,6 +191,8 @@ export default function SoundModal({ open, onClose, onApplied }: Props) {
                     value={label}
                     checked={voice === label}
                     onChange={() => setVoice(label)}
+                    aria-label={`목소리 ${label}`}
+                    {...focusSpeak}
                   />
                   <label htmlFor={`voice-${label}`}>{label}</label>
                 </Row>
@@ -184,26 +204,30 @@ export default function SoundModal({ open, onClose, onApplied }: Props) {
             <button
               type="button"
               onClick={play}
-              aria-label="미리듣기 재생"
+              aria-label="미리 듣기"
               title="미리듣기 재생"
+              {...focusSpeak}
             >
               ▶︎ 미리듣기
-            </button>
-            <button
-              type="button"
-              onClick={stopAudio}
-              aria-label="정지"
-              title="정지"
-            >
-              ■ 정지
             </button>
           </PreviewBar>
 
           <Footer>
-            <Btn type="button" data-variant="ghost" onClick={handleCancel}>
+            <Btn
+              type="button"
+              data-variant="ghost"
+              onClick={handleCancel}
+              aria-label="취소"
+              {...focusSpeak}
+            >
               취소
             </Btn>
-            <Btn type="button" onClick={handleSave}>
+            <Btn
+              type="button"
+              onClick={handleSave}
+              aria-label="적용하기"
+              {...focusSpeak}
+            >
               적용하기
             </Btn>
           </Footer>
@@ -213,7 +237,7 @@ export default function SoundModal({ open, onClose, onApplied }: Props) {
   );
 }
 
-/* ---------- styled (A11yModal과 유사) ---------- */
+/* ---------- styled ---------- */
 const Overlay = styled.div`
   position: fixed;
   inset: 0;
@@ -225,6 +249,7 @@ const Overlay = styled.div`
   padding: clamp(12px, 4vh, 24px);
   touch-action: none;
 `;
+
 const Card = styled.div`
   width: min(720px, 100%);
   max-width: calc(100vw - 32px);
@@ -241,6 +266,7 @@ const Card = styled.div`
     outline-offset: 2px;
   }
 `;
+
 const Header = styled.div`
   display: flex;
   align-items: center;
@@ -251,6 +277,7 @@ const Header = styled.div`
     margin: 0;
   }
 `;
+
 const CloseBtn = styled.button`
   all: unset;
   cursor: pointer;
@@ -261,11 +288,13 @@ const CloseBtn = styled.button`
     transform: scale(1.1);
   }
 `;
+
 const Desc = styled.p`
   ${fonts.regular17};
   margin: 0 0 14px;
   color: var(--c-grayD);
 `;
+
 const Section = styled.section`
   border: 1px solid var(--c-grayD);
   border-radius: 16px;
@@ -273,15 +302,18 @@ const Section = styled.section`
   margin-top: 14px;
   background: #fff;
 `;
+
 const SecTitle = styled.h3`
   ${fonts.bold20};
   margin: 0 0 12px;
   color: black;
 `;
+
 const Options = styled.div`
   display: flex;
   gap: 12px;
 `;
+
 const Row = styled.div`
   display: flex;
   align-items: center;
@@ -289,6 +321,7 @@ const Row = styled.div`
   ${fonts.medium24}
   color: black;
 `;
+
 const Radio = styled.input.attrs({ type: "radio" })`
   width: 20px;
   height: 20px;
@@ -299,6 +332,7 @@ const Radio = styled.input.attrs({ type: "radio" })`
     outline-offset: 2px;
   }
 `;
+
 const PreviewBar = styled.div`
   margin-top: 14px;
   display: flex;
@@ -314,12 +348,14 @@ const PreviewBar = styled.div`
     color: var(--c-blue);
   }
 `;
+
 const Footer = styled.div`
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
 `;
+
 const Btn = styled.button`
   ${fonts.medium24};
   height: 44px;
