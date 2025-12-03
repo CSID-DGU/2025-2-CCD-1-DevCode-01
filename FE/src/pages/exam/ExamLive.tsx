@@ -341,6 +341,31 @@ const ExamTake = () => {
     navigate("/exam", { replace: true });
   };
 
+  /* ---------- 4.1) 종료 시각 도달 시 자동으로 시험 종료 ---------- */
+  useEffect(() => {
+    if (!exam?.endTime) return;
+
+    const end = new Date(exam.endTime);
+    if (Number.isNaN(end.getTime())) {
+      console.warn("[ExamTake] endTime 파싱 실패:", exam.endTime);
+      return;
+    }
+
+    const now = Date.now();
+    const diff = end.getTime() - now;
+
+    if (diff <= 0) {
+      void handleEndExam();
+      return;
+    }
+
+    const timerId = window.setTimeout(() => {
+      void handleEndExam();
+    }, diff);
+
+    return () => window.clearTimeout(timerId);
+  }, [exam?.endTime]);
+
   /* ---------- 5) 문제 전체 듣기 (API TTS로 순서대로 재생) ---------- */
   const handlePlayWholeQuestion = async () => {
     if (!currentQuestion || !exam) return;
