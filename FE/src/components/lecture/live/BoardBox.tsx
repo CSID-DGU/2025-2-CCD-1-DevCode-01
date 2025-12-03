@@ -205,13 +205,13 @@ export default function BoardBox({
               ? {
                   ...b,
                   text: updated.board_text,
-                  board_tts: updated.board_tts, // ✅ 새 TTS 반영
+                  board_tts: updated.board_tts,
                 }
               : b
           )
         );
       } else {
-        // ✅ Live 화면: 기존 patch만 사용 (TTS 없음)
+        // Live 화면: 기존 patch만 사용 (TTS 없음)
         const updated = await patchBoardText(boardId, nextText);
         setList((prev) =>
           prev.map((b) => (b.boardId === boardId ? { ...b, ...updated } : b))
@@ -311,17 +311,16 @@ export default function BoardBox({
 
                 <Row>
                   <Actions>
-                    {/* ✅ 서버 TTS: 추가 자료 텍스트 읽어주기 */}
-                    {/* {b.board_tts && ( */}
-                    <Button
-                      type="button"
-                      onClick={() => playBoardTts(b)}
-                      aria-label="추가 자료 설명 듣기"
-                      {...focusSpeak}
-                    >
-                      듣기
-                    </Button>
-                    {/* )} */}
+                    {b.board_tts && (
+                      <Button
+                        type="button"
+                        onClick={() => playBoardTts(b)}
+                        aria-label="추가 자료 설명 듣기"
+                        {...focusSpeak}
+                      >
+                        듣기
+                      </Button>
+                    )}
 
                     {isEditing ? (
                       <>
