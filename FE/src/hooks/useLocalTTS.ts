@@ -17,7 +17,6 @@ function ensureVoices(): Promise<SpeechSynthesisVoice[]> {
     };
     speechSynthesis.onvoiceschanged = handler;
 
-    // 안전망
     setTimeout(() => {
       resolve(speechSynthesis.getVoices());
       speechSynthesis.onvoiceschanged = null;
@@ -38,7 +37,6 @@ export async function initTTS() {
   }
 
   await ensureVoices();
-
   await new Promise((r) => setTimeout(r, 60));
 
   const u = new SpeechSynthesisUtterance("준비 완료");
@@ -67,35 +65,38 @@ export function useLocalTTS() {
   const stop = useCallback(() => {
     try {
       speechSynthesis.cancel();
-    } catch {
-      console.log("error");
+      console.log("[TTS] stop() → cancel()");
+    } catch (e) {
+      console.warn("[TTS] stop() error", e);
     }
   }, []);
 
-  const speak = useCallback(async (text: string) => {
-    if (!text) return;
-
-    try {
-      speechSynthesis.resume();
-    } catch {
-      console.log("error");
+  const speak = useCallback(async (rawText: string) => {
+    const text = (rawText ?? "").trim();
+    if (!text) {
+      console.warn("[TTS] speak() with empty text, skip");
+      return;
     }
 
-    const voices = await ensureVoices();
-    const v =
-      voices.find((x) => x.lang?.toLowerCase().startsWith("ko")) ||
-      voices.find((x) => x.lang?.toLowerCase().startsWith("en")) ||
-      null;
-
-    const needCancel = speechSynthesis.speaking || speechSynthesis.pending;
-    if (needCancel) {
-      await new Promise((r) => setTimeout(r, 80));
-      try {
+    // 1. 혹시 남은 발화 있으면 그냥 즉시 정리
+    try {
+      if (speechSynthesis.speaking || speechSynthesis.pending) {
         speechSynthesis.cancel();
-      } catch {
-        console.log("error");
       }
-      await new Promise((r) => setTimeout(r, 40)); // cancel 처리 시간
+    } catch (e) {
+      console.warn("[TTS] pre-cancel error", e);
+    }
+
+    // 2. 보이스 준비
+    let v: SpeechSynthesisVoice | null = null;
+    try {
+      const voices = await ensureVoices();
+      v =
+        voices.find((x) => x.lang?.toLowerCase().startsWith("ko")) ||
+        voices.find((x) => x.lang?.toLowerCase().startsWith("en")) ||
+        null;
+    } catch (e) {
+      console.warn("[TTS] ensureVoices error", e);
     }
 
     const u = new SpeechSynthesisUtterance(text);
@@ -105,17 +106,21 @@ export function useLocalTTS() {
     u.pitch = 1;
     u.volume = 1;
 
-    u.onstart = () => console.log("[TTS] ▶", text, v?.name);
-    u.onerror = (e) => {
-      // @ts-expect-ignore
-      if (e?.error !== "canceled") console.warn("[TTS] ❌", e);
-    };
+    u.onstart = () =>
+      console.log("[TTS] ▶ start", { len: text.length, voice: v?.name });
     u.onend = () => console.log("[TTS] ⏹ end");
+    u.onerror = (e: SpeechSynthesisErrorEvent) => {
+      console.warn("[TTS] ❌ utterance error", {
+        error: e.error,
+        message: e,
+      });
+    };
 
     try {
+      console.log("[TTS] speak() 호출");
       speechSynthesis.speak(u);
     } catch (e) {
-      console.warn("[TTS] speak failed", e);
+      console.warn("[TTS] speechSynthesis.speak() 실패", e);
     }
   }, []);
 

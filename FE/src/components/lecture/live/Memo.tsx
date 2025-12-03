@@ -199,21 +199,36 @@ export default function MemoBox({
   const handleFocus: React.FocusEventHandler<HTMLTextAreaElement> = async (
     e: FocusEvent<HTMLTextAreaElement>
   ) => {
-    console.log("[MemoBox] onFocus", {
-      pageId,
+    console.log("[MemoBox] handleFocus fired", {
+      targetEq: e.currentTarget === e.target,
       autoReadOnFocus,
       hasOnPlayMemoTts: !!onPlayMemoTts,
       noteId,
       contentLen: content.trim().length,
-      hasNoteTts: !!noteTts,
-      noteTts,
+      dirty,
+      updateWithTts,
     });
+    // if (e.currentTarget !== e.target) return;
+    if (!autoReadOnFocus) return;
+    // if (!onPlayMemoTts) return;
+
+    // const text = content.trim();
 
     if (e.currentTarget !== e.target) return;
-    if (!autoReadOnFocus) return;
-    if (!onPlayMemoTts) return;
+    if (!autoReadOnFocus) {
+      console.log("[MemoBox] autoReadOnFocus=false → 조용히 종료");
+      return;
+    }
+    if (!onPlayMemoTts) {
+      console.log("[MemoBox] onPlayMemoTts 없음 → 종료");
+      return;
+    }
 
     const text = content.trim();
+    if (!text) {
+      console.log("[MemoBox] content 비어있음 → 종료");
+      return;
+    }
     if (!text) return;
 
     if (noteId == null) {

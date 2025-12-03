@@ -145,13 +145,22 @@ export default function RightTabs({
         hidden={currentTab !== "memo"}
       >
         {typeof memo.pageId === "number" && memo.pageId > 0 ? (
-          <MemoBox
-            docId={memo.docId}
-            pageId={memo.pageId}
-            autoReadOnFocus={memoAutoReadOnFocus}
-            updateWithTts={memoUpdateWithTts}
-            onPlayMemoTts={onPlayMemoTts}
-          />
+          <>
+            {console.log("[RightTabs] Memo panel 렌더링", {
+              pageId: memo.pageId,
+              memoAutoReadOnFocus,
+              memoUpdateWithTts,
+              hasOnPlayMemoTts: !!onPlayMemoTts,
+              currentTab,
+            })}
+            <MemoBox
+              docId={memo.docId}
+              pageId={memo.pageId}
+              autoReadOnFocus={memoAutoReadOnFocus}
+              updateWithTts={memoUpdateWithTts}
+              onPlayMemoTts={onPlayMemoTts}
+            />
+          </>
         ) : (
           <EmptyState role="status" aria-live="polite">
             이 페이지는 아직 메모를 사용할 수 없어요. 조금만 기다려주세요.

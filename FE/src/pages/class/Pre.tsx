@@ -190,19 +190,21 @@ export default function PreClass() {
     }
   }, []);
 
-  /* ---------- 모든 음성(TTS + 오디오) 정지 ---------- */
   const stopAllTts = useCallback(() => {
-    stop(); // 로컬 TTS
-    stopServerAudio(); // 서버 오디오
+    try {
+      stop();
+    } catch {
+      // ignore
+    }
+    stopServerAudio();
   }, [stop, stopServerAudio]);
 
-  /* ---------- 로컬 TTS + 정지 래퍼 ---------- */
   const speakWithStop = useCallback(
     (text: string) => {
       stopAllTts();
       speak(text);
     },
-    [speak, stopAllTts]
+    [stopAllTts, speak]
   );
 
   /* ---------- 페이지 로드 ---------- */
