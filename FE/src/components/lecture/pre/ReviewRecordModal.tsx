@@ -18,12 +18,13 @@ export default function ReviewRecordModal({
   onContinue,
 }: Props) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  const reviewBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  const titleRef = useRef<HTMLParagraphElement | null>(null);
 
   const { handleKeyDown } = useModalFocusTrap({
     open,
     containerRef: dialogRef,
-    initialFocusRef: reviewBtnRef,
+    initialFocusRef: titleRef,
     onClose,
   });
 
@@ -51,18 +52,18 @@ export default function ReviewRecordModal({
       >
         <IconCircle src="/img/lecture/check.png" aria-hidden="true" />
 
-        <Title tabIndex={0} {...recordText}>
+        <Title tabIndex={0} ref={titleRef} {...recordText}>
           수업 기록이 있습니다!
         </Title>
 
         <Divider />
 
         <ButtonRow>
-          <ActionButton tabIndex={0} onClick={onReview} {...reviewDocs}>
+          <ActionButton type="button" onClick={onReview} {...reviewDocs}>
             복습 하기
           </ActionButton>
           <VerticalDivider />
-          <ActionButton tabIndex={0} onClick={onContinue} {...continueDocs}>
+          <ActionButton type="button" onClick={onContinue} {...continueDocs}>
             이어서{"\n"}학습하기
           </ActionButton>
         </ButtonRow>
@@ -123,7 +124,7 @@ const ButtonRow = styled.div`
   margin-top: 0;
 `;
 
-const ActionButton = styled.div`
+const ActionButton = styled.button`
   border: none;
   background: transparent;
   padding: 14px 0 16px;
