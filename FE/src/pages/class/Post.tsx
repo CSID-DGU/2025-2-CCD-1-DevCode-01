@@ -169,6 +169,7 @@ export default function PostClass() {
 
   const ocrAudioRef = useRef<HTMLAudioElement | null>(null);
   const sumAudioRef = useRef<HTMLAudioElement | null>(null);
+  const memoAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const cleanOcr = useMemo(() => formatOcr(docPage?.ocr ?? ""), [docPage?.ocr]);
 
@@ -193,6 +194,7 @@ export default function PostClass() {
   const stopServerAudio = useCallback(() => {
     const ocr = ocrAudioRef.current;
     const sum = sumAudioRef.current;
+    const memoEl = memoAudioRef.current;
 
     if (ocr) {
       try {
@@ -210,7 +212,26 @@ export default function PostClass() {
         // ignore
       }
     }
+    if (memoEl) {
+      try {
+        memoEl.pause();
+        memoEl.currentTime = 0;
+      } catch {
+        // ignore
+      }
+    }
   }, []);
+
+  const stopAllTts = useCallback(() => {
+    stopServerAudio();
+    stop();
+  }, [stopServerAudio, stop]);
+
+  useEffect(() => {
+    return () => {
+      stopAllTts();
+    };
+  }, [stopAllTts]);
 
   const speakWithStop = useCallback(
     (text: string) => {
@@ -473,16 +494,80 @@ export default function PostClass() {
 
   const handlePlayMemoTts = useCallback(
     async ({ content, tts }: { content: string; tts?: TtsPair | null }) => {
+      console.log("[PostClass] handlePlayMemoTts 호출", {
+        contentLen: content?.length ?? 0,
+        tts,
+      });
+
       try {
-        await playReviewTts(tts ?? null, content);
+        // 1) 로컬 TTS / 기존 서버 오디오 모두 정지
+        stop(); // SpeechSynthesis
+        stopServerAudio(); // ocr, sum, memo 오디오 전부 정지
+
+        const url =
+          tts && (tts.female || tts.male)
+            ? soundVoice === "여성"
+              ? tts.female ?? tts.male ?? null
+              : tts.male ?? tts.female ?? null
+            : null;
+
+        console.log("[PostClass] handlePlayMemoTts URL 선택", {
+          soundVoice,
+          url,
+        });
+
+        if (!url) {
+          console.log(
+            "[PostClass] URL 없음 -> 로컬 TTS fallback (speakWithStop)"
+          );
+          speakWithStop(content);
+          return;
+        }
+
+        const audio = memoAudioRef.current; // 🔹 sumAudioRef 대신 memoAudioRef 사용
+        if (!audio) {
+          console.warn("[PostClass] memoAudioRef.current가 없습니다.");
+          return;
+        }
+
+        try {
+          audio.pause();
+        } catch {
+          // ignore
+        }
+
+        audio.src = url;
+        applyPlaybackRate(audio, soundRate);
+        audio.currentTime = 0;
+
+        console.log("[PostClass] memo audio.play() 호출 직전", {
+          audioSrc: audio.src,
+          playbackRate: audio.playbackRate,
+        });
+
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          await playPromise;
+        }
+
+        console.log("[PostClass] memo audio.play() 완료");
         announce("메모 음성을 재생합니다.");
       } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+          console.warn(
+            "[PostClass] 메모 음성 재생 중단(AbortError) - 로컬 TTS로 대체"
+          );
+          // 필요하면 여기서도 speakWithStop(content) 호출 가능
+          // speakWithStop(content);
+          return;
+        }
+
         console.error("[PostClass] 메모 음성 재생 실패:", e);
         toast.error("메모 음성 재생에 실패했습니다.");
         announce("메모 음성을 불러오지 못했습니다.");
       }
     },
-    [playReviewTts, announce]
+    [stop, stopServerAudio, soundVoice, soundRate, speakWithStop, announce]
   );
 
   const handlePlaySummaryTts = useCallback(async () => {
@@ -579,6 +664,7 @@ export default function PostClass() {
     <Wrap aria-busy={loading} aria-describedby="live-status">
       <audio ref={ocrAudioRef} preload="none" />
       <audio ref={sumAudioRef} preload="none" />
+      <audio ref={memoAudioRef} preload="none" />
 
       <SrLive
         id="live-status"

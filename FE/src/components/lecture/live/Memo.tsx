@@ -54,7 +54,15 @@ export default function MemoBox({
 
   /* ---------- 1) review.note 기반 초기화 ---------- */
   useEffect(() => {
-    if (!review) return;
+    if (!review) {
+      console.log("[MemoBox] review 없음, note API로 조회 예정");
+      return;
+    }
+
+    console.log("[MemoBox] review 변경 감지", {
+      hasNote: !!review.note,
+      note: review.note,
+    });
 
     if (review.note) {
       setNoteId(review.note.note_id);
@@ -112,6 +120,8 @@ export default function MemoBox({
   }, [pageId, review]);
 
   /* ---------- 저장 로직: noteId 유무에 따라 POST / PATCH (텍스트만) ---------- */
+  // MemoBox.tsx 안
+
   const saveOnce = async () => {
     if (!dirty) return;
 
@@ -124,30 +134,33 @@ export default function MemoBox({
     setStatus("saving");
     setErrMsg(null);
 
-    let saved: Note | null = null;
     try {
+      let saved: Note | null = null;
+
       if (noteId == null) {
-        // 첫 저장: POST /class/{pageId}/note/
         saved = await createNote(pageId, content);
         if (saved) setNoteId(saved.note_id);
       } else {
-        // 이후 저장: 텍스트만 PATCH
-        saved = await updateNote(noteId, content);
+        if (updateWithTts) {
+          saved = await updateNoteTts(noteId, content);
+        } else {
+          saved = await updateNote(noteId, content);
+        }
       }
+
+      if (!saved) {
+        throw new Error("저장 실패");
+      }
+      setContent(saved.content ?? content);
+      setNoteTts(saved.note_tts ?? null);
+      setDirty(false);
+      setStatus("saved");
+      setTimeout(() => setStatus("idle"), 1500);
     } catch (e) {
       console.error(e);
-    }
-
-    if (!saved) {
       setStatus("error");
       setErrMsg("저장에 실패했어요. 잠시 후 다시 시도해주세요.");
-      return;
     }
-
-    setContent(saved.content ?? content);
-    setDirty(false);
-    setStatus("saved");
-    setTimeout(() => setStatus("idle"), 1500);
   };
 
   /* ---------- 자동 저장 타이머 ---------- */
@@ -186,6 +199,16 @@ export default function MemoBox({
   const handleFocus: React.FocusEventHandler<HTMLTextAreaElement> = async (
     e: FocusEvent<HTMLTextAreaElement>
   ) => {
+    console.log("[MemoBox] onFocus", {
+      pageId,
+      autoReadOnFocus,
+      hasOnPlayMemoTts: !!onPlayMemoTts,
+      noteId,
+      contentLen: content.trim().length,
+      hasNoteTts: !!noteTts,
+      noteTts,
+    });
+
     if (e.currentTarget !== e.target) return;
     if (!autoReadOnFocus) return;
     if (!onPlayMemoTts) return;

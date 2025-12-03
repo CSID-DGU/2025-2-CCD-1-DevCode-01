@@ -32,6 +32,7 @@ type Props = {
     tts?: TtsPair | null;
     fallbackText?: string;
   }) => void;
+  onStopAllTts?: () => void;
 };
 
 export default function RightTabsPost({
@@ -45,7 +46,10 @@ export default function RightTabsPost({
   summaryTtsLoading,
   onPlayMemoTts,
   readOnFocus,
-}: Props) {
+  onStopAllTts,
+}: // onFocusReviewTts,
+// readOnFocus,
+Props) {
   const [tab, setTab] = useState<TabKey>("class");
   const baseId = useId();
   const id = (k: TabKey) => ({
@@ -54,14 +58,33 @@ export default function RightTabsPost({
   });
 
   const handleTabClick = (k: TabKey) => {
-    console.log(summary.sidePaneRef.current);
+    // 1) 탭 바꿀 때는 모든 TTS 정지
+    onStopAllTts?.();
+
+    // 2) 현재 활성 탭 변경
     setTab(k);
 
-    if (k === "summary") {
-      setTimeout(() => {
+    // 3) 다음 렌더 후 각 탭에 맞는 포커스 이동
+    setTimeout(() => {
+      // 요약 탭: 기존처럼 sidePaneRef에 포커스 → SummaryPane에서 autoPlayOnFocus
+      if (k === "summary") {
         summary.sidePaneRef.current?.focus();
-      }, 0);
-    }
+        return;
+      }
+
+      // 메모/수업/판서: 패널 DOM 안에서 포커스 타겟 찾기
+      const panelId = id(k).panel;
+      const panelEl = document.getElementById(panelId);
+      if (!panelEl) return;
+
+      // 우선순위: data-focus-initial > textarea > button > [tabindex]
+      const focusTarget =
+        panelEl.querySelector<HTMLElement>("[data-focus-initial='true']") ||
+        panelEl.querySelector<HTMLElement>("textarea") ||
+        panelEl.querySelector<HTMLElement>("button, [tabindex]");
+
+      focusTarget?.focus();
+    }, 0);
   };
 
   return (
@@ -105,13 +128,21 @@ export default function RightTabsPost({
         hidden={tab !== "memo"}
       >
         {typeof memo.pageId === "number" && memo.pageId > 0 ? (
-          <MemoBox
-            docId={memo.docId}
-            pageId={memo.pageId}
-            review={review}
-            onPlayMemoTts={onPlayMemoTts}
-            autoReadOnFocus={readOnFocus}
-          />
+          <>
+            {console.log("[RightTabsPost] Memo panel 렌더링", {
+              pageId: memo.pageId,
+              hasReview: !!review,
+              hasOnPlayMemoTts: !!onPlayMemoTts,
+            })}
+            <MemoBox
+              docId={memo.docId}
+              pageId={memo.pageId}
+              review={review}
+              onPlayMemoTts={onPlayMemoTts}
+              autoReadOnFocus={!!readOnFocus}
+              updateWithTts
+            />
+          </>
         ) : (
           <Empty>이 페이지는 아직 메모를 사용할 수 없어요.</Empty>
         )}
