@@ -724,6 +724,7 @@ export default function LiveClass() {
               pageId: docPage?.pageId ?? null,
             }}
             localTtsEnabled={false}
+            boardTtsEnabled={false}
           />
         </Grid>
       </Container>

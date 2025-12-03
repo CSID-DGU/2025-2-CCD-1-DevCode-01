@@ -27,6 +27,7 @@ type Props = {
   token?: string | null;
   wsBase?: string;
   buildBoardTtsText?: (raw: string) => Promise<string>;
+  enableTts?: boolean;
 };
 
 export default function BoardBox({
@@ -36,6 +37,7 @@ export default function BoardBox({
   token,
   wsBase,
   buildBoardTtsText,
+  enableTts = true,
 }: Props) {
   const [list, setList] = useState<BoardItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -60,10 +62,13 @@ export default function BoardBox({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { soundRate, soundVoice } = useSoundOptions();
 
-  const focusSpeak = useFocusSpeak();
+  const rawFocusSpeak = useFocusSpeak();
+  const focusSpeak = enableTts ? rawFocusSpeak : ({} as typeof rawFocusSpeak);
 
   const playBoardTts = async (item: BoardItem) => {
+    if (!enableTts) return; // 🔒 라이브에서는 아예 실행 안 함
     if (!audioRef.current) return;
+
     const tts = item.board_tts;
     if (!tts) return;
 
@@ -256,7 +261,10 @@ export default function BoardBox({
 
   return (
     <>
-      <audio ref={audioRef} preload="none" style={{ display: "none" }} />
+      {enableTts && (
+        <audio ref={audioRef} preload="none" style={{ display: "none" }} />
+      )}
+
       <Wrap>
         <Uploader
           role="button"

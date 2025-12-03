@@ -43,6 +43,7 @@ type Props = {
   onTabChange?: (tab: TabKey) => void;
   onStopAllTts?: () => void;
   localTtsEnabled?: boolean;
+  boardTtsEnabled?: boolean;
 };
 
 export default function RightTabs({
@@ -63,6 +64,7 @@ export default function RightTabs({
   onTabChange,
   onStopAllTts,
   localTtsEnabled = true,
+  boardTtsEnabled = true,
 }: Props) {
   const [innerTab, setInnerTab] = useState<TabKey>(activeInitial);
 
@@ -219,6 +221,7 @@ export default function RightTabs({
               pageId={board.pageId}
               assetBase={import.meta.env.VITE_BASE_URL}
               token={localStorage.getItem("access")}
+              enableTts={localTtsEnabled && boardTtsEnabled}
             />
           ) : (
             <EmptyState role="status" aria-live="polite">
