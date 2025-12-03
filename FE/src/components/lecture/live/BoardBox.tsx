@@ -28,6 +28,7 @@ type Props = {
   wsBase?: string;
   buildBoardTtsText?: (raw: string) => Promise<string>;
   enableTts?: boolean;
+  onRegisterStopAudio?: (fn: () => void) => void;
 };
 
 export default function BoardBox({
@@ -38,6 +39,7 @@ export default function BoardBox({
   wsBase,
   buildBoardTtsText,
   enableTts = true,
+  onRegisterStopAudio,
 }: Props) {
   const [list, setList] = useState<BoardItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -62,15 +64,29 @@ export default function BoardBox({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { soundRate, soundVoice } = useSoundOptions();
 
+  const stopBoardAudio = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+    } catch {
+      // ignore
+    }
+  };
+
   const rawFocusSpeak = useFocusSpeak();
   const focusSpeak = enableTts ? rawFocusSpeak : ({} as typeof rawFocusSpeak);
 
   const playBoardTts = async (item: BoardItem) => {
-    if (!enableTts) return; // 🔒 라이브에서는 아예 실행 안 함
+    if (!enableTts) return;
     if (!audioRef.current) return;
 
     const tts = item.board_tts;
     if (!tts) return;
+
+    stopBoardAudio();
 
     const female = tts.female ?? null;
     const male = tts.male ?? null;
@@ -102,6 +118,21 @@ export default function BoardBox({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [preview]);
+
+  useEffect(() => {
+    if (!enableTts) return;
+    if (!onRegisterStopAudio) return;
+
+    onRegisterStopAudio(stopBoardAudio);
+
+    return () => {
+      stopBoardAudio();
+    };
+  }, [enableTts, onRegisterStopAudio]);
+
+  useEffect(() => {
+    stopBoardAudio();
+  }, [pageId]);
 
   const load = async () => {
     setLoading(true);
@@ -150,6 +181,8 @@ export default function BoardBox({
     },
   });
 
+  const stopOnFocus = enableTts ? { onFocus: () => stopBoardAudio() } : {};
+
   // 업로드
   const handleFiles = async (file?: File) => {
     if (!file) return;
@@ -185,12 +218,10 @@ export default function BoardBox({
   };
 
   // 수정 저장
-  // 수정 저장
   const saveText = async (boardId: number, nextText: string) => {
     try {
       setSavingId(boardId);
 
-      // ✅ Post 화면: TTS까지 생성하는 엔드포인트 사용
       if (buildBoardTtsText) {
         const processed = await buildBoardTtsText(nextText);
 
@@ -220,7 +251,6 @@ export default function BoardBox({
 
       setEditingId(null);
 
-      // 소켓은 예전처럼 텍스트/이미지만 전파
       setList((current) => {
         const updatedItem = current.find((b) => b.boardId === boardId);
         if (!updatedItem) return current;
@@ -274,6 +304,7 @@ export default function BoardBox({
           onDrop={onDrop}
           aria-label="사진 업로드"
           {...focusSpeak}
+          {...stopOnFocus}
         >
           <span>{uploading ? "업로드 중" : "사진 업로드"}</span>
           <input
@@ -304,6 +335,7 @@ export default function BoardBox({
                     onClick={() => setPreview({ src, alt: "추가자료 이미지" })}
                     aria-label="이미지 크게 보기"
                     {...focusSpeak}
+                    {...stopOnFocus}
                   >
                     <Thumb src={src} alt="추가자료 이미지" />
                   </ThumbButton>
@@ -336,6 +368,7 @@ export default function BoardBox({
                               saveText(b.boardId, textarea.value.trim());
                           }}
                           {...focusSpeak}
+                          {...stopOnFocus}
                         >
                           {isSaving ? "저장중…" : "저장"}
                         </Button>
@@ -345,6 +378,7 @@ export default function BoardBox({
                           onClick={() => setEditingId(null)}
                           $variant="ghost"
                           {...focusSpeak}
+                          {...stopOnFocus}
                         >
                           취소
                         </Button>
@@ -356,6 +390,7 @@ export default function BoardBox({
                           onClick={() => setEditingId(b.boardId)}
                           aria-label="설명 수정"
                           {...focusSpeak}
+                          {...stopOnFocus}
                         >
                           수정
                         </Button>
@@ -365,6 +400,7 @@ export default function BoardBox({
                           disabled={isDeleting}
                           aria-label="추가 자료 삭제"
                           {...focusSpeak}
+                          {...stopOnFocus}
                         >
                           {isDeleting ? "삭제중…" : "삭제"}
                         </DangerBtn>
@@ -378,6 +414,7 @@ export default function BoardBox({
                     id={`edit-${b.boardId}`}
                     defaultValue={b.text ?? ""}
                     placeholder="이미지에 대한 설명이나 텍스트를 입력하세요"
+                    {...stopOnFocus}
                   />
                 ) : b.text ? (
                   <MarkdownText>{b.text}</MarkdownText>

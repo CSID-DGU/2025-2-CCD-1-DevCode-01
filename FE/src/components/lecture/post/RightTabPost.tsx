@@ -35,6 +35,7 @@ type Props = {
   }) => void;
   onStopAllTts?: () => void;
   buildBoardTtsText?: (raw: string) => Promise<string>;
+  registerBoardStop?: (fn: () => void) => void;
 };
 
 const TAB_ORDER: TabKey[] = ["class", "memo", "board", "summary"];

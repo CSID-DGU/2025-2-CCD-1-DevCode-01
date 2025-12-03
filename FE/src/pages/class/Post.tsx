@@ -170,6 +170,7 @@ export default function PostClass() {
   const ocrAudioRef = useRef<HTMLAudioElement | null>(null);
   const sumAudioRef = useRef<HTMLAudioElement | null>(null);
   const memoAudioRef = useRef<HTMLAudioElement | null>(null);
+  const boardStopAudioRef = useRef<(() => void) | null>(null);
 
   const cleanOcr = useMemo(() => formatOcr(docPage?.ocr ?? ""), [docPage?.ocr]);
 
@@ -201,7 +202,7 @@ export default function PostClass() {
         ocr.pause();
         ocr.currentTime = 0;
       } catch {
-        // ignore
+        //ignore
       }
     }
     if (sum) {
@@ -209,7 +210,7 @@ export default function PostClass() {
         sum.pause();
         sum.currentTime = 0;
       } catch {
-        // ignore
+        //ignore
       }
     }
     if (memoEl) {
@@ -217,7 +218,15 @@ export default function PostClass() {
         memoEl.pause();
         memoEl.currentTime = 0;
       } catch {
-        // ignore
+        //ignore
+      }
+    }
+
+    if (boardStopAudioRef.current) {
+      try {
+        boardStopAudioRef.current();
+      } catch {
+        //ignore
       }
     }
   }, []);
