@@ -64,6 +64,7 @@ export default function RightTabsPost({
   readOnFocus,
   onStopAllTts,
   buildBoardTtsText,
+  registerBoardStop,
 }: Props) {
   const [tab, setTab] = useState<TabKey>("class");
   const baseId = useId();
@@ -166,10 +167,8 @@ export default function RightTabsPost({
       nextTabEl?.focus();
     };
 
-  /* ---------- 패널 안에서의 Tab ----------
-   *  이제는 Tab으로 탭 전환 안 함.
-   *  → Tab은 브라우저 기본 동작: 패널 안 포커스 요소들 → 그 다음(보통 BottomToolbar)
-   */
+  /* ---------- 패널 안에서의 Tab ---------- */
+
   const handleAsideKeyDown: React.KeyboardEventHandler<HTMLElement> = (e) => {
     if (e.key !== "Tab" || e.altKey || e.ctrlKey || e.metaKey) return;
 
@@ -264,6 +263,7 @@ export default function RightTabsPost({
             assetBase={import.meta.env.VITE_BASE_URL}
             token={localStorage.getItem("access")}
             buildBoardTtsText={buildBoardTtsText}
+            onRegisterStopAudio={registerBoardStop}
           />
         ) : (
           <Empty>이 페이지는 아직 판서를 사용할 수 없어요.</Empty>

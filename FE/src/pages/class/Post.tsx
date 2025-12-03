@@ -113,10 +113,12 @@ async function buildBoardsPayload(
   const res = await fetchBoards(pageId);
   const items: BoardItem[] = res?.boards ?? [];
 
+  const textBoards = items.filter((b) => (b.text ?? "").trim().length > 0);
+
   const boards = await Promise.all(
-    items.map(async (b) => ({
+    textBoards.map(async (b) => ({
       boardId: b.boardId,
-      text: b.text ? await transformText(b.text) : "",
+      text: await transformText(b.text!),
     }))
   );
 
@@ -191,7 +193,7 @@ export default function PostClass() {
     announce,
   });
 
-  /* 서버 오디오 정지 도우미 (본문/요약 공통) */
+  /* 서버 오디오 정지 도우미 (본문/요약/메모/판서 공통) */
   const stopServerAudio = useCallback(() => {
     const ocr = ocrAudioRef.current;
     const sum = sumAudioRef.current;
@@ -253,8 +255,8 @@ export default function PostClass() {
 
   const focusSpeakForToolbar = useCallback(
     (msg: string) => {
-      if (!readOnFocus) return; // 포커스 읽기 설정 꺼져 있으면 무시
-      speakWithStop(msg); // 서버 오디오 멈추고 로컬 TTS 실행
+      if (!readOnFocus) return;
+      speakWithStop(msg);
     },
     [readOnFocus, speakWithStop]
   );
@@ -293,6 +295,7 @@ export default function PostClass() {
         if (dp.pageId) {
           setSummaryLoading(true);
           try {
+            // 요약 + 요약 TTS
             const sumPromise = (async () => {
               const s = await fetchPageSummary(dp.pageId);
               if (cancelled) return null;
@@ -318,6 +321,7 @@ export default function PostClass() {
               return s;
             })();
 
+            // 리뷰 + 기존 보드용 TTS (텍스트 있는 보드만)
             const reviewPromise = (async (): Promise<PageReview | null> => {
               try {
                 const boardsPayload = await buildBoardsPayload(
@@ -372,7 +376,7 @@ export default function PostClass() {
     return () => {
       cancelled = true;
     };
-  }, [docId, page, isAssistant, announce]);
+  }, [docId, page, isAssistant, announce, buildTtsText]);
 
   useOcrTtsAutoStop(ocrAudioRef, {
     pageKey: docPage?.pageId,
@@ -516,7 +520,6 @@ export default function PostClass() {
       });
 
       try {
-        // 1) 로컬 TTS / 기존 서버 오디오 모두 정지
         stop();
         stopServerAudio();
 
@@ -725,6 +728,9 @@ export default function PostClass() {
             readOnFocus={readOnFocus}
             onFocusReviewTts={handleFocusReviewTts}
             buildBoardTtsText={buildTtsText}
+            registerBoardStop={(fn) => {
+              boardStopAudioRef.current = fn;
+            }}
           />
         </Grid>
       </Container>
