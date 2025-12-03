@@ -1,11 +1,8 @@
-import base64
+import re
 from google.cloud import texttospeech
-from openai import OpenAI
-import vertexai
 from classes.utils import text_to_speech, time_to_seconds
 from lecture_docs.models import *
-from dotenv import load_dotenv
-from vertexai import generative_models
+from project.vertexai import gemini_model
 from users.models import User
 from django.conf import settings
 from botocore.exceptions import NoCredentialsError
@@ -44,22 +41,19 @@ def summarize_stt(doc_id: int, user: User) -> tuple[str, str]:
     # 3️⃣ Gemini 프롬프트 생성
     prompt = f"""
     너는 '{lecture_title}' 강의의 '{doc_title}' 교안에 대한 전문가이다.
-    아래는 강의 중 교수님이 실제로 말한 내용이다:
-    ---
-    {combined_stt}
-    ---
     
-    이 내용을 전체적으로 읽고, 아래 규칙에 맞게 1000자 이내로 요약한다:
+    요약 규칙:
+    - 오탈자나 일부 누락이 있을 수 있으니 의미를 올바르게 해석한다.
+    - 원문에 없는 새로운 사실은 추가하지 않는다.
+    - 중복된 설명은 생략한다.
+    - 중요하고 핵심적인 개념 위주로 정리한다.
+    - 1000자 이내로 요약한다.
 
-    1) 오탈자나 일부 누락이 있을 수 있으니 의미를 올바르게 해석한다.
-    2) 원문에 없는 새로운 사실은 추가하지 않는다.
-    3) 중복된 설명은 생략한다.
-    4) 중요하고 핵심적인 개념 위주로 정리한다.
-    
-    요약문:
+    아래 내용을 요약해줘:
+    {combined_stt}
     """
 
-    summary_text = summarize(prompt)
+    summary_text = summarize(prompt).strip()
 
     # Google TTS 변환 + S3 업로드
     try:
@@ -83,26 +77,79 @@ def summarize_doc(doc_id: int, ocr_text: str) -> str:
     # 3️⃣ Gemini 프롬프트 생성
     prompt = f"""
     너는 '{lecture_title}' 강의의 '{doc_title}' 교안에 대한 전문가이다.
-    아래는 강의 교안의 OCR 인식 결과이다:
+
+    요약 규칙:
+    - 오탈자나 일부 누락이 있을 수 있으니 의미를 올바르게 해석한다.
+    - 수식은 LaTeX 문법으로만 출력하라. (\(...\), \[...\], \begin{...}...\end{...} 그대로 유지)
+    - 코드(쉘 명령어 포함)는 plain text로 작성하되 언어명을 추가하지 마라. 
+    - 코드 위에 언어명(json, python 등)을 절대 추가하지 마라.
+    - 원문에 없는 새로운 사실은 추가하지 않는다.
+    - 중복된 설명은 생략한다.
+    - 중요하고 핵심적인 개념 위주로 정리한다.
+    - 200자 이내로 요약한다.
+    
+    아래 내용을 요약해줘:
     ---
     {ocr_text}
     ---
-
-    이 내용을 전체적으로 읽고, 아래 규칙에 맞게 200자 이내로 요약한다:
-
-    1) 오탈자나 일부 누락이 있을 수 있으니 의미를 올바르게 해석한다.
-    2) 수식은 <수식> ... </수식> 으로 감싸고, 코드블록은 <코드> ... </코드> 으로 감싼다.
-    2-1) 수식은 LaTeX로 작성한다.
-    3) 원문에 없는 새로운 사실은 추가하지 않는다.
-    4) 중복된 설명은 생략한다.
-    5) 중요하고 핵심적인 개념 위주로 정리한다.
-
-    요약문:
     """
 
-    return summarize(prompt)
+    response = summarize(prompt).strip()
 
-def summarize(prompt: str) -> str:
+    response = latex_rewrite(response)
+    response = code_rewrite(response)
+
+    return response
+
+#수식 후처리
+def latex_rewrite(text: str) -> str:
+    # \[ ... \]
+    text = re.sub(
+        r'\\\[(.*?)\\\]',
+        lambda m: f"<수식>\n{m.group(1).strip()}\n</수식>",
+        text,
+        flags=re.DOTALL
+    )
+
+    # $$ ... $$
+    text = re.sub(
+        r'\$\$(.*?)\$\$',
+        lambda m: f"<수식>\n{m.group(1).strip()}\n</수식>",
+        text,
+        flags=re.DOTALL
+    )
+
+    # \( ... \)
+    text = re.sub(
+        r'\\\((.*?)\\\)',
+        lambda m: f"<수식>\n{m.group(1).strip()}\n</수식>",
+        text
+    )
+
+    # \begin{env} ... \end{env}
+    text = re.sub(
+        r'(\\begin\{.*?\}.*?\\end\{.*?\})',
+        lambda m: f"<수식>\n{m.group(1).strip()}\n</수식>",
+        text,
+        flags=re.DOTALL
+    )
+
+    return text
+
+#코드 후처리
+def code_rewrite(text: str) -> str:
+
+    # ``` ... ``` 감지
+    text = re.sub(
+        r"```(.*?)```",
+        lambda m: f"<코드>\n{m.group(1).strip()}\n</코드>",
+        text,
+        flags=re.DOTALL
+    )
+
+    return text
+
+def summarize(prompt) -> str:
     """
     Gemini 호출 요약본 생성 함수
     프롬프트를 받아서 요약문 반환
@@ -110,12 +157,7 @@ def summarize(prompt: str) -> str:
 
     # Gemini 모델 호출
     try:
-        vertexai.init(
-            project=settings.GCP_PROJECT_ID,
-            location=settings.GCP_REGION,
-        )
-        model = generative_models.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(prompt)
+        response = gemini_model.generate_content(prompt)
 
         if not response or not getattr(response, "text", "").strip():
             raise ValueError("Gemini 응답이 비어 있습니다.")
@@ -126,8 +168,6 @@ def summarize(prompt: str) -> str:
         raise RuntimeError(f"Gemini 요약 생성 중 오류 발생: {e}")
 
     return summary_text
-
-
 
 def upload_s3(file_obj, file_name, folder=None, content_type=None):
     try:
