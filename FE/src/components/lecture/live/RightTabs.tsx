@@ -42,6 +42,7 @@ type Props = {
   activeTab?: TabKey;
   onTabChange?: (tab: TabKey) => void;
   onStopAllTts?: () => void;
+  localTtsEnabled?: boolean;
 };
 
 export default function RightTabs({
@@ -61,6 +62,7 @@ export default function RightTabs({
   activeTab,
   onTabChange,
   onStopAllTts,
+  localTtsEnabled = true,
 }: Props) {
   const [innerTab, setInnerTab] = useState<TabKey>(activeInitial);
 
@@ -110,7 +112,7 @@ export default function RightTabs({
     onSummaryOpen?.();
   };
 
-  const focusSpeak = useFocusSpeak();
+  const focusSpeak = useFocusSpeak({ enabled: localTtsEnabled });
 
   return (
     <Aside $stack={stack} aria-label="메모, 판서, 요약 패널">
