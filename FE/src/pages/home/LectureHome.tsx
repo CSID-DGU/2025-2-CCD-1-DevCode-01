@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
+
 import styled from "styled-components";
 import toast from "react-hot-toast";
 
@@ -28,6 +30,7 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
   const [busy, setBusy] = useState(false);
+  const addLectureSpeak = useFocusSpeak({ text: "강의 추가" });
 
   // 강의 카드 컨텍스트 메뉴 영역
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -172,7 +175,12 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
       >
         {/* 강의 추가 타일 */}
         <AddTileBox style={{ width: columnMin }}>
-          <AddTile aria-label="강의 추가" onClick={() => setOpen(true)}>
+          <AddTile
+            aria-label="강의 추가"
+            onClick={() => setOpen(true)}
+            onFocus={addLectureSpeak.onFocus}
+            onBlur={addLectureSpeak.onBlur}
+          >
             <AddInner>
               <AddPlus aria-hidden>＋</AddPlus>
             </AddInner>

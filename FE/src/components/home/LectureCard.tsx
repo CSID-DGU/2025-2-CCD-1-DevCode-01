@@ -4,6 +4,7 @@ import type { Lecture } from "src/entities/lecture/types";
 import { OptionsMenu } from "./OptionsMenu";
 import { EditTitleBar } from "./EditTitleBar";
 import { useContrastImage } from "@shared/useContrastImage";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 type Props = {
   style?: React.CSSProperties;
@@ -44,6 +45,12 @@ export const LectureCard = ({
 }: Props) => {
   const arrowDown = useContrastImage("/img/home/arrowDown");
 
+  const menuBtnSpeak = useFocusSpeak({ text: "옵션 메뉴 열기 버튼" });
+
+  const codeSpeak = useFocusSpeak({
+    text: lec.code ? `강의 코드 ${lec.code}입니다. ` : "강의 코드 없음",
+  });
+
   return (
     <FolderBox style={style}>
       <Tile
@@ -79,6 +86,8 @@ export const LectureCard = ({
                   prev === lec.lecture_id ? null : lec.lecture_id
                 );
               }}
+              onFocus={menuBtnSpeak.onFocus}
+              onBlur={menuBtnSpeak.onBlur}
             >
               <img src={arrowDown} alt="" />
             </MenuButton>
@@ -89,8 +98,11 @@ export const LectureCard = ({
             $disabled={!lec.code}
             aria-disabled={!lec.code}
             onClick={onCopyCode}
+            tabIndex={lec.code ? 0 : -1}
+            onFocus={codeSpeak.onFocus}
+            onBlur={codeSpeak.onBlur}
           >
-            {lec.code ?? "코드 없음"}
+            {lec.code ?? ""}
           </Meta>
 
           {menuOpenId === lec.lecture_id && (
