@@ -101,7 +101,7 @@ def summarize_doc(doc_id: int, ocr_text: str) -> str:
 
     response = summarize(prompt).strip()
 
-    response = latex_rewrite(ocr_text)
+    response = latex_rewrite(response)
     response = code_rewrite(response)
 
     return response
