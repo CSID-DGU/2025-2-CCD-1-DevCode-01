@@ -31,7 +31,6 @@ export function RichOcrContent({ text }: Props) {
           return (
             <CodeBlock
               key={`${idx}-code`}
-              tabIndex={0}
               aria-hidden="true"
               data-skip-focus-tts="true"
             >
@@ -75,7 +74,6 @@ function MathBlock({ latex }: MathBlockProps) {
           'a, button, input, textarea, select, [tabindex], [contenteditable="true"], svg[focusable="true"]';
 
         root.querySelectorAll<HTMLElement>(focusableSelector).forEach((el) => {
-          el.tabIndex = 0;
           el.setAttribute("aria-hidden", "true");
         });
       })
@@ -85,12 +83,7 @@ function MathBlock({ latex }: MathBlockProps) {
   }, [latex]);
 
   return (
-    <MathContainer
-      ref={ref}
-      aria-hidden="true"
-      tabIndex={0}
-      data-skip-focus-tts="true"
-    >
+    <MathContainer ref={ref} aria-hidden="true" data-skip-focus-tts="true">
       {"$$ " + latex + " $$"}
     </MathContainer>
   );
@@ -117,11 +110,6 @@ const CodeBlock = styled.pre`
   color: var(--c-black);
   border-radius: 8px;
   overflow-x: auto;
-
-  &:focus-visible {
-    outline: 5px solid var(--c-blue);
-    outline-offset: 2px;
-  }
 `;
 
 const MathContainer = styled.div`
@@ -133,9 +121,4 @@ const MathContainer = styled.div`
   ${fonts.medium26};
   color: var(--c-black);
   overflow: auto;
-
-  &:focus-visible {
-    outline: 5px solid var(--c-blue);
-    outline-offset: 2px;
-  }
 `;
