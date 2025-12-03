@@ -10,18 +10,11 @@ export const NavWrapper = styled.nav`
   align-items: center;
   background: var(--c-blue);
   color: var(--c-white);
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
 `;
-
-// export const Bar = styled.div`
-//   display: grid;
-//   grid-template-columns: 1fr auto;
-//   align-items: center;
-//   min-height: 56px;
-//   padding: 12px 16px;
-//   border-radius: 8px;
-//   background: var(--c-blue);
-//   color: #fff;
-// `;
 
 export const BrandArea = styled.div`
   display: inline-flex;
@@ -191,7 +184,7 @@ export const RecIconBtn = styled.button`
     filter: brightness(0.9);
   }
   &:focus-visible {
-    outline: 2px solid #3b82f6;
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;

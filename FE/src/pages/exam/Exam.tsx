@@ -345,7 +345,7 @@ const ModeButton = styled.button<{ $active: boolean }>`
   transition: background 0.15s ease, color 0.15s ease;
 
   &:focus-visible {
-    outline: 2px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 
@@ -466,7 +466,7 @@ const RemoveButton = styled.button`
   cursor: pointer;
 
   &:focus-visible {
-    outline: 2px solid #ef4444;
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;

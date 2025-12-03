@@ -175,7 +175,7 @@ const Radio = styled.input.attrs({ type: "radio" })`
   cursor: pointer;
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
 
     html.hc & {

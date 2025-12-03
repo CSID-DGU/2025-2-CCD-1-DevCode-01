@@ -250,7 +250,7 @@ export const PostSummary = () => {
         </S.ToolbarLeft>
         <S.ToolbarRight>
           <S.ToolbarButton type="button" onClick={handleBackToPost}>
-            수업 후 화면으로 돌아가기
+            교안 보러가기
           </S.ToolbarButton>
         </S.ToolbarRight>
       </S.Toolbar>
@@ -308,7 +308,6 @@ export const PostSummary = () => {
                   발화 요약 #{detail.speechSummaryId}
                 </S.DetailTitle>
                 <S.DetailMeta>
-                  <span>수업 종료 시점: {detail.end_time}</span>
                   <span>생성일: {detail.createdAt}</span>
                 </S.DetailMeta>
               </S.DetailHeader>

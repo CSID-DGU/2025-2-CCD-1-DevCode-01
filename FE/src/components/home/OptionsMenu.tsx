@@ -166,9 +166,8 @@ const DropdownItem = styled.button<{ $danger?: boolean }>`
   cursor: pointer;
   color: ${({ $danger }) => ($danger ? "crimson" : "black")};
 
-  &:hover,
   &:focus-visible {
-    background: var(--c-blueL);
-    outline: none;
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
   }
 `;

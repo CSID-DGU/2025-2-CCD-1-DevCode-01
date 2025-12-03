@@ -5,9 +5,10 @@ import { fonts } from "@styles/fonts";
 import SummaryPane from "../pre/SummaryPane";
 import { PANEL_FIXED_H_LIVE } from "@pages/class/pre/styles";
 import BoardBox from "./BoardBox";
+import type { NoteTts } from "@apis/lecture/note.api";
 
 type Role = "student" | "assistant";
-type TabKey = "memo" | "board" | "summary";
+export type TabKey = "memo" | "board" | "summary";
 
 type Props = {
   stack: boolean;
@@ -34,6 +35,12 @@ type Props = {
   onSummaryOpen?: () => void;
   onSummaryTtsPlay?: () => void;
   summaryTtsLoading?: boolean;
+  memoAutoReadOnFocus?: boolean;
+  memoUpdateWithTts?: boolean;
+  onPlayMemoTts?: (payload: { content: string; tts?: NoteTts | null }) => void;
+  activeTab?: TabKey;
+  onTabChange?: (tab: TabKey) => void;
+  onStopAllTts?: () => void;
 };
 
 export default function RightTabs({
@@ -47,8 +54,26 @@ export default function RightTabs({
   onSummaryOpen,
   onSummaryTtsPlay,
   summaryTtsLoading,
+  memoAutoReadOnFocus,
+  memoUpdateWithTts,
+  onPlayMemoTts,
+  activeTab,
+  onTabChange,
+  onStopAllTts,
 }: Props) {
-  const [tab, setTab] = useState<TabKey>(activeInitial);
+  const [innerTab, setInnerTab] = useState<TabKey>(activeInitial);
+
+  const isControlled = activeTab != null;
+  const currentTab: TabKey = isControlled ? (activeTab as TabKey) : innerTab;
+
+  const changeTab = (next: TabKey) => {
+    onStopAllTts?.();
+
+    if (!isControlled) {
+      setInnerTab(next);
+    }
+    onTabChange?.(next);
+  };
 
   const baseId = useId();
   const tabIds: Record<TabKey, string> = {
@@ -65,7 +90,7 @@ export default function RightTabs({
   const hasBoard = showBoard && board;
 
   const handleClickSummary = () => {
-    setTab("summary");
+    changeTab("summary");
     onSummaryOpen?.();
   };
 
@@ -79,9 +104,9 @@ export default function RightTabs({
         <Tab
           id={tabIds.memo}
           role="tab"
-          aria-selected={tab === "memo"}
+          aria-selected={currentTab === "memo"}
           aria-controls={panelIds.memo}
-          onClick={() => setTab("memo")}
+          onClick={() => changeTab("memo")}
           type="button"
         >
           메모
@@ -91,9 +116,9 @@ export default function RightTabs({
           <Tab
             id={tabIds.board}
             role="tab"
-            aria-selected={tab === "board"}
+            aria-selected={currentTab === "board"}
             aria-controls={panelIds.board}
-            onClick={() => setTab("board")}
+            onClick={() => changeTab("board")}
             type="button"
           >
             추가 자료
@@ -103,7 +128,7 @@ export default function RightTabs({
         <Tab
           id={tabIds.summary}
           role="tab"
-          aria-selected={tab === "summary"}
+          aria-selected={currentTab === "summary"}
           aria-controls={panelIds.summary}
           onClick={handleClickSummary}
           type="button"
@@ -117,10 +142,25 @@ export default function RightTabs({
         id={panelIds.memo}
         role="tabpanel"
         aria-labelledby={tabIds.memo}
-        hidden={tab !== "memo"}
+        hidden={currentTab !== "memo"}
       >
         {typeof memo.pageId === "number" && memo.pageId > 0 ? (
-          <MemoBox docId={memo.docId} pageId={memo.pageId} />
+          <>
+            {console.log("[RightTabs] Memo panel 렌더링", {
+              pageId: memo.pageId,
+              memoAutoReadOnFocus,
+              memoUpdateWithTts,
+              hasOnPlayMemoTts: !!onPlayMemoTts,
+              currentTab,
+            })}
+            <MemoBox
+              docId={memo.docId}
+              pageId={memo.pageId}
+              autoReadOnFocus={memoAutoReadOnFocus}
+              updateWithTts={memoUpdateWithTts}
+              onPlayMemoTts={onPlayMemoTts}
+            />
+          </>
         ) : (
           <EmptyState role="status" aria-live="polite">
             이 페이지는 아직 메모를 사용할 수 없어요. 조금만 기다려주세요.
@@ -134,7 +174,7 @@ export default function RightTabs({
           id={panelIds.board}
           role="tabpanel"
           aria-labelledby={tabIds.board}
-          hidden={tab !== "board"}
+          hidden={currentTab !== "board"}
         >
           {typeof board?.pageId === "number" && board.pageId > 0 ? (
             <BoardBox
@@ -156,7 +196,7 @@ export default function RightTabs({
         id={panelIds.summary}
         role="tabpanel"
         aria-labelledby={tabIds.summary}
-        hidden={tab !== "summary"}
+        hidden={currentTab !== "summary"}
       >
         <SummaryPane
           summaryText={summary.text ?? null}
@@ -216,7 +256,8 @@ const Tab = styled.button`
     outline: none;
   }
   &:focus-visible {
-    border-color: var(--c-blue, #2563eb);
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
     box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(37, 99, 235, 0.35);
 
     &[aria-selected="true"] {
@@ -232,9 +273,8 @@ const Tab = styled.button`
 
   @media (forced-colors: active) {
     &:focus-visible {
-      outline: 2px solid CanvasText;
+      outline: 5px solid var(--c-blue);
       outline-offset: 2px;
-      box-shadow: none;
     }
   }
 `;

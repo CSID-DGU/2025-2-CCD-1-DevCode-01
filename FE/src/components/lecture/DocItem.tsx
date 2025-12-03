@@ -185,7 +185,7 @@ const TitleBtn = styled.button`
   cursor: pointer;
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
     border-radius: 6px;
   }
@@ -198,7 +198,8 @@ const EditInput = styled.input`
   padding: 0.25rem 0.5rem;
   width: 100%;
   &:focus-visible {
-    outline: 2px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
   }
 `;
 
@@ -225,7 +226,7 @@ const MenuBtn = styled.button`
   }
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;

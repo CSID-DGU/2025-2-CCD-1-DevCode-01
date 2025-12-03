@@ -102,8 +102,8 @@ const Pane = styled.aside<{ $stack: boolean; $height?: string }>`
   }
 
   &:focus-visible {
-    border: 3px solid var(--c-blue);
-    outline-offset: 10px;
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
   }
 `;
 

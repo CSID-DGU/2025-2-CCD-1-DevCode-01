@@ -323,7 +323,7 @@ const Btn = styled.button`
     cursor: not-allowed;
   }
   &:focus-visible {
-    outline: 2px solid var(--c-white);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;

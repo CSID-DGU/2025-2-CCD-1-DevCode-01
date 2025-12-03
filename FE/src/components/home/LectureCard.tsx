@@ -120,7 +120,7 @@ const TileBase = styled.div`
   background: var(--c-white);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
   @media (prefers-reduced-motion: no-preference) {

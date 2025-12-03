@@ -81,7 +81,7 @@ export const ToolbarButton = styled.button`
   }
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;
@@ -105,7 +105,7 @@ export const EndButton = styled.button`
   }
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;
@@ -243,7 +243,8 @@ export const ThumbnailItem = styled.li<{ $active: boolean }>`
   }
 
   &:focus-visible {
-    border: 3px solid var(--c-yellowM);
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
   }
 `;
 
@@ -292,7 +293,7 @@ export const NavButton = styled.button`
   }
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;
@@ -385,7 +386,7 @@ export const ItemImageButton = styled.button`
   display: block;
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;
@@ -487,7 +488,7 @@ export const TtsButton = styled.button`
   }
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;

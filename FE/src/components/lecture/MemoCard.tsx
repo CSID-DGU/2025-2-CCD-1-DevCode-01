@@ -291,7 +291,7 @@ const Row = styled.div<{ $role: Role }>`
   }};
 
   &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.base.blueD};
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;

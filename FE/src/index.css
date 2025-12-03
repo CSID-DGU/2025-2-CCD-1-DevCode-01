@@ -32,3 +32,24 @@ h1 {
   font-size: 3.2em;
   line-height: 1.1;
 }
+
+button {
+  &:focus-visible {
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
+  }
+}
+
+input {
+  &:focus-visible {
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
+  }
+}
+
+textarea {
+  &:focus-visible {
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
+  }
+}
