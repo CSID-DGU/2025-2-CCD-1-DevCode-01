@@ -20,6 +20,11 @@ import MarkdownText from "./MarkdownText";
 import { useSoundOptions, applyPlaybackRate } from "src/hooks/useSoundOption";
 import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
+type TtsPair = {
+  female?: string | null;
+  male?: string | null;
+} | null;
+
 type Props = {
   docId: number;
   pageId: number;
@@ -34,13 +39,17 @@ type Props = {
   buildBoardTtsText?: (raw: string) => Promise<string>;
   /**
    * true면 board_tts 기반 서버 TTS 재생 버튼 노출.
-   * 라이브에서는 false, 수업 후에서는 true 추천.
    */
   enableTts?: boolean;
-  /**
-   * PostClass에서 전체 TTS stop을 위해 등록할 수 있는 콜백
-   */
   onRegisterStopAudio?: (fn: () => void) => void;
+  /**
+   * 리뷰 API에서 내려온 보드들 (강의 중 생성된 판서 TTS 포함)
+   * boardId 기준으로 fetchBoards 결과와 매칭해서 board_tts를 보강
+   */
+  reviewBoards?: {
+    boardId: number;
+    board_tts?: TtsPair;
+  }[];
 };
 
 export default function BoardBox({
@@ -52,6 +61,7 @@ export default function BoardBox({
   buildBoardTtsText,
   enableTts = true,
   onRegisterStopAudio,
+  reviewBoards,
 }: Props) {
   const [list, setList] = useState<BoardItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -88,7 +98,6 @@ export default function BoardBox({
     }
   };
 
-  // PostClass에서 전체 stop을 위해 콜백 등록
   useEffect(() => {
     if (!enableTts) return;
     if (!onRegisterStopAudio) return;
@@ -100,7 +109,6 @@ export default function BoardBox({
     };
   }, [enableTts, onRegisterStopAudio]);
 
-  // 페이지 변경 시 기존 board 오디오 정리
   useEffect(() => {
     stopBoardAudio();
   }, [pageId]);
@@ -108,19 +116,17 @@ export default function BoardBox({
   const rawFocusSpeak = useFocusSpeak();
   const focusSpeak = enableTts ? rawFocusSpeak : ({} as typeof rawFocusSpeak);
 
-  const playBoardTts = async (item: BoardItem) => {
+  const playBoardTts = async (tts: TtsPair | undefined | null) => {
     if (!enableTts) return;
     if (!audioRef.current) return;
-
-    const tts = item.board_tts;
     if (!tts) return;
-
-    stopBoardAudio();
 
     const female = tts.female ?? null;
     const male = tts.male ?? null;
     const url = soundVoice === "여성" ? female ?? male : male ?? female;
     if (!url) return;
+
+    stopBoardAudio();
 
     const audio = audioRef.current;
 
@@ -137,7 +143,6 @@ export default function BoardBox({
     }
   };
 
-  // ESC로 이미지 프리뷰 닫기
   useEffect(() => {
     if (!preview) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -261,7 +266,7 @@ export default function BoardBox({
               ? {
                   ...b,
                   text: updated.board_text,
-                  board_tts: updated.board_tts,
+                  board_tts: updated.board_tts ?? b.board_tts ?? null,
                 }
               : b
           )
@@ -276,7 +281,7 @@ export default function BoardBox({
 
       setEditingId(null);
 
-      // 실시간 방송 (TTS는 소켓으로 안 보냄)
+      // 소켓
       setList((current) => {
         const updatedItem = current.find((b) => b.boardId === boardId);
         if (!updatedItem) return current;
@@ -296,6 +301,73 @@ export default function BoardBox({
       setSavingId(null);
     }
   };
+
+  // ====== 자동 TTS 생성용: 이미 텍스트 있는데 TTS 없는 보드 처리 ======
+  const autoTtsPendingRef = useRef<Set<number>>(new Set());
+
+  const hasEffectiveTts = (b: BoardItem): boolean => {
+    const rb = reviewBoards?.find((rb) => rb.boardId === b.boardId);
+    const ttsFromReview = rb?.board_tts;
+    const ttsFromList = b.board_tts as TtsPair | undefined;
+
+    const tts = ttsFromReview ?? ttsFromList ?? null;
+    return !!(tts && (tts.female || tts.male));
+  };
+
+  useEffect(() => {
+    if (!enableTts) return;
+    if (!buildBoardTtsText) return;
+    if (!list.length) return;
+
+    const run = async () => {
+      for (const b of list) {
+        const text = (b.text ?? "").trim();
+        if (!text) continue;
+
+        // 이미 TTS가 있으면 스킵
+        if (hasEffectiveTts(b)) continue;
+
+        // 이미 이 보드에 대해 자동 TTS 발행 중이면 스킵
+        if (autoTtsPendingRef.current.has(b.boardId)) continue;
+
+        autoTtsPendingRef.current.add(b.boardId);
+
+        try {
+          // 1) 프론트 전처리
+          const processed = await buildBoardTtsText(text);
+
+          // 2) 서버 TTS 생성
+          const updated = await patchBoardTextWithTts(b.boardId, {
+            board_text: text,
+            processed_text: processed,
+          });
+
+          // 3) list에 TTS 반영
+          setList((prev) =>
+            prev.map((x) =>
+              x.boardId === b.boardId
+                ? {
+                    ...x,
+                    text: updated.board_text,
+                    board_tts: updated.board_tts ?? x.board_tts ?? null,
+                  }
+                : x
+            )
+          );
+        } catch (err) {
+          console.error("[BoardBox] auto TTS 생성 실패:", {
+            boardId: b.boardId,
+            err,
+          });
+        } finally {
+          autoTtsPendingRef.current.delete(b.boardId);
+        }
+      }
+    };
+
+    void run();
+  }, [list, enableTts, buildBoardTtsText, reviewBoards]);
+  // ======================== 자동 TTS 생성 끝 ========================
 
   // 삭제
   const remove = async (boardId: number) => {
@@ -353,6 +425,11 @@ export default function BoardBox({
 
             const src = b.image ? toUrl(b.image) : "";
 
+            // reviewBoards와 매칭해서 TTS를 보강
+            const rb = reviewBoards?.find((rb) => rb.boardId === b.boardId);
+            const effectiveTts: TtsPair =
+              rb?.board_tts ?? (b.board_tts as TtsPair) ?? null;
+
             return (
               <Item key={b.boardId} role="listitem">
                 {b.image && (
@@ -369,10 +446,10 @@ export default function BoardBox({
 
                 <Row>
                   <Actions>
-                    {enableTts && b.board_tts && (
+                    {enableTts && effectiveTts && (
                       <Button
                         type="button"
-                        onClick={() => void playBoardTts(b)}
+                        onClick={() => void playBoardTts(effectiveTts)}
                         aria-label="추가 자료 설명 듣기"
                         {...focusSpeak}
                       >
