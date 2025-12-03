@@ -3,15 +3,15 @@ import tempfile
 import wave
 from bs4 import BeautifulSoup
 from google.cloud import speech, storage
-from google.cloud import texttospeech, translate_v2 as translate
+from google.cloud import texttospeech
 import boto3
 from django.conf import settings
 import io, os
 import uuid
 from datetime import datetime, timedelta
-from groq import Groq
 import markdown
 import numpy as np
+from openai import OpenAI
 
 from users.models import User
 
@@ -55,7 +55,7 @@ symbol_pattern = re.compile("|".join(re.escape(k) for k in symbol_map.keys()))
 code_pattern = re.compile(r"<코드>(.*?)</코드>", re.DOTALL)
 math_pattern = re.compile(r"<수식>(.*?)</수식>", re.DOTALL)
 
-client = Groq(api_key=settings.GROQ_API_KEY)
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def upload_to_gcs(file_bytes: bytes, filename: str, bucket_name: str) -> str:
     """GCS 버킷에 파일 업로드 후 URI 반환"""
@@ -270,7 +270,7 @@ def preprocess_text(processed_math):
     def translate_math(match):
         english_math = match.group(1)
         # 수식 번역
-        korean_math = translate(english_math)
+        korean_math = translate_processed_math(english_math)
         return korean_math
 
     # 최종 전처리 텍스트
@@ -279,28 +279,31 @@ def preprocess_text(processed_math):
 
     return processed_text
 
-def translate(text: str) -> str:
-    prompt = f"""
+def translate_processed_math(text: str) -> str:
+    system_prompt = f"""
     너는 영어 수식을 한국어로 번역하는 전문가이다.
-    아래는 영어로 표현된 수식이다:
+    
+    번역 규칙:
+    - 수식 텍스트의 모든 구성요소를 단 하나도 생략하거나 삭제하지 않는다.
+    - 수식의 기호, 구조, 관계를 자연스러운 한국어 수학 서술로 표현한다.
+    - 수식을 설명, 해석, 요약하지 않고, 오직 수식 표현을 그대로 번역한다.
+    - '~입니다', '~합니다', '~됩니다' 등 문어체 종결을 사용하지 않는다.
+    - 출력은 번역된 한국어 텍스트만 제공한다.
+    """
+
+    user_prompt = f"""
+    아래 수식을 번역해줘:
     ---
     {text}
     ---
-    
-    이 수식을 한국어로 자연스럽게 번역한다.
-    번역 규칙은 다음과 같다:
-
-    1) 수식의 기호, 구조, 관계를 한국어로 정확히 표현한다.
-    2) 수식을 설명하거나 해석하지 않고, 제공된 수식 자체만 번역한다.
-    3) '~입니다', '~합니다', '~됩니다' 등 문어체 종결을 사용하지 않는다.
-    4) 출력은 번역된 한국어 텍스트만 제공한다.
-
-    번역문:
     """
 
     response = client.chat.completions.create(
-        model="openai/gpt-oss-20b",
-        messages=[{"role": "user", "content": prompt}],
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
         temperature=0.1,
     )
     

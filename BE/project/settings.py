@@ -222,3 +222,5 @@ AI_EXAM_OCR_RESULT_URL = os.getenv("AI_EXAM_OCR_RESULT_URL")
 BACKEND_BASE_URL= "https://campusmate.shop"
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
