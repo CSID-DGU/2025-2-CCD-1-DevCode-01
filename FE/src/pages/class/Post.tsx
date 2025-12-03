@@ -242,6 +242,14 @@ export default function PostClass() {
     [stopServerAudio, stop, speak]
   );
 
+  const focusSpeakForToolbar = useCallback(
+    (msg: string) => {
+      if (!readOnFocus) return; // 포커스 읽기 설정 꺼져 있으면 무시
+      speakWithStop(msg); // 서버 오디오 멈추고 로컬 TTS 실행
+    },
+    [readOnFocus, speakWithStop]
+  );
+
   /* ---------------- 페이지 로드 + 요약/리뷰/요약TTS ---------------- */
   useEffect(() => {
     if (!docId) return;
@@ -466,19 +474,18 @@ export default function PostClass() {
 
       try {
         const playPromise = audio.play();
-        // 일부 브라우저는 play()가 Promise를 안 돌려주기도 해서 방어코드
+
         if (playPromise !== undefined) {
           await playPromise;
         }
       } catch (err) {
         if ((err as DOMException).name === "AbortError") {
-          // 🔇 포커스 이동 등으로 인한 자연스러운 중단 → 조용히 무시
           console.warn(
             "[TTS] play aborted (probably due to quick focus change or pause)."
           );
           return;
         }
-        throw err; // 다른 에러는 그대로 위로 던짐
+        throw err;
       }
     },
     [stop, stopServerAudio, soundVoice, soundRate, speakWithStop]
@@ -486,7 +493,7 @@ export default function PostClass() {
 
   const handleFocusReviewTts = useCallback(
     (opts: { tts?: TtsPair | null; fallbackText?: string }) => {
-      if (!readOnFocus) return; // 설정 꺼져 있으면 아무것도 안 함
+      if (!readOnFocus) return;
       void playReviewTts(opts.tts ?? null, opts.fallbackText);
     },
     [readOnFocus, playReviewTts]
@@ -501,8 +508,8 @@ export default function PostClass() {
 
       try {
         // 1) 로컬 TTS / 기존 서버 오디오 모두 정지
-        stop(); // SpeechSynthesis
-        stopServerAudio(); // ocr, sum, memo 오디오 전부 정지
+        stop();
+        stopServerAudio();
 
         const url =
           tts && (tts.female || tts.male)
@@ -524,7 +531,7 @@ export default function PostClass() {
           return;
         }
 
-        const audio = memoAudioRef.current; // 🔹 sumAudioRef 대신 memoAudioRef 사용
+        const audio = memoAudioRef.current;
         if (!audio) {
           console.warn("[PostClass] memoAudioRef.current가 없습니다.");
           return;
@@ -557,8 +564,6 @@ export default function PostClass() {
           console.warn(
             "[PostClass] 메모 음성 재생 중단(AbortError) - 로컬 TTS로 대체"
           );
-          // 필요하면 여기서도 speakWithStop(content) 호출 가능
-          // speakWithStop(content);
           return;
         }
 
@@ -724,6 +729,7 @@ export default function PostClass() {
         onNext={() => void goToPage(page + 1)}
         onToggleMode={toggleMode}
         onGoTo={(n) => void goToPage(n)}
+        speak={focusSpeakForToolbar}
         startPageId={docPage?.pageId ?? null}
         onStartLive={(pageId) => {
           if (!docId) {

@@ -57,10 +57,8 @@ export default function BoardBox({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { soundRate, soundVoice } = useSoundOptions();
 
-  // ✅ 버튼/텍스트 포커스 시 로컬 낭독용
   const focusSpeak = useFocusSpeak();
 
-  // ✅ 서버에서 내려온 board_tts로 추가 자료 읽어주기
   const playBoardTts = async (item: BoardItem) => {
     if (!audioRef.current) return;
     const tts = item.board_tts;
@@ -126,7 +124,6 @@ export default function BoardBox({
       setList((prev) => {
         const exists = prev.some((b) => b.boardId === data.boardId);
         if (exists) return prev;
-        // ✅ 최신을 맨 아래에
         return [...prev, { ...data }];
       });
     },
