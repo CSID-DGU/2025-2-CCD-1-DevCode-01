@@ -1,12 +1,13 @@
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
+
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 MINI_SUMMARY_PROMPT = """
-다음 페이지 OCR 결과를 3~5줄 mini-summary로 압축해라.
+다음 페이지 OCR/분석 결과를 2~3줄 mini-summary로 압축해라.
 교안 전체의 흐름 파악을 돕는 핵심 개념만 요약하고,
 문장은 짧고 명확하게 써라.
 
@@ -25,12 +26,14 @@ def make_mini_summary(content: str) -> str:
         model="gpt-4o-mini",
         temperature=0.1,
         messages=[
-            {"role": "user", "content": MINI_SUMMARY_PROMPT.format(content=content)}
-        ]
+            {
+                "role": "user",
+                "content": MINI_SUMMARY_PROMPT.format(content=content),
+            }
+        ],
     )
 
     summary = response.choices[0].message.content.strip()
-
-    print('⭐'+summary)
-
+    print("⭐ MINI SUMMARY ⭐")
+    print(summary)
     return summary

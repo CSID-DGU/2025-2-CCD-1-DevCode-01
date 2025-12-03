@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from ai_file_ocr.celery_app import celery_app
 from ai_file_ocr.pipeline.ocr import pdf_to_images, analyze_page_with_context
 from ai_file_ocr.pipeline.summarize import make_mini_summary
-from ai_file_ocr.pipeline.memory import ContextMemory  
+from ai_file_ocr.pipeline.memory import  ContextMemory  
 
 load_dotenv()
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
@@ -35,31 +35,20 @@ def upload_s3(image_bytes: bytes, key: str, content_type: str = "image/png") -> 
 @celery_app.task(name="ai_file_ocr.tasks.run_pdf_ocr")
 def run_pdf_ocr(doc_id: int, pdf_bytes: bytes, callback_url: str):
 
-    # 2) PDF → 이미지 변환
     pages = pdf_to_images(pdf_bytes)
 
-    # 3) llama_index 기반 문맥 메모리 객체 생성
-    mem = ContextMemory()
+    mem = ContextMemory(max_history=3)
 
-    # 4) 페이지 분석
     for page_number, img_bytes in pages:
 
         s3_key = f"docs/{doc_id}/pages/{page_number}.png"
         image_url = upload_s3(img_bytes, s3_key, content_type="image/png")
-
-        # llama_index 기반 문맥 가져오기 (최근 k개)
-        current_context = mem.get_context(k=5)
-
-        # OCR + 문맥 기반 Vision 분석
-        ocr_text = analyze_page_with_context(img_bytes, current_context)
-
-        # llama_index로 사용할 요약 (mini-summary 활용)
+        
+        context = mem.get_context()
+        ocr_text = analyze_page_with_context(img_bytes, context)
         mini = make_mini_summary(ocr_text)
-
-        # llama_index 메모리에 요약 저장
         mem.add_summary(page_number, mini)
 
-        # 5) callback 전달
         try:
             resp = requests.post(
                 callback_url,

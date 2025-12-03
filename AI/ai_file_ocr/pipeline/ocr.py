@@ -3,8 +3,8 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 from typing import List, Tuple
-from io import BytesIO
 import fitz  
+from ai_file_ocr.pipeline.rewrite import latex_rewrite, code_rewrite
 
 #이미지 변환
 def pdf_to_images(pdf_bytes: bytes, dpi: int = 150) -> List[Tuple[int, bytes]]:
@@ -23,42 +23,49 @@ def pdf_to_images(pdf_bytes: bytes, dpi: int = 150) -> List[Tuple[int, bytes]]:
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+
 PROMPT_TEMPLATE = """
 너는 시각장애 대학생을 위한 강의 슬라이드 분석 도우미다.
-지금까지 분석된 페이지들의 요약은 다음과 같다:
+지금까지 분석된 페이지들의 문맥 요약은 다음과 같다:
 
 {context}
 
 
 이 문맥을 참고하여 아래 이미지를 분석하라.
+반드시 아래 네 섹션만 사용하고 그 외의 섹션 이름은 절대 만들지 마라.
+섹션에 쓸 내용이 전혀 없다면, 그 섹션 제목과 내용 전체를 아예 출력하지 않는다.
 
-규칙:
-- 각 섹션 제목([제목], [본문], [이미지 설명], [표/그래프])은 그대로 사용하되, 내용이 없으면 섹션 자체를 생략한다.
-- 수식은 <수식> ... </수식> 으로 감싸고, 내부는 LaTeX 형식으로 작성한다. 절대 요약하거나 수정하지 않는다. Latex 문법을 잘 지켜라.
-- 코드는 <코드> ... </코드> 로 감싸고, 내부 내용은 원본 그대로 보존하며, 언어 추측 없이 plain text 형식으로 출력한다.
-- 다른 언어는 번역하지 않고 그대로 표기하며, 한문은 한글로 변환한다.
+중요 규칙
+- 모든 수식은 LaTeX 문법으로만 출력하라. (\(...\), \[...\], \begin{...}...\end{...} 그대로 유지)
+- 모든 코드(쉘 명령어 포함)는 plain text로 작성하되 언어명을 추가하지 마라. 
+- 코드 위에 언어명(json, python 등)을 절대 추가하지 마라.
+- 코드 내부는 여백, 줄바꿈, 공백 포함하여 원본을 그대로 보존한다.
+- 한국어 외 언어는 번역하지 않고 원문 그대로 유지한다.
 
 [제목]
-- 슬라이드의 핵심 제목이 있을 때만 1줄로 쓴다.
+- 슬라이드의 핵심 제목이 있을 때만 한 줄로 작성.
 
 [본문]
-- 문단구조를 유지하여 본문의 텍스트 추출 한다. 
+- 본문의 텍스트를 추출. 
+- 의미 변경 금지, 핵심 내용 생략 금지.
 
 [이미지 설명]
-- 수업 내용과 관련 없는 배경 이미지, 로고, 디자인용 아이콘 등은 설명하지 않는다.
-- 이미지의 외관을 묘사한 뒤 이미지를 보지 않고도 이해할 수 있도록 교안 맥락에 맞게 정리한다.
-- 이미지에 텍스트/코드가 있으면 텍스트/코드를 모두 다 읽어준다.
+- 슬라이드에 실제 삽화/도식/도형/사진이 있을 때만 작성.
+- 이미지의 외관을 묘사한 뒤 이미지를 보지 않고도 이해할 수 있도록 교안 맥락에 맞게 정리
+- 이미지 안의 텍스트나 코드/수식이 있는 경우엔 요약하지 않고 전부 다 읽어줌
 
 [표/그래프]
-- 표/그래프가 있을 때만 쓴다.
-- 어떤 형태의 표/그래프 인지 설명한 뒤 모든 셀을 나열하지 말고, 비교·범위·추세 등 교안 문맥에 맞게 정리한다.
+- 표나 그래프가 있을 때만 작성.
+- 어떤 형태의 표/그래프인지 설명하고, 모든 셀을 나열하지 말고 비교·범위·추세 위주로 교안 문맥에 맞게 정리
+
+이제 위 규칙에 따라 결과를 생성하라.
 
 """
-
 
 def analyze_page_with_context(image_bytes: bytes, context: str) -> str:
 
     print("⭐context:"+context)
+    system_prompt = PROMPT_TEMPLATE.replace("{context}", context)
 
     img_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
@@ -66,7 +73,7 @@ def analyze_page_with_context(image_bytes: bytes, context: str) -> str:
         model="gpt-4o",
         temperature=0.2,
         messages=[
-            {"role": "system", "content": PROMPT_TEMPLATE.format(context=context)},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": [
@@ -82,4 +89,11 @@ def analyze_page_with_context(image_bytes: bytes, context: str) -> str:
         ],
     )
 
-    return response.choices[0].message.content.strip()
+
+
+    raw = response.choices[0].message.content.strip()
+
+    clean = latex_rewrite(raw)
+    clean = code_rewrite(clean)
+
+    return clean

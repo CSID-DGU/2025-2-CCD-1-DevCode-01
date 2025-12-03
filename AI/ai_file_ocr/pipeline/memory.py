@@ -1,44 +1,38 @@
-from llama_index.core import SummaryIndex, Document
-from typing import Optional
+from typing import List, Dict
 
 
 class ContextMemory:
-    def __init__(self):
-        # 빈 SummaryIndex 생성
-        self.index = SummaryIndex([])
 
-    def add_summary(self, page_number: int, mini_summary: str):
-        """
-        페이지 요약(mini_summary)을 SummaryIndex에 추가
-        """
+    def __init__(self, max_history: int = 3):
+        self.max_history = max_history
+        self._history: List[Dict] = []
+
+    def add_summary(self, page_number: int, mini_summary: str) -> None:
+
         if not mini_summary or not mini_summary.strip():
             mini_summary = "(내용 없음)"
 
-        doc = Document(
-            text=mini_summary,
-            metadata={"page": page_number}
+        self._history.append(
+            {
+                "page": int(page_number),
+                "summary": mini_summary.strip(),
+            }
         )
-        self.index.insert(doc)
 
-    def get_context(self, k: int = 5) -> str:
-        """
-        최근 요약 k개(기본 5개)를 기반으로 문맥 생성
-        (필요하면 전체로 확장 가능)
-        """
-        # SummaryIndex → Retriever
-        retriever = self.index.as_retriever(
-            similarity_top_k=k
-        )
-        nodes = retriever.retrieve("문맥 요청")
+        if len(self._history) > self.max_history:
+            self._history = self._history[-self.max_history :]
 
-        # 정렬(페이지 순)
-        nodes = sorted(nodes, key=lambda n: n.metadata.get("page", 0))
+    def get_context(self) -> str:
+        if not self._history:
+            return "(이전 페이지 요약 없음)"
 
-        # context 텍스트 조립
-        context_texts = [
-            f"[페이지 {n.metadata.get('page')} 요약]\n{n.text}"
-            for n in nodes
-        ]
+        sorted_history = sorted(self._history, key=lambda x: x["page"])
 
-        return "\n\n".join(context_texts)
+        lines: List[str] = []
+        for h in sorted_history:
+            lines.append(f"[페이지 {h['page']} 요약]\n{h['summary']}")
 
+        return "\n\n".join(lines)
+
+    def reset(self) -> None:
+        self._history.clear()
