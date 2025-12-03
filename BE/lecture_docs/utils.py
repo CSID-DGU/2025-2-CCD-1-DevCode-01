@@ -14,6 +14,14 @@ latex_patterns = [
     r'\$\$(.*?)\$\$',
     r'(\\begin\{.*?\}.*?\\end\{.*?\})',
 ]
+
+text_commands = [
+    "textbf", "textit", "textrm", "textsf",
+    "texttt", "text", "mathrm", "mathbf"
+]
+
+text_pattern = r'\\(' + '|'.join(text_commands) + r')\{([^{}]+)\}'
+
 code_pattern = r"```(.*?)```"
 
 def summarize_stt(doc_id: int, user: User) -> tuple[str, str]:
@@ -101,7 +109,7 @@ def summarize_doc(doc_id: int, ocr_text: str) -> str:
 
     response = summarize(prompt).strip()
 
-    response = latex_rewrite(response)
+    response = latex_rewrite(remove_text(response))
     response = code_rewrite(response)
 
     return response
@@ -120,6 +128,30 @@ def safe_sub(pattern, repl, text):
         return repl(match)
 
     return re.sub(pattern, wrapper, text, flags=re.DOTALL)
+
+#수식 밖 Latex 제거
+def remove_text(text: str) -> str:
+    math_spans = []
+    for pattern in latex_patterns:
+        for m in re.finditer(pattern, text, flags=re.DOTALL):
+            math_spans.append((m.start(), m.end()))
+
+    def is_inside_math(pos):
+        for start, end in math_spans:
+            if start <= pos < end:
+                return True
+        return False
+
+    def replacer(match):
+        cmd = match.group(1)
+        inner = match.group(2)
+        start = match.start()
+
+        if is_inside_math(start):
+            return match.group(0)
+        return inner
+
+    return re.sub(text_pattern, replacer, text)
 
 #수식 후처리
 def latex_rewrite(text: str) -> str:
