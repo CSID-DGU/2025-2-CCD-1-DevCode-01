@@ -1,4 +1,5 @@
 import os
+from ai_file_ocr.pipeline.rewrite import process_latex, code_rewrite
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -68,6 +69,11 @@ def call_gpt_from_blocks(blocks):
 - 요약 1
 - 요약 2
 
+출력 규칙 :
+- 모든 수식은 LaTeX 문법으로만 출력하라. (\(...\), \[...\], \begin{...}...\end{...} 그대로 유지)
+- 모든 코드(쉘 명령어 포함)는  코드블록(```)으로 감싸서 출력하되 언어명은 작성하지 않는다. 
+- 코드 내부는 여백, 줄바꿈, 공백 포함하여 원본을 그대로 보존한다.
+
 아래는 OCR 텍스트야:
 
 {block_text}
@@ -81,5 +87,9 @@ def call_gpt_from_blocks(blocks):
 
     raw = resp.choices[0].message.content
     clean = strip_think_block(raw)
-    return clean
 
+    clean = code_rewrite(clean)
+    
+    clean = process_latex(clean)
+
+    return clean

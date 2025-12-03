@@ -31,7 +31,6 @@ jobs:
           echo "📌 AI 서버 systemd 재시작..."
           sudo systemctl restart ai-api
           sudo systemctl restart ai-celery
-          sudo systemctl restart exam-celery
           sudo systemctl restart nginx
 
           echo "✅ AI 서버 배포 완료!"
