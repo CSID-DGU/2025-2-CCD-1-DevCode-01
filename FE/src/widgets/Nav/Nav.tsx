@@ -21,6 +21,7 @@ const RightActions = ({
   logoutSrc,
   onOpenSound,
   onLogout,
+  enableTts,
 }: {
   isHC: boolean;
   onOpenA11y: () => void;
@@ -29,17 +30,21 @@ const RightActions = ({
   logoutSrc: string;
   onOpenSound: () => void;
   onLogout: () => void;
+  enableTts: boolean;
 }) => {
   const soundSpeak = useFocusSpeak({
     text: "음성 설정 버튼",
+    enabled: enableTts,
   });
 
   const a11ySpeak = useFocusSpeak({
     text: "화면 설정 버튼",
+    enabled: enableTts,
   });
 
   const logoutSpeak = useFocusSpeak({
     text: "로그아웃 버튼",
+    enabled: enableTts,
   });
 
   return (
@@ -81,9 +86,18 @@ const RightActions = ({
   );
 };
 
-const BackButton = ({ icon, onBack }: { icon: string; onBack: () => void }) => {
+const BackButton = ({
+  icon,
+  onBack,
+  enableTts,
+}: {
+  icon: string;
+  onBack: () => void;
+  enableTts: boolean;
+}) => {
   const backSpeak = useFocusSpeak({
-    text: "뒤로가기",
+    text: "뒤로가기 버튼",
+    enabled: enableTts,
   });
 
   return (
@@ -156,6 +170,10 @@ const Nav = ({ variant, title }: Props) => {
     nav("/login", { replace: true });
   };
 
+  const isClassFlow = ["pre", "live", "post"].includes(variant);
+  const isLive = variant === "live";
+  const navTtsEnabled = !isLive;
+
   /* ---------- 1) 로그인/회원가입: 왼쪽 로고만 ---------- */
   if (variant === "auth") {
     return (
@@ -192,6 +210,7 @@ const Nav = ({ variant, title }: Props) => {
             logoutSrc={logout}
             onOpenSound={() => setSoundOpen(true)}
             onLogout={handleLogout}
+            enableTts={true}
           />
         </s.Right>
 
@@ -227,6 +246,7 @@ const Nav = ({ variant, title }: Props) => {
             logoutSrc={logout}
             onOpenSound={() => setSoundOpen(true)}
             onLogout={handleLogout}
+            enableTts={true}
           />
         </s.Right>
 
@@ -243,7 +263,6 @@ const Nav = ({ variant, title }: Props) => {
   }
 
   /* ---------- 4) 수업 전/중/후: 뒤로가기 + 설정 ---------- */
-  const isClassFlow = ["pre", "live", "post"].includes(variant);
 
   return (
     <s.NavWrapper data-variant={variant}>
@@ -251,7 +270,11 @@ const Nav = ({ variant, title }: Props) => {
       <s.Left>
         {isClassFlow ? (
           <s.LeftActions>
-            <BackButton icon={back} onBack={() => nav(-1)} />
+            <BackButton
+              icon={back}
+              onBack={() => nav(-1)}
+              enableTts={navTtsEnabled}
+            />
           </s.LeftActions>
         ) : (
           <span aria-hidden />
@@ -271,6 +294,7 @@ const Nav = ({ variant, title }: Props) => {
           logoutSrc={logout}
           onOpenSound={() => setSoundOpen(true)}
           onLogout={handleLogout}
+          enableTts={navTtsEnabled}
         />
       </s.Right>
 
