@@ -1,11 +1,11 @@
-// src/components/lecture/UploadBar.tsx
 import { useRef } from "react";
 import styled from "styled-components";
 import { fonts } from "@styles/fonts";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 type Props = {
   onSelectFile: (file: File) => void;
-  busy?: boolean; // 선택(로딩 스피너 등 쓸 때)
+  busy?: boolean;
 };
 
 export default function UploadBar({ onSelectFile, busy }: Props) {
@@ -19,6 +19,10 @@ export default function UploadBar({ onSelectFile, busy }: Props) {
     e.currentTarget.value = "";
   };
 
+  const addLectureDocs = useFocusSpeak({
+    text: "자료 추가, pdf 파일을 선택해주세요.",
+  });
+
   return (
     <AddBar role="region" aria-label="자료 추가 영역" aria-busy={!!busy}>
       <AddBarTop>
@@ -27,6 +31,8 @@ export default function UploadBar({ onSelectFile, busy }: Props) {
           onClick={openPicker}
           aria-controls="doc-file-input"
           aria-describedby="doc-file-desc"
+          onFocus={addLectureDocs.onFocus}
+          onBlur={addLectureDocs.onBlur}
         >
           <Plus aria-hidden>＋</Plus>
           <span>자료 추가</span>
