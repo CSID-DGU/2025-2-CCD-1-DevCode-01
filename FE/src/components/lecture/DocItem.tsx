@@ -6,6 +6,7 @@ import { useRef, useState, useEffect } from "react";
 import { useContrastImage } from "@shared/useContrastImage";
 import toast from "react-hot-toast";
 import { updateLectureDoc } from "src/entities/doc/api";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 type Props = {
   doc: LectureDoc;
@@ -34,6 +35,8 @@ export default function DocItem({
   const titleBtnRef = useRef<HTMLButtonElement | null>(null);
 
   const arrow = useContrastImage("/img/home/arrowDown");
+
+  const menuBtnSpeak = useFocusSpeak({ text: "옵션 메뉴 열기 버튼" });
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -157,6 +160,8 @@ export default function DocItem({
             menuBtnRef.current?.focus();
           }
         }}
+        onFocus={menuBtnSpeak.onFocus}
+        onBlur={menuBtnSpeak.onBlur}
       >
         <img src={arrow} alt="" aria-hidden />
       </MenuBtn>

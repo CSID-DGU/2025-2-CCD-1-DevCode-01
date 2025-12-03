@@ -67,7 +67,6 @@ export default function UploadBar({ onSelectFile, busy }: Props) {
 const AddBar = styled.div`
   grid-column: 1 / -1;
   grid-row: 1;
-  position: sticky;
   top: 0;
   z-index: 10;
   padding-bottom: 0.25rem;
