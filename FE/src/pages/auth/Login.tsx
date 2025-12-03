@@ -5,7 +5,11 @@ import InputField from "@layouts/components/login/InputContainer";
 import { useContrastImage } from "@shared/useContrastImage";
 import { loginApi } from "@apis/auth/login";
 
-import { TTSContext } from "@shared/tts/TTSProvider";
+import {
+  TTSContext,
+  type RateLabel,
+  type VoiceLabel,
+} from "@shared/tts/TTSProvider";
 import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 import { setA11yAndApply } from "@shared/a11y/initA11y";
@@ -64,6 +68,11 @@ const Login = () => {
       localStorage.setItem("username", r.username);
       localStorage.setItem("rate", r.rate);
       localStorage.setItem("voice", r.voice);
+
+      tts?.applyLabels({
+        rate: r.rate as RateLabel,
+        voice: r.voice as VoiceLabel,
+      });
 
       setA11yAndApply({
         font: normalizeFontToPct(r.font),

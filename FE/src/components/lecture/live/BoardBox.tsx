@@ -6,6 +6,7 @@ import {
   patchBoardText,
   deleteBoard,
   type BoardItem,
+  patchBoardTextWithTts,
 } from "@apis/lecture/board.api";
 
 import { PANEL_FIXED_H_LIVE } from "@pages/class/pre/styles";
@@ -16,6 +17,13 @@ import {
   type BoardEventDataBase,
 } from "src/hooks/useDocLiveSync";
 import MarkdownText from "./MarkdownText";
+import { useSoundOptions, applyPlaybackRate } from "src/hooks/useSoundOption";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
+
+type TtsPair = {
+  female?: string | null;
+  male?: string | null;
+} | null;
 
 type Props = {
   docId: number;
@@ -23,6 +31,25 @@ type Props = {
   assetBase?: string;
   token?: string | null;
   wsBase?: string;
+  /**
+   * 수업 후(Post)에서 TTS 전처리를 위해 사용하는 함수.
+   * 전달되면 /board/{id}/tts/ 엔드포인트를 사용.
+   * 미전달이면 /board/{id}/ 로 텍스트만 patch (라이브용).
+   */
+  buildBoardTtsText?: (raw: string) => Promise<string>;
+  /**
+   * true면 board_tts 기반 서버 TTS 재생 버튼 노출.
+   */
+  enableTts?: boolean;
+  onRegisterStopAudio?: (fn: () => void) => void;
+  /**
+   * 리뷰 API에서 내려온 보드들 (강의 중 생성된 판서 TTS 포함)
+   * boardId 기준으로 fetchBoards 결과와 매칭해서 board_tts를 보강
+   */
+  reviewBoards?: {
+    boardId: number;
+    board_tts?: TtsPair;
+  }[];
 };
 
 export default function BoardBox({
@@ -31,6 +58,10 @@ export default function BoardBox({
   assetBase = "",
   token,
   wsBase,
+  buildBoardTtsText,
+  enableTts = true,
+  onRegisterStopAudio,
+  reviewBoards,
 }: Props) {
   const [list, setList] = useState<BoardItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -52,6 +83,66 @@ export default function BoardBox({
     wsBase ??
     (import.meta.env.VITE_BASE_URL as string).replace(/^http(s?)/, "ws$1");
 
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { soundRate, soundVoice } = useSoundOptions();
+
+  const stopBoardAudio = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    if (!enableTts) return;
+    if (!onRegisterStopAudio) return;
+
+    onRegisterStopAudio(stopBoardAudio);
+
+    return () => {
+      stopBoardAudio();
+    };
+  }, [enableTts, onRegisterStopAudio]);
+
+  useEffect(() => {
+    stopBoardAudio();
+  }, [pageId]);
+
+  const rawFocusSpeak = useFocusSpeak();
+  const focusSpeak = enableTts ? rawFocusSpeak : ({} as typeof rawFocusSpeak);
+
+  const playBoardTts = async (tts: TtsPair | undefined | null) => {
+    if (!enableTts) return;
+    if (!audioRef.current) return;
+    if (!tts) return;
+
+    const female = tts.female ?? null;
+    const male = tts.male ?? null;
+    const url = soundVoice === "여성" ? female ?? male : male ?? female;
+    if (!url) return;
+
+    stopBoardAudio();
+
+    const audio = audioRef.current;
+
+    if (audio.src !== url) {
+      audio.src = url;
+    }
+
+    applyPlaybackRate(audio, soundRate);
+
+    try {
+      await audio.play();
+    } catch (e) {
+      console.error("[BoardBox] TTS 재생 실패:", e);
+    }
+  };
+
   useEffect(() => {
     if (!preview) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -67,12 +158,21 @@ export default function BoardBox({
     setLoading(true);
     setError(null);
     const res = await fetchBoards(pageId);
-    if (!res) setError("판서 목록을 불러오지 못했습니다.");
-    setList(res?.boards ?? []);
+
+    if (!res) {
+      setError("판서 목록을 불러오지 못했습니다.");
+      setList([]);
+      setLoading(false);
+      return;
+    }
+
+    const boards = [...res.boards].sort((a, b) => a.boardId - b.boardId);
+    setList(boards);
     setLoading(false);
   };
+
   useEffect(() => {
-    load();
+    void load();
   }, [pageId]);
 
   const { sendBoardEvent } = useDocLiveSync({
@@ -80,17 +180,21 @@ export default function BoardBox({
     docId,
     token: accessToken,
     onBoardCreated: (data: BoardEventCreatedOrUpdated) => {
-      setList((prev) =>
-        prev.some((b) => b.boardId === data.boardId)
-          ? prev
-          : [{ ...data }, ...prev]
-      );
+      setList((prev) => {
+        const exists = prev.some((b) => b.boardId === data.boardId);
+        if (exists) return prev;
+        return [...prev, { ...data }];
+      });
     },
     onBoardUpdated: (data: BoardEventCreatedOrUpdated) => {
       setList((prev) =>
         prev.map((b) =>
           b.boardId === data.boardId
-            ? { ...b, text: data.text, image: data.image }
+            ? {
+                ...b,
+                text: data.text ?? b.text,
+                image: data.image ?? b.image,
+              }
             : b
         )
       );
@@ -101,15 +205,23 @@ export default function BoardBox({
     },
   });
 
-  // 업로드
+  const stopOnFocus = enableTts ? { onFocus: () => stopBoardAudio() } : {};
+
+  // 이미지 업로드 (수업 중/후 공통)
   const handleFiles = async (file?: File) => {
     if (!file) return;
     try {
       setUploading(true);
       setError(null);
       const created = await uploadBoardImage(pageId, file);
-      setList((prev) => [created, ...prev]);
 
+      setList((prev) => {
+        const exists = prev.some((b) => b.boardId === created.boardId);
+        if (exists) return prev;
+        return [...prev, created];
+      });
+
+      // 실시간 방송
       sendBoardEvent("created", {
         boardId: created.boardId,
         image: created.image,
@@ -127,23 +239,60 @@ export default function BoardBox({
   const onDrop: React.DragEventHandler<HTMLDivElement> = (e) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
-    handleFiles(file);
+    void handleFiles(file);
   };
 
-  // 수정 저장
+  // 텍스트 저장
+  // - 라이브: /board/{id}/ (buildBoardTtsText 없음)
+  // - 수업 후: /board/{id}/tts/ (buildBoardTtsText 있음)
   const saveText = async (boardId: number, nextText: string) => {
+    const trimmed = nextText.trim();
+
     try {
       setSavingId(boardId);
-      const updated = await patchBoardText(boardId, nextText);
-      setList((prev) =>
-        prev.map((b) => (b.boardId === boardId ? { ...b, ...updated } : b))
-      );
+
+      if (buildBoardTtsText) {
+        // ===== 수업 후(Post): 텍스트 + TTS 생성 =====
+        const processed = await buildBoardTtsText(trimmed);
+
+        const updated = await patchBoardTextWithTts(boardId, {
+          board_text: trimmed,
+          processed_text: processed,
+        });
+
+        setList((prev) =>
+          prev.map((b) =>
+            b.boardId === boardId
+              ? {
+                  ...b,
+                  text: updated.board_text,
+                  board_tts: updated.board_tts ?? b.board_tts ?? null,
+                }
+              : b
+          )
+        );
+      } else {
+        // ===== 라이브: 텍스트만 수정 =====
+        const updated = await patchBoardText(boardId, trimmed);
+        setList((prev) =>
+          prev.map((b) => (b.boardId === boardId ? { ...b, ...updated } : b))
+        );
+      }
+
       setEditingId(null);
 
-      sendBoardEvent("updated", {
-        boardId,
-        image: updated.image ?? null,
-        text: updated.text ?? null,
+      // 소켓
+      setList((current) => {
+        const updatedItem = current.find((b) => b.boardId === boardId);
+        if (!updatedItem) return current;
+
+        sendBoardEvent("updated", {
+          boardId,
+          image: updatedItem.image ?? null,
+          text: updatedItem.text ?? null,
+        });
+
+        return current;
       });
     } catch (e) {
       console.error(e);
@@ -152,6 +301,73 @@ export default function BoardBox({
       setSavingId(null);
     }
   };
+
+  // ====== 자동 TTS 생성용: 이미 텍스트 있는데 TTS 없는 보드 처리 ======
+  const autoTtsPendingRef = useRef<Set<number>>(new Set());
+
+  const hasEffectiveTts = (b: BoardItem): boolean => {
+    const rb = reviewBoards?.find((rb) => rb.boardId === b.boardId);
+    const ttsFromReview = rb?.board_tts;
+    const ttsFromList = b.board_tts as TtsPair | undefined;
+
+    const tts = ttsFromReview ?? ttsFromList ?? null;
+    return !!(tts && (tts.female || tts.male));
+  };
+
+  useEffect(() => {
+    if (!enableTts) return;
+    if (!buildBoardTtsText) return;
+    if (!list.length) return;
+
+    const run = async () => {
+      for (const b of list) {
+        const text = (b.text ?? "").trim();
+        if (!text) continue;
+
+        // 이미 TTS가 있으면 스킵
+        if (hasEffectiveTts(b)) continue;
+
+        // 이미 이 보드에 대해 자동 TTS 발행 중이면 스킵
+        if (autoTtsPendingRef.current.has(b.boardId)) continue;
+
+        autoTtsPendingRef.current.add(b.boardId);
+
+        try {
+          // 1) 프론트 전처리
+          const processed = await buildBoardTtsText(text);
+
+          // 2) 서버 TTS 생성
+          const updated = await patchBoardTextWithTts(b.boardId, {
+            board_text: text,
+            processed_text: processed,
+          });
+
+          // 3) list에 TTS 반영
+          setList((prev) =>
+            prev.map((x) =>
+              x.boardId === b.boardId
+                ? {
+                    ...x,
+                    text: updated.board_text,
+                    board_tts: updated.board_tts ?? x.board_tts ?? null,
+                  }
+                : x
+            )
+          );
+        } catch (err) {
+          console.error("[BoardBox] auto TTS 생성 실패:", {
+            boardId: b.boardId,
+            err,
+          });
+        } finally {
+          autoTtsPendingRef.current.delete(b.boardId);
+        }
+      }
+    };
+
+    void run();
+  }, [list, enableTts, buildBoardTtsText, reviewBoards]);
+  // ======================== 자동 TTS 생성 끝 ========================
 
   // 삭제
   const remove = async (boardId: number) => {
@@ -173,6 +389,10 @@ export default function BoardBox({
 
   return (
     <>
+      {enableTts && (
+        <audio ref={audioRef} preload="none" style={{ display: "none" }} />
+      )}
+
       <Wrap>
         <Uploader
           role="button"
@@ -180,14 +400,16 @@ export default function BoardBox({
           onClick={() => fileRef.current?.click()}
           onDragOver={(e) => e.preventDefault()}
           onDrop={onDrop}
-          aria-label="사진 업로드 또는 드래그 앤 드롭"
+          aria-label="사진 업로드"
+          {...focusSpeak}
+          {...stopOnFocus}
         >
           <span>{uploading ? "업로드 중" : "사진 업로드"}</span>
           <input
             ref={fileRef}
             type="file"
             accept="image/*"
-            onChange={(e) => handleFiles(e.target.files?.[0] ?? undefined)}
+            onChange={(e) => void handleFiles(e.target.files?.[0] ?? undefined)}
             hidden
           />
         </Uploader>
@@ -203,6 +425,11 @@ export default function BoardBox({
 
             const src = b.image ? toUrl(b.image) : "";
 
+            // reviewBoards와 매칭해서 TTS를 보강
+            const rb = reviewBoards?.find((rb) => rb.boardId === b.boardId);
+            const effectiveTts: TtsPair =
+              rb?.board_tts ?? (b.board_tts as TtsPair) ?? null;
+
             return (
               <Item key={b.boardId} role="listitem">
                 {b.image && (
@@ -210,6 +437,8 @@ export default function BoardBox({
                     type="button"
                     onClick={() => setPreview({ src, alt: "추가자료 이미지" })}
                     aria-label="이미지 크게 보기"
+                    {...focusSpeak}
+                    {...stopOnFocus}
                   >
                     <Thumb src={src} alt="추가자료 이미지" />
                   </ThumbButton>
@@ -217,6 +446,17 @@ export default function BoardBox({
 
                 <Row>
                   <Actions>
+                    {enableTts && effectiveTts && (
+                      <Button
+                        type="button"
+                        onClick={() => void playBoardTts(effectiveTts)}
+                        aria-label="추가 자료 설명 듣기"
+                        {...focusSpeak}
+                      >
+                        듣기
+                      </Button>
+                    )}
+
                     {isEditing ? (
                       <>
                         <Button
@@ -228,8 +468,10 @@ export default function BoardBox({
                               `edit-${b.boardId}`
                             ) as HTMLTextAreaElement | null;
                             if (textarea)
-                              saveText(b.boardId, textarea.value.trim());
+                              void saveText(b.boardId, textarea.value);
                           }}
+                          {...focusSpeak}
+                          {...stopOnFocus}
                         >
                           {isSaving ? "저장중…" : "저장"}
                         </Button>
@@ -238,6 +480,8 @@ export default function BoardBox({
                           aria-label="편집 취소"
                           onClick={() => setEditingId(null)}
                           $variant="ghost"
+                          {...focusSpeak}
+                          {...stopOnFocus}
                         >
                           취소
                         </Button>
@@ -247,14 +491,19 @@ export default function BoardBox({
                         <Button
                           type="button"
                           onClick={() => setEditingId(b.boardId)}
+                          aria-label="설명 수정"
+                          {...focusSpeak}
+                          {...stopOnFocus}
                         >
-                          수정
+                          {b.text ? "수정" : "설명 추가"}
                         </Button>
                         <DangerBtn
                           type="button"
-                          onClick={() => remove(b.boardId)}
+                          onClick={() => void remove(b.boardId)}
                           disabled={isDeleting}
                           aria-label="추가 자료 삭제"
+                          {...focusSpeak}
+                          {...stopOnFocus}
                         >
                           {isDeleting ? "삭제중…" : "삭제"}
                         </DangerBtn>
@@ -268,18 +517,26 @@ export default function BoardBox({
                     id={`edit-${b.boardId}`}
                     defaultValue={b.text ?? ""}
                     placeholder="이미지에 대한 설명이나 텍스트를 입력하세요"
+                    {...stopOnFocus}
                   />
                 ) : b.text ? (
                   <MarkdownText>{b.text}</MarkdownText>
                 ) : (
-                  <EmptyLine>설명이 없습니다.</EmptyLine>
+                  <EmptyLine {...focusSpeak} aria-label="설명이 없습니다.">
+                    설명이 없습니다.
+                  </EmptyLine>
                 )}
               </Item>
             );
           })}
 
           {!loading && list.length === 0 && (
-            <Empty>아직 업로드된 추가 자료가 없어요.</Empty>
+            <Empty
+              {...focusSpeak}
+              aria-label="아직 업로드된 추가 자료가 없습니다."
+            >
+              아직 업로드된 추가 자료가 없어요.
+            </Empty>
           )}
         </List>
       </Wrap>
@@ -348,7 +605,7 @@ const List = styled.div`
 
 const Item = styled.article`
   background: var(--c-white);
-  border: 1px solid #e5e7eb;
+  border: 2px solid var(--c-grayD);
   border-radius: 12px;
   padding: 10px;
   min-width: 0;
@@ -439,7 +696,7 @@ const Overlay = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: 99;
   padding: 16px;
 `;
 
@@ -447,14 +704,16 @@ const PreviewInner = styled.div`
   position: relative;
   max-width: 100%;
   max-height: 100%;
+  z-index: 99;
 `;
 
 const PreviewImg = styled.img`
   max-width: min(100vw - 48px, 960px);
-  max-height: min(100vh - 96px, 720px);
+  max-height: min(100vh - 96px, 500px);
   border-radius: 12px;
   display: block;
   background: #0f172a;
+  z-index: 99;
 `;
 
 const CloseBtn = styled.button`

@@ -1,3 +1,4 @@
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 import { fonts } from "@styles/fonts";
 import { useRef } from "react";
 import { useModalFocusTrap } from "src/hooks/useModalFocusTrap";
@@ -17,13 +18,26 @@ export default function ReviewRecordModal({
   onContinue,
 }: Props) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  const reviewBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  const titleRef = useRef<HTMLParagraphElement | null>(null);
 
   const { handleKeyDown } = useModalFocusTrap({
     open,
     containerRef: dialogRef,
-    initialFocusRef: reviewBtnRef,
+    initialFocusRef: titleRef,
     onClose,
+  });
+
+  const recordText = useFocusSpeak({
+    text: "수업 기록이 있습니다.",
+  });
+
+  const reviewDocs = useFocusSpeak({
+    text: "복습하기",
+  });
+
+  const continueDocs = useFocusSpeak({
+    text: "이어서 학습하기",
   });
 
   if (!open) return null;
@@ -38,16 +52,18 @@ export default function ReviewRecordModal({
       >
         <IconCircle src="/img/lecture/check.png" aria-hidden="true" />
 
-        <Title>수업 기록이 있습니다!</Title>
+        <Title tabIndex={0} ref={titleRef} {...recordText}>
+          수업 기록이 있습니다!
+        </Title>
 
         <Divider />
 
         <ButtonRow>
-          <ActionButton type="button" onClick={onReview} ref={reviewBtnRef}>
+          <ActionButton type="button" onClick={onReview} {...reviewDocs}>
             복습 하기
           </ActionButton>
           <VerticalDivider />
-          <ActionButton type="button" onClick={onContinue}>
+          <ActionButton type="button" onClick={onContinue} {...continueDocs}>
             이어서{"\n"}학습하기
           </ActionButton>
         </ButtonRow>
@@ -86,6 +102,11 @@ const Title = styled.p`
   margin: 12px;
   ${fonts.title2}
   color: ${({ theme }) => theme.colors.base.black};
+
+  &:focus-visible {
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
+  }
 `;
 
 const Divider = styled.hr`
@@ -112,6 +133,15 @@ const ActionButton = styled.button`
   cursor: pointer;
   white-space: pre-line;
   width: 100%;
+  align-items: center;
+  justify-content: center;
+  display: flex;
+  text-align: center;
+
+  &:focus-visible {
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
+  }
 `;
 
 const VerticalDivider = styled.div`

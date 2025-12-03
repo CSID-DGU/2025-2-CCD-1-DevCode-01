@@ -11,6 +11,7 @@ import {
 } from "@apis/lecture/profTts.api";
 import toast from "react-hot-toast";
 import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 type SpeechSummaryItem = {
   speechSummaryId: number;
@@ -44,6 +45,10 @@ export const PostSummary = () => {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { soundRate, soundVoice } = useSoundOptions();
+  const focusSpeak = useFocusSpeak();
+
+  const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
+  const autoFocusAfterLoadRef = useRef(false);
 
   const ensureSummarySrc = useCallback(() => {
     const a = audioRef.current;
@@ -77,6 +82,11 @@ export const PostSummary = () => {
 
   useEffect(() => {
     if (!detail) return;
+
+    if (autoFocusAfterLoadRef.current && textAreaRef.current) {
+      autoFocusAfterLoadRef.current = false;
+      textAreaRef.current.focus();
+    }
 
     const a = audioRef.current;
     if (!a) return;
@@ -140,7 +150,7 @@ export const PostSummary = () => {
     };
   }, [selectedId]);
 
-  const handleSelectSummary = (id: number) => {
+  const handleSelectSummary = (id: number, autoFocus = false) => {
     if (id === selectedId) return;
 
     if (
@@ -150,6 +160,9 @@ export const PostSummary = () => {
       return;
     }
 
+    if (autoFocus) {
+      autoFocusAfterLoadRef.current = true;
+    }
     setSelectedId(id);
   };
 
@@ -249,18 +262,28 @@ export const PostSummary = () => {
           <S.ToolbarSubtitle>{navTitle}</S.ToolbarSubtitle>
         </S.ToolbarLeft>
         <S.ToolbarRight>
-          <S.ToolbarButton type="button" onClick={handleBackToPost}>
+          <S.ToolbarButton
+            type="button"
+            onClick={handleBackToPost}
+            aria-label="교안 보러가기"
+            {...focusSpeak}
+            tabIndex={0}
+          >
             교안 보러가기
           </S.ToolbarButton>
         </S.ToolbarRight>
       </S.Toolbar>
 
-      {/* 좌측 리스트 + 우측 상세 */}
       <S.MainLayout $stack={stackLayout}>
-        {/* 리스트 영역 */}
         <S.ListPane $stack={stackLayout}>
           <S.ListHeader>
-            <S.ListTitle>발화 요약 목록</S.ListTitle>
+            <S.ListTitle
+              aria-label="발화 요약 목록"
+              {...focusSpeak}
+              tabIndex={0}
+            >
+              발화 요약 목록
+            </S.ListTitle>
             <S.ListCount>{summaries.length}개</S.ListCount>
           </S.ListHeader>
 
@@ -281,9 +304,18 @@ export const PostSummary = () => {
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
+                        if (s.speechSummaryId === selectedId) {
+                          if (textAreaRef.current) {
+                            textAreaRef.current.focus();
+                          }
+                          return;
+                        }
+                        autoFocusAfterLoadRef.current = true;
                         handleSelectSummary(s.speechSummaryId);
                       }
                     }}
+                    aria-label={`발화 요약, 생성일 ${s.createdAt}`}
+                    {...focusSpeak}
                   >
                     <S.SummaryDate $active={active}>
                       {s.createdAt}
@@ -313,6 +345,7 @@ export const PostSummary = () => {
               </S.DetailHeader>
 
               <S.TextArea
+                ref={textAreaRef}
                 placeholder="생성된 교수 발화 요약이 여기에 표시되고, 수정할 수 있습니다."
                 value={editText}
                 onChange={(e) => {
@@ -362,6 +395,9 @@ export const PostSummary = () => {
                     type="button"
                     onClick={handleSave}
                     disabled={!isDirty || !detail}
+                    tabIndex={0}
+                    aria-label="저장하기"
+                    {...focusSpeak}
                   >
                     저장하기
                   </S.PrimaryButton>

@@ -49,11 +49,20 @@ export default function LectureDocs() {
 
   const memoAreaRef = useRef<HTMLElement | null>(null);
   const memoAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const docAudioRef = useRef<HTMLAudioElement | null>(null);
+
   const { soundRate, soundVoice } = useSoundOptions();
 
   useOcrTtsAutoStop(memoAudioRef, {
     areaRef: memoAreaRef as RefObject<HTMLElement | null>,
     stopMessageOnBlur: "메모 음성 재생이 중지되었습니다.",
+  });
+
+  const docAreaRef = useRef<HTMLElement | null>(null);
+  useOcrTtsAutoStop(docAudioRef, {
+    areaRef: docAreaRef as RefObject<HTMLElement | null>,
+    stopMessageOnBlur: "교안 음성 재생이 중지되었습니다.",
   });
 
   const [fontPct, setFontPct] = useState<number>(() => readFontPct());
@@ -106,6 +115,12 @@ export default function LectureDocs() {
       const audio = memoAudioRef.current;
       if (!audio) return;
 
+      const docAudio = docAudioRef.current;
+      if (docAudio && !docAudio.paused) {
+        docAudio.pause();
+        docAudio.currentTime = 0;
+      }
+
       if (!audio.src || audio.src !== url) {
         audio.src = url;
       }
@@ -116,7 +131,57 @@ export default function LectureDocs() {
       try {
         await audio.play();
       } catch (err) {
-        console.error("[LectureDocs] 메모 TTS 재생 실패:", err);
+        const e = err as DOMException;
+        if (e?.name === "AbortError") {
+          return;
+        }
+      }
+    },
+    [soundRate, soundVoice]
+  );
+
+  // 교안 제목 TTS
+  const playDocTts = useCallback(
+    async (doc: LectureDoc) => {
+      const tts = doc.docTts;
+      if (!tts) return;
+
+      const femaleUrl = tts.female ?? undefined;
+      const maleUrl = tts.male ?? undefined;
+
+      let url: string | undefined;
+      if (soundVoice === "여성") {
+        url = femaleUrl ?? maleUrl;
+      } else {
+        url = maleUrl ?? femaleUrl;
+      }
+      if (!url) return;
+
+      const audio = docAudioRef.current;
+      if (!audio) return;
+
+      const memoAudio = memoAudioRef.current;
+      if (memoAudio && !memoAudio.paused) {
+        memoAudio.pause();
+        memoAudio.currentTime = 0;
+      }
+
+      if (!audio.src || audio.src !== url) {
+        audio.src = url;
+      }
+
+      applyPlaybackRate(audio, soundRate);
+      audio.currentTime = 0;
+
+      try {
+        await audio.play();
+      } catch (err) {
+        const e = err as DOMException;
+        if (e?.name === "AbortError") {
+          console.log("[LectureDocs] 교안 TTS 재생 중단 (Abort)");
+          return;
+        }
+        console.error("[LectureDocs] 교안 TTS 재생 실패:", err);
       }
     },
     [soundRate, soundVoice]
@@ -134,7 +199,13 @@ export default function LectureDocs() {
 
       <UploadBar onSelectFile={upload} />
 
-      <Left mode={layoutMode} role="region" aria-label="교안 목록">
+      <Left
+        mode={layoutMode}
+        role="region"
+        aria-label="교안 목록"
+        ref={docAreaRef}
+      >
+        <audio ref={docAudioRef} preload="none" />
         <DocList role="list" aria-describedby="doc-list-desc">
           <SrOnly id="doc-list-desc">
             항목을 클릭하면 해당 교안을 열 수 있습니다. 각 항목의 옵션 버튼으로
@@ -164,6 +235,7 @@ export default function LectureDocs() {
                 onTitleUpdated={async (id, newTitle) => {
                   await updateTitle(id, newTitle);
                 }}
+                onFocusTitle={() => void playDocTts(doc)}
               />
             </ListItem>
           ))}

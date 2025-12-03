@@ -113,10 +113,12 @@ async function buildBoardsPayload(
   const res = await fetchBoards(pageId);
   const items: BoardItem[] = res?.boards ?? [];
 
+  const textBoards = items.filter((b) => (b.text ?? "").trim().length > 0);
+
   const boards = await Promise.all(
-    items.map(async (b) => ({
+    textBoards.map(async (b) => ({
       boardId: b.boardId,
-      text: b.text ? await transformText(b.text) : "",
+      text: await transformText(b.text!),
     }))
   );
 
@@ -170,6 +172,7 @@ export default function PostClass() {
   const ocrAudioRef = useRef<HTMLAudioElement | null>(null);
   const sumAudioRef = useRef<HTMLAudioElement | null>(null);
   const memoAudioRef = useRef<HTMLAudioElement | null>(null);
+  const boardStopAudioRef = useRef<(() => void) | null>(null);
 
   const cleanOcr = useMemo(() => formatOcr(docPage?.ocr ?? ""), [docPage?.ocr]);
 
@@ -190,7 +193,7 @@ export default function PostClass() {
     announce,
   });
 
-  /* 서버 오디오 정지 도우미 (본문/요약 공통) */
+  /* 서버 오디오 정지 도우미 (본문/요약/메모/판서 공통) */
   const stopServerAudio = useCallback(() => {
     const ocr = ocrAudioRef.current;
     const sum = sumAudioRef.current;
@@ -201,7 +204,7 @@ export default function PostClass() {
         ocr.pause();
         ocr.currentTime = 0;
       } catch {
-        // ignore
+        //ignore
       }
     }
     if (sum) {
@@ -209,7 +212,7 @@ export default function PostClass() {
         sum.pause();
         sum.currentTime = 0;
       } catch {
-        // ignore
+        //ignore
       }
     }
     if (memoEl) {
@@ -217,7 +220,15 @@ export default function PostClass() {
         memoEl.pause();
         memoEl.currentTime = 0;
       } catch {
-        // ignore
+        //ignore
+      }
+    }
+
+    if (boardStopAudioRef.current) {
+      try {
+        boardStopAudioRef.current();
+      } catch {
+        //ignore
       }
     }
   }, []);
@@ -240,6 +251,14 @@ export default function PostClass() {
       speak(text);
     },
     [stopServerAudio, stop, speak]
+  );
+
+  const focusSpeakForToolbar = useCallback(
+    (msg: string) => {
+      if (!readOnFocus) return;
+      speakWithStop(msg);
+    },
+    [readOnFocus, speakWithStop]
   );
 
   /* ---------------- 페이지 로드 + 요약/리뷰/요약TTS ---------------- */
@@ -276,6 +295,7 @@ export default function PostClass() {
         if (dp.pageId) {
           setSummaryLoading(true);
           try {
+            // 요약 + 요약 TTS
             const sumPromise = (async () => {
               const s = await fetchPageSummary(dp.pageId);
               if (cancelled) return null;
@@ -301,6 +321,7 @@ export default function PostClass() {
               return s;
             })();
 
+            // 리뷰 + 기존 보드용 TTS (텍스트 있는 보드만)
             const reviewPromise = (async (): Promise<PageReview | null> => {
               try {
                 const boardsPayload = await buildBoardsPayload(
@@ -355,7 +376,7 @@ export default function PostClass() {
     return () => {
       cancelled = true;
     };
-  }, [docId, page, isAssistant, announce]);
+  }, [docId, page, isAssistant, announce, buildTtsText]);
 
   useOcrTtsAutoStop(ocrAudioRef, {
     pageKey: docPage?.pageId,
@@ -466,19 +487,18 @@ export default function PostClass() {
 
       try {
         const playPromise = audio.play();
-        // 일부 브라우저는 play()가 Promise를 안 돌려주기도 해서 방어코드
+
         if (playPromise !== undefined) {
           await playPromise;
         }
       } catch (err) {
         if ((err as DOMException).name === "AbortError") {
-          // 🔇 포커스 이동 등으로 인한 자연스러운 중단 → 조용히 무시
           console.warn(
             "[TTS] play aborted (probably due to quick focus change or pause)."
           );
           return;
         }
-        throw err; // 다른 에러는 그대로 위로 던짐
+        throw err;
       }
     },
     [stop, stopServerAudio, soundVoice, soundRate, speakWithStop]
@@ -486,7 +506,7 @@ export default function PostClass() {
 
   const handleFocusReviewTts = useCallback(
     (opts: { tts?: TtsPair | null; fallbackText?: string }) => {
-      if (!readOnFocus) return; // 설정 꺼져 있으면 아무것도 안 함
+      if (!readOnFocus) return;
       void playReviewTts(opts.tts ?? null, opts.fallbackText);
     },
     [readOnFocus, playReviewTts]
@@ -500,9 +520,8 @@ export default function PostClass() {
       });
 
       try {
-        // 1) 로컬 TTS / 기존 서버 오디오 모두 정지
-        stop(); // SpeechSynthesis
-        stopServerAudio(); // ocr, sum, memo 오디오 전부 정지
+        stop();
+        stopServerAudio();
 
         const url =
           tts && (tts.female || tts.male)
@@ -524,7 +543,7 @@ export default function PostClass() {
           return;
         }
 
-        const audio = memoAudioRef.current; // 🔹 sumAudioRef 대신 memoAudioRef 사용
+        const audio = memoAudioRef.current;
         if (!audio) {
           console.warn("[PostClass] memoAudioRef.current가 없습니다.");
           return;
@@ -557,8 +576,6 @@ export default function PostClass() {
           console.warn(
             "[PostClass] 메모 음성 재생 중단(AbortError) - 로컬 TTS로 대체"
           );
-          // 필요하면 여기서도 speakWithStop(content) 호출 가능
-          // speakWithStop(content);
           return;
         }
 
@@ -710,6 +727,10 @@ export default function PostClass() {
             onPlayMemoTts={handlePlayMemoTts}
             readOnFocus={readOnFocus}
             onFocusReviewTts={handleFocusReviewTts}
+            buildBoardTtsText={buildTtsText}
+            registerBoardStop={(fn) => {
+              boardStopAudioRef.current = fn;
+            }}
           />
         </Grid>
       </Container>
@@ -724,6 +745,7 @@ export default function PostClass() {
         onNext={() => void goToPage(page + 1)}
         onToggleMode={toggleMode}
         onGoTo={(n) => void goToPage(n)}
+        speak={focusSpeakForToolbar}
         startPageId={docPage?.pageId ?? null}
         onStartLive={(pageId) => {
           if (!docId) {

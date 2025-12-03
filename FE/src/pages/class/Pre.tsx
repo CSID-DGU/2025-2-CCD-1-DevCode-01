@@ -429,8 +429,8 @@ export default function PreClass() {
       announce("본문 음성을 재생합니다.");
     } catch (e) {
       console.error(e);
-      toast.error("음성 생성에 실패했습니다.");
-      announce("음성을 불러오지 못했습니다.");
+      toast.error("교안 음성을 불러오는 중입니다");
+      announce("교안 음성을 불러오는 중입니다");
     } finally {
       setPageTtsLoading(false);
     }
@@ -471,7 +471,7 @@ export default function PreClass() {
           : summaryTts.male ?? summaryTts.female ?? null;
 
       if (!url) {
-        toast.error("생성된 요약 음성이 없습니다.");
+        toast.error("교안 음성을 불러오는 중입니다");
         return;
       }
 

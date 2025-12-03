@@ -8,6 +8,19 @@ import type { LectureDoc, LectureDocDTO, LectureDocsResponse } from "./types";
 import { mapLectureDoc } from "./types";
 
 /* ---------- 타입 가드 ---------- */
+
+const isDocTtsDTO = (
+  v: unknown
+): v is { female?: string | null; male?: string | null } => {
+  if (v === null || v === undefined) return true; // optional이니까 허용
+  if (typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  const isStrOrNullOrUndef = (x: unknown) =>
+    typeof x === "string" || x === null || x === undefined;
+
+  return isStrOrNullOrUndef(o.female) && isStrOrNullOrUndef(o.male);
+};
+
 const isLectureDocDTO = (v: unknown): v is LectureDocDTO => {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
@@ -16,7 +29,8 @@ const isLectureDocDTO = (v: unknown): v is LectureDocDTO => {
     typeof o.title === "string" &&
     typeof o.createdAt === "string" &&
     typeof o.review === "boolean" &&
-    (typeof o.timestamp === "string" || o.timestamp === null)
+    (typeof o.timestamp === "string" || o.timestamp === null) &&
+    isDocTtsDTO(o.doc_tts)
   );
 };
 

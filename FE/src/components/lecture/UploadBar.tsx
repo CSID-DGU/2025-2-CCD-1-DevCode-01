@@ -1,11 +1,11 @@
-// src/components/lecture/UploadBar.tsx
 import { useRef } from "react";
 import styled from "styled-components";
 import { fonts } from "@styles/fonts";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 type Props = {
   onSelectFile: (file: File) => void;
-  busy?: boolean; // 선택(로딩 스피너 등 쓸 때)
+  busy?: boolean;
 };
 
 export default function UploadBar({ onSelectFile, busy }: Props) {
@@ -16,21 +16,32 @@ export default function UploadBar({ onSelectFile, busy }: Props) {
   const onChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const file = e.target.files?.[0];
     if (file) onSelectFile(file);
-    e.currentTarget.value = ""; // 같은 파일 재선택 대비 초기화
+    e.currentTarget.value = "";
   };
+
+  const addLectureDocs = useFocusSpeak({
+    text: "자료 추가, pdf 파일을 선택해주세요.",
+  });
 
   return (
     <AddBar role="region" aria-label="자료 추가 영역" aria-busy={!!busy}>
-      <AddBtn
-        type="button"
-        onClick={openPicker}
-        aria-controls="doc-file-input"
-        aria-describedby="doc-file-desc"
-      >
-        <Plus aria-hidden>＋</Plus>
-        <span>자료 추가</span>
-      </AddBtn>
-
+      <AddBarTop>
+        <AddBtn
+          type="button"
+          onClick={openPicker}
+          aria-controls="doc-file-input"
+          aria-describedby="doc-file-desc"
+          onFocus={addLectureDocs.onFocus}
+          onBlur={addLectureDocs.onBlur}
+        >
+          <Plus aria-hidden>＋</Plus>
+          <span>자료 추가</span>
+        </AddBtn>
+        <p>
+          * AI 분석 결과는 참고용이며 오류가 있을 수 있습니다. <br />* 교안
+          텍스트는 ai 분석 결과로, 일부 내용이 정확하지 않을 수 있습니다.
+        </p>
+      </AddBarTop>
       <VisuallyHidden id="doc-file-desc">
         PDF 또는 파워포인트 파일을 선택합니다.
       </VisuallyHidden>
@@ -56,7 +67,6 @@ export default function UploadBar({ onSelectFile, busy }: Props) {
 const AddBar = styled.div`
   grid-column: 1 / -1;
   grid-row: 1;
-  position: sticky;
   top: 0;
   z-index: 10;
   padding-bottom: 0.25rem;
@@ -64,6 +74,20 @@ const AddBar = styled.div`
   background: var(--c-white);
   display: flex;
   justify-content: center;
+`;
+
+const AddBarTop = styled.div`
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 10px;
+
+  p {
+    display: flex;
+    justify-content: flex-start;
+    ${fonts.regular17}
+    color: var(--c-grayD)
+  }
 `;
 
 const AddBtn = styled.button`

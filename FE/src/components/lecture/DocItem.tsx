@@ -1,4 +1,3 @@
-// src/components/lecture/DocItem.tsx
 import styled from "styled-components";
 import { fonts } from "@styles/fonts";
 import { OptionsMenu } from "src/components/home/OptionsMenu";
@@ -7,6 +6,7 @@ import { useRef, useState, useEffect } from "react";
 import { useContrastImage } from "@shared/useContrastImage";
 import toast from "react-hot-toast";
 import { updateLectureDoc } from "src/entities/doc/api";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 type Props = {
   doc: LectureDoc;
@@ -14,6 +14,7 @@ type Props = {
   onDelete: (doc: LectureDoc) => void;
   fmtDate: (iso: string) => string;
   onTitleUpdated: (id: number, title: string) => void;
+  onFocusTitle?: () => void;
 };
 
 export default function DocItem({
@@ -22,6 +23,7 @@ export default function DocItem({
   onDelete,
   fmtDate,
   onTitleUpdated,
+  onFocusTitle,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -33,6 +35,8 @@ export default function DocItem({
   const titleBtnRef = useRef<HTMLButtonElement | null>(null);
 
   const arrow = useContrastImage("/img/home/arrowDown");
+
+  const menuBtnSpeak = useFocusSpeak({ text: "옵션 메뉴 열기 버튼" });
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -47,6 +51,24 @@ export default function DocItem({
     };
     document.addEventListener("click", onDocClick);
     return () => document.removeEventListener("click", onDocClick);
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        e.preventDefault();
+        setMenuOpen(false);
+        menuBtnRef.current?.focus();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
   }, [menuOpen]);
 
   useEffect(() => {
@@ -72,8 +94,6 @@ export default function DocItem({
     requestAnimationFrame(() => {
       if (by === "enter") {
         titleBtnRef.current?.focus({ preventScroll: true });
-      } else {
-        (document.activeElement as HTMLElement | null)?.blur();
       }
     });
 
@@ -88,7 +108,7 @@ export default function DocItem({
           onChange={(e) => setNewTitle(e.target.value)}
           onBlur={() => void saveEdit("blur")}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key === "Enter" && e.ctrlKey) {
               e.preventDefault();
               e.stopPropagation();
               void saveEdit("enter");
@@ -96,6 +116,7 @@ export default function DocItem({
               e.preventDefault();
               e.stopPropagation();
               setEditing(false);
+              setNewTitle(doc.title);
               titleBtnRef.current?.focus();
             }
           }}
@@ -108,6 +129,9 @@ export default function DocItem({
           type="button"
           onClick={() => onOpen(doc)}
           aria-labelledby={`doc-title-${doc.id}`}
+          onFocus={() => {
+            onFocusTitle?.();
+          }}
         >
           <span id={`doc-title-${doc.id}`}>{doc.title}</span>
         </TitleBtn>
@@ -136,6 +160,8 @@ export default function DocItem({
             menuBtnRef.current?.focus();
           }
         }}
+        onFocus={menuBtnSpeak.onFocus}
+        onBlur={menuBtnSpeak.onBlur}
       >
         <img src={arrow} alt="" aria-hidden />
       </MenuBtn>

@@ -1,4 +1,4 @@
-import React, { useId, useState } from "react";
+import React, { useId, useState, useRef, useCallback } from "react";
 import styled from "styled-components";
 import MemoBox from "./Memo";
 import { fonts } from "@styles/fonts";
@@ -6,6 +6,7 @@ import SummaryPane from "../pre/SummaryPane";
 import { PANEL_FIXED_H_LIVE } from "@pages/class/pre/styles";
 import BoardBox from "./BoardBox";
 import type { NoteTts } from "@apis/lecture/note.api";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 type Role = "student" | "assistant";
 export type TabKey = "memo" | "board" | "summary";
@@ -41,6 +42,8 @@ type Props = {
   activeTab?: TabKey;
   onTabChange?: (tab: TabKey) => void;
   onStopAllTts?: () => void;
+  localTtsEnabled?: boolean;
+  boardTtsEnabled?: boolean;
 };
 
 export default function RightTabs({
@@ -60,20 +63,13 @@ export default function RightTabs({
   activeTab,
   onTabChange,
   onStopAllTts,
+  localTtsEnabled = true,
+  boardTtsEnabled = true,
 }: Props) {
   const [innerTab, setInnerTab] = useState<TabKey>(activeInitial);
 
   const isControlled = activeTab != null;
   const currentTab: TabKey = isControlled ? (activeTab as TabKey) : innerTab;
-
-  const changeTab = (next: TabKey) => {
-    onStopAllTts?.();
-
-    if (!isControlled) {
-      setInnerTab(next);
-    }
-    onTabChange?.(next);
-  };
 
   const baseId = useId();
   const tabIds: Record<TabKey, string> = {
@@ -89,10 +85,36 @@ export default function RightTabs({
 
   const hasBoard = showBoard && board;
 
+  const changeTab = (next: TabKey) => {
+    onStopAllTts?.();
+
+    if (!isControlled) {
+      setInnerTab(next);
+    }
+    onTabChange?.(next);
+  };
+
+  const memoPanelRef = useRef<HTMLElement | null>(null);
+
+  const focusFirstInMemoPanel = useCallback(() => {
+    requestAnimationFrame(() => {
+      const root = memoPanelRef.current;
+      if (!root) return;
+
+      const selector =
+        'button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])';
+
+      const first = root.querySelector<HTMLElement>(selector);
+      first?.focus();
+    });
+  }, []);
+
   const handleClickSummary = () => {
     changeTab("summary");
     onSummaryOpen?.();
   };
+
+  const focusSpeak = useFocusSpeak({ enabled: localTtsEnabled });
 
   return (
     <Aside $stack={stack} aria-label="메모, 판서, 요약 패널">
@@ -101,17 +123,28 @@ export default function RightTabs({
         aria-label="우측 기능"
         aria-orientation="horizontal"
       >
+        {/* 메모 탭 */}
         <Tab
           id={tabIds.memo}
           role="tab"
           aria-selected={currentTab === "memo"}
           aria-controls={panelIds.memo}
-          onClick={() => changeTab("memo")}
           type="button"
+          aria-label="메모"
+          onClick={() => changeTab("memo")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              changeTab("memo");
+              focusFirstInMemoPanel();
+            }
+          }}
+          {...focusSpeak}
         >
           메모
         </Tab>
 
+        {/* 판서 탭 */}
         {hasBoard && (
           <Tab
             id={tabIds.board}
@@ -120,11 +153,14 @@ export default function RightTabs({
             aria-controls={panelIds.board}
             onClick={() => changeTab("board")}
             type="button"
+            aria-label="추가자료"
+            {...focusSpeak}
           >
             추가 자료
           </Tab>
         )}
 
+        {/* 요약 탭 */}
         <Tab
           id={tabIds.summary}
           role="tab"
@@ -132,6 +168,8 @@ export default function RightTabs({
           aria-controls={panelIds.summary}
           onClick={handleClickSummary}
           type="button"
+          aria-label="요약"
+          {...focusSpeak}
         >
           요약
         </Tab>
@@ -143,6 +181,7 @@ export default function RightTabs({
         role="tabpanel"
         aria-labelledby={tabIds.memo}
         hidden={currentTab !== "memo"}
+        ref={memoPanelRef}
       >
         {typeof memo.pageId === "number" && memo.pageId > 0 ? (
           <>
@@ -182,6 +221,7 @@ export default function RightTabs({
               pageId={board.pageId}
               assetBase={import.meta.env.VITE_BASE_URL}
               token={localStorage.getItem("access")}
+              enableTts={localTtsEnabled && boardTtsEnabled}
             />
           ) : (
             <EmptyState role="status" aria-live="polite">
@@ -213,6 +253,8 @@ export default function RightTabs({
     </Aside>
   );
 }
+
+/* ---------- styled ---------- */
 
 const Aside = styled.aside<{ $stack: boolean }>`
   position: ${({ $stack }) => ($stack ? "static" : "sticky")};
