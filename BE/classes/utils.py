@@ -331,8 +331,8 @@ def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     if not text or text.strip() == "":
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
 
-    ssml_text = text_to_ssml(text)
-    synthesis_input = texttospeech.SynthesisInput(ssml=ssml_text)
+    # ssml_text = text_to_ssml(text)
+    synthesis_input = texttospeech.SynthesisInput(text=text)
     
     voice_map = {
         "female": "ko-KR-Neural2-A",
@@ -406,8 +406,8 @@ def text_to_speech_local(text: str, voice: str, rate: str) -> str:
     if not text or text.strip() == "":
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
 
-    ssml_text = text_to_ssml(text)
-    synthesis_input = texttospeech.SynthesisInput(ssml=ssml_text)
+    # ssml_text = text_to_ssml(text)
+    synthesis_input = texttospeech.SynthesisInput(text=text)
 
     voice_map = {
         "여성": "ko-KR-Neural2-A",
