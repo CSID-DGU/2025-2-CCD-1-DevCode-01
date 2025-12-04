@@ -56,10 +56,12 @@ code_pattern = re.compile(r"<코드>(.*?)</코드>", re.DOTALL)
 math_pattern = re.compile(r"<수식>(.*?)</수식>", re.DOTALL)
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+tts_client = texttospeech.TextToSpeechClient(transport="rest")
+stt_client = speech.SpeechClient(transport="rest")
+storage_client = storage.Client()
 
 def upload_to_gcs(file_bytes: bytes, filename: str, bucket_name: str) -> str:
     """GCS 버킷에 파일 업로드 후 URI 반환"""
-    storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(f"stt/{filename}")
     blob.upload_from_string(file_bytes)
@@ -136,8 +138,6 @@ def split_audio_on_silence(wav_bytes: bytes, silence_threshold=150, min_silence_
     return chunks, rate
 
 def speech_to_text(audio_path) -> tuple[str, list]:
-    client = speech.SpeechClient(transport="rest")
-
     with open(audio_path, "rb") as f:
         content = f.read()
 
@@ -174,7 +174,7 @@ def speech_to_text(audio_path) -> tuple[str, list]:
 
         if len(chunk_bytes) < 1024 * 1024:
             audio = speech.RecognitionAudio(content=chunk_bytes)
-            response = client.recognize(config=config, audio=audio)
+            response = stt_client.recognize(config=config, audio=audio)
         else:
             gcs_uri = upload_to_gcs(
                 chunk_bytes,
@@ -182,7 +182,7 @@ def speech_to_text(audio_path) -> tuple[str, list]:
                 settings.GCP_BUCKET_NAME
             )
             audio = speech.RecognitionAudio(uri=gcs_uri)
-            operation = client.long_running_recognize(config=config, audio=audio)
+            operation = stt_client.long_running_recognize(config=config, audio=audio)
             response = operation.result(timeout=900)
 
         if response.results:
@@ -330,9 +330,8 @@ def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     if not text or text.strip() == "":
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
 
-    client = texttospeech.TextToSpeechClient(transport="rest")
-
-    synthesis_input = texttospeech.SynthesisInput(text=text)
+    ssml_text = text_to_ssml(text)
+    synthesis_input = texttospeech.SynthesisInput(ssml=ssml_text)
     
     voice_map = {
         "female": "ko-KR-Neural2-A",
@@ -352,7 +351,7 @@ def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
             name=name,
         )
 
-        response = client.synthesize_speech(
+        response = tts_client.synthesize_speech(
             input=synthesis_input,
             voice=voice_config,
             audio_config=audio_config
@@ -385,6 +384,17 @@ def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
 
     return s3_urls
 
+def text_to_ssml(text: str) -> str:
+    if not text or text.strip() == "":
+        raise ValueError("SSML 변환할 텍스트가 비어 있습니다.")
+
+    text = text.replace("\n", " <break time=\"500ms\"/> ")
+    text = re.sub(r'\s*([.,])\s*', r'\1 <break time="300ms"/> ', text)
+
+    ssml = f"<speak>{text}</speak>"
+    
+    return ssml
+
 def text_to_speech_local(text: str, voice: str, rate: str) -> str:
     """
     Google TTS 변환 후 로컬에만 MP3 저장 (S3 업로드 없음)
@@ -392,10 +402,8 @@ def text_to_speech_local(text: str, voice: str, rate: str) -> str:
     if not text or text.strip() == "":
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
 
-    # 1️⃣ Google TTS 클라이언트 생성
-    client = texttospeech.TextToSpeechClient(transport="rest")
-
-    synthesis_input = texttospeech.SynthesisInput(text=text)
+    ssml_text = text_to_ssml(text)
+    synthesis_input = texttospeech.SynthesisInput(ssml=ssml_text)
 
     voice_map = {
         "여성": "ko-KR-Neural2-A",
@@ -417,7 +425,7 @@ def text_to_speech_local(text: str, voice: str, rate: str) -> str:
     )
 
     # 2️⃣ TTS 변환
-    response = client.synthesize_speech(
+    response = tts_client.synthesize_speech(
         input=synthesis_input,
         voice=voice_config,
         audio_config=audio_config
