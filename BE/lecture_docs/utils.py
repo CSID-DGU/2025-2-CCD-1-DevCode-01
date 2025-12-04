@@ -24,6 +24,8 @@ text_pattern = r'\\(' + '|'.join(text_commands) + r')\{([^{}]+)\}'
 
 code_pattern = r"```(.*?)```"
 
+tts_client = texttospeech.TextToSpeechClient(transport="rest")
+
 def summarize_stt(doc_id: int, user: User) -> tuple[str, str]:
     """
     1. Doc ID로 모든 Page.speeches의 STT 텍스트 병합
@@ -236,8 +238,6 @@ def upload_s3(file_obj, file_name, folder=None, content_type=None):
         raise Exception(f"S3 업로드 실패: {e}")
 
 def exam_tts(text: str, user: User):
-    client = texttospeech.TextToSpeechClient(transport="rest")
-
     synthesis_input = texttospeech.SynthesisInput(text=text)
 
     voice_map = {
@@ -259,7 +259,7 @@ def exam_tts(text: str, user: User):
         speaking_rate=speaking_rate,
     )
 
-    response = client.synthesize_speech(
+    response = tts_client.synthesize_speech(
         input=synthesis_input, voice=voice_config, audio_config=audio_config
     )
 
