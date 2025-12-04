@@ -190,6 +190,7 @@ const ExamTake = () => {
         return null;
       }
 
+      // 🔊 여기서만 buildTtsText 사용 → TTS 전용
       let finalText = rawText;
       try {
         finalText = await buildTtsText(rawText);
@@ -365,7 +366,7 @@ const ExamTake = () => {
     }, diff);
 
     return () => window.clearTimeout(timerId);
-  }, [exam?.endTime]);
+  }, [exam?.endTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---------- 5) 문제 전체 듣기 (API TTS로 순서대로 재생) ---------- */
   const handlePlayWholeQuestion = async () => {
@@ -521,8 +522,8 @@ const ExamTake = () => {
             onFocus={() => {
               announce(
                 viewMode === "detail"
-                  ? "시험지 전체 페이지 보기 버튼입니다. 현재는 텍스트 모드입니다."
-                  : "텍스트로 보기 버튼입니다. 현재는 시험지 전체 페이지 모드입니다."
+                  ? "시험지 전체 페이지 보기 버튼"
+                  : "텍스트로 보기 버튼"
               );
             }}
           >
@@ -542,8 +543,8 @@ const ExamTake = () => {
             onFocus={() => {
               announce(
                 isWholeReading
-                  ? "문제 전체 듣기 정지 버튼입니다."
-                  : "문제 전체 듣기 버튼입니다. 누르면 이 문제의 모든 항목을 순서대로 읽어줍니다."
+                  ? "문제 전체 듣기 정지 버튼"
+                  : "문제 전체 듣기 버튼"
               );
             }}
           >
@@ -804,29 +805,6 @@ export default ExamTake;
 /* ---------- 텍스트 변환 컴포넌트 (수식 포함) ---------- */
 
 function ItemTextContent({ item }: { item: ExamItem }) {
-  const { buildTtsText } = useTtsTextBuilder();
-  const [text, setText] = useState(item.displayText ?? "");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const run = async () => {
-      if (!item.displayText) return;
-      try {
-        const processed = await buildTtsText(item.displayText);
-        if (!cancelled) {
-          setText(processed);
-        }
-      } catch {
-        if (!cancelled) setText(item.displayText ?? "");
-      }
-    };
-
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [item.displayText, buildTtsText]);
-
-  return <RichOcrContent text={text} />;
+  const visibleText = item.displayText ?? "";
+  return <RichOcrContent text={visibleText} />;
 }
