@@ -13,5 +13,5 @@ export const SIZE_PRESETS = [
   { id: "large", label: "150%", valuePct: "150" },
   { id: "xlarge", label: "175%", valuePct: "175" },
   { id: "xxlarge", label: "200%", valuePct: "200" },
-  { id: "max", label: "300%", valuePct: "300" },
+  // { id: "max", label: "300%", valuePct: "300" },
 ] as const;

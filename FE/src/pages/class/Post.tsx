@@ -434,8 +434,8 @@ export default function PostClass() {
       announce("본문 음성을 재생합니다.");
     } catch (e) {
       console.error(e);
-      toast.error("음성 생성에 실패했습니다.");
-      announce("음성을 불러오지 못했습니다.");
+      toast.error("본문 음성을 불러오는 중입니다.");
+      announce("본문 음성을 불러오는 중입니다.");
     } finally {
       setPageTtsLoading(false);
     }
