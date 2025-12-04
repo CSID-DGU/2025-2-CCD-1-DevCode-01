@@ -75,7 +75,7 @@ export default function LiveClass() {
   const params = useParams<RouteParams>();
   const { state } = useLocation() as { state?: NavState };
 
-  console.log("[LiveClass] received resumeClock =", state?.resumeClock);
+  // console.log("[LiveClass] received resumeClock =", state?.resumeClock);
 
   const [totalPageNum, setTotalPageNum] = useState<number | null>(
     typeof state?.totalPage === "number" ? state!.totalPage : null

@@ -152,9 +152,18 @@ function MathBlock({ latex }: MathBlockProps) {
     const root = ref.current;
     if (!mj?.typesetPromise || !root) return;
 
-    mj.typesetPromise([root]).catch((err) => {
-      console.error("[MarkdownText/MathJax] typeset 실패:", err);
-    });
+    mj.typesetPromise([root])
+      .then(() => {
+        const focusables = root.querySelectorAll<HTMLElement>("[tabindex]");
+        focusables.forEach((el) => {
+          el.tabIndex = -1;
+          el.setAttribute("aria-hidden", "true");
+          el.setAttribute("data-skip-focus-tts", "true");
+        });
+      })
+      .catch((err) => {
+        console.error("[MarkdownText/MathJax] typeset 실패:", err);
+      });
   }, [latex]);
 
   return (
@@ -222,7 +231,10 @@ const CodeInline = styled.code`
   ${fonts.regular20}
 `;
 
-const CodeBlock = styled.pre`
+const CodeBlock = styled.pre.attrs({
+  tabIndex: -1,
+  "data-skip-focus-tts": "true",
+})`
   padding: 10px;
   border-radius: 8px;
   background: #f3f4f6;

@@ -70,11 +70,16 @@ function MathBlock({ latex }: MathBlockProps) {
 
     mj.typesetPromise([root])
       .then(() => {
+        // MathJax가 만들어 놓은 포커스 가능한 모든 요소 + tabindex 가진 요소들
         const focusableSelector =
-          'a, button, input, textarea, select, [contenteditable="true"], svg[focusable="true"]';
+          'a, button, input, textarea, select, [contenteditable="true"], svg[focusable="true"], [tabindex]';
 
         root.querySelectorAll<HTMLElement>(focusableSelector).forEach((el) => {
+          // 키보드 포커스 막기
+          el.tabIndex = -1;
+          // 스크린리더/포커스 읽기도 막기
           el.setAttribute("aria-hidden", "true");
+          el.setAttribute("data-skip-focus-tts", "true");
         });
       })
       .catch((err) => {
