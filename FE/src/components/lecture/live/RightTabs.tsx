@@ -185,13 +185,6 @@ export default function RightTabs({
       >
         {typeof memo.pageId === "number" && memo.pageId > 0 ? (
           <>
-            {console.log("[RightTabs] Memo panel 렌더링", {
-              pageId: memo.pageId,
-              memoAutoReadOnFocus,
-              memoUpdateWithTts,
-              hasOnPlayMemoTts: !!onPlayMemoTts,
-              currentTab,
-            })}
             <MemoBox
               docId={memo.docId}
               pageId={memo.pageId}

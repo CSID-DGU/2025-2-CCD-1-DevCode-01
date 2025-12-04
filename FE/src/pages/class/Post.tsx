@@ -33,6 +33,10 @@ import RightTabsPost from "src/components/lecture/post/RightTabPost";
 import { useFocusTTS } from "src/hooks/useFocusTTS";
 import { fetchDocSpeechSummaries } from "@apis/lecture/profTts.api";
 
+/* ===========================
+ * 유틸 & 타입
+ * =========================== */
+
 type RouteParams = { courseId?: string; docId?: string };
 type NavState = {
   navTitle?: string;
@@ -40,6 +44,27 @@ type NavState = {
   resumeClock?: string | null;
 };
 type UserRole = "assistant" | "student";
+
+// 비동기 딜레이용
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+// 모든 status / TTS가 완료되었는지 판단
+function isReviewDone(review: PageReview | null): boolean {
+  if (!review) return false;
+
+  // speeches가 하나도 없으면 그냥 끝난 걸로 볼지,
+  // 아니면 false로 볼지는 취향인데 일단 "없으면 true"로 둘게
+  if (!review.speeches || review.speeches.length === 0) {
+    return true;
+  }
+
+  // ✅ 모든 speech.status가 "done"이면 완료
+  return review.speeches.every((s) => s.status === "done");
+}
 
 function useDocIdFromParamsAndState(params: RouteParams, state?: NavState) {
   return useMemo(() => {
@@ -124,6 +149,10 @@ async function buildBoardsPayload(
 
   return { boards };
 }
+
+/* ===========================
+ * 컴포넌트
+ * =========================== */
 
 export default function PostClass() {
   const params = useParams<RouteParams>();
@@ -261,7 +290,7 @@ export default function PostClass() {
     [readOnFocus, speakWithStop]
   );
 
-  /* ---------------- 페이지 로드 + 요약/리뷰/요약TTS ---------------- */
+  /* ---------------- 페이지 로드 + 요약/리뷰/요약TTS (+ 리뷰 폴링) ---------------- */
   useEffect(() => {
     if (!docId) return;
 
@@ -321,18 +350,47 @@ export default function PostClass() {
               return s;
             })();
 
-            // 리뷰 + 기존 보드용 TTS (텍스트 있는 보드만)
             const reviewPromise = (async (): Promise<PageReview | null> => {
               try {
                 const boardsPayload = await buildBoardsPayload(
                   dp.pageId,
                   buildTtsText
                 );
+                if (cancelled) return null;
 
-                const res = await postPageReview(dp.pageId, boardsPayload);
-                return res ?? null;
+                const POLL_INTERVAL = 3000;
+                const MAX_ATTEMPTS = 30;
+
+                let lastReview: PageReview | null = null;
+
+                for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+                  if (cancelled) return lastReview;
+
+                  const res = await postPageReview(dp.pageId, boardsPayload);
+                  if (cancelled) return lastReview;
+
+                  lastReview = res ?? null;
+                  setReview(lastReview);
+
+                  if (isReviewDone(lastReview)) {
+                    console.log(
+                      "[PostClass] PageReview 처리 완료 (status=done)."
+                    );
+                    break;
+                  }
+
+                  await sleep(POLL_INTERVAL);
+                }
+
+                if (!isReviewDone(lastReview)) {
+                  console.warn(
+                    "[PostClass] PageReview 폴링 최대 시도 수 초과 (완료 전 중단 가능성)"
+                  );
+                }
+
+                return lastReview;
               } catch (err) {
-                console.error("[PostClass] postPageReview 실패:", err);
+                console.error("[PostClass] postPageReview 폴링 실패:", err);
                 return null;
               }
             })();
