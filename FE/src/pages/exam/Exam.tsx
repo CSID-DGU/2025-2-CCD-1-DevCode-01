@@ -34,6 +34,27 @@ const Exam = () => {
   const focusSpeak = useFocusSpeak();
 
   const liveRef = useRef<HTMLDivElement | null>(null);
+  const [minEndTime, setMinEndTime] = useState("");
+
+  // HH:MM 포맷으로 현재 시간 반환
+  const getNowHHMM = () => {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2, "0");
+    const m = String(now.getMinutes()).padStart(2, "0");
+    return `${h}:${m}`;
+  };
+
+  useEffect(() => {
+    // 처음 마운트될 때 한 번 세팅
+    setMinEndTime(getNowHHMM());
+
+    // 1분마다 최소 시간 갱신
+    const timer = setInterval(() => {
+      setMinEndTime(getNowHHMM());
+    }, 60_000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   /* ---------- 1) 현재 시험 상태 확인 ---------- */
   useEffect(() => {
@@ -82,6 +103,12 @@ const Exam = () => {
     }
     if (images.length === 0) {
       toast.error("시험지 사진을 한 장 이상 촬영하거나 선택해주세요.");
+      return;
+    }
+
+    const now = getNowHHMM();
+    if (endTime <= now) {
+      toast.error("현재 시각 이후의 종료 시간을 선택해주세요.");
       return;
     }
 
@@ -159,6 +186,7 @@ const Exam = () => {
               aria-required="true"
               aria-describedby="endTime-hint"
               aria-label="시험 종료 시간을 입력해주세요"
+              min={minEndTime}
               {...focusSpeak}
             />
             <Hint id="endTime-hint">
