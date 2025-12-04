@@ -387,6 +387,10 @@ export default function BoardBox({
     }
   };
 
+  const openFileDialog = () => {
+    fileRef.current?.click();
+  };
+
   return (
     <>
       {enableTts && (
@@ -398,6 +402,12 @@ export default function BoardBox({
           role="button"
           tabIndex={0}
           onClick={() => fileRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openFileDialog();
+            }
+          }}
           onDragOver={(e) => e.preventDefault()}
           onDrop={onDrop}
           aria-label="사진 업로드"
@@ -424,8 +434,6 @@ export default function BoardBox({
             const isDeleting = deletingId === b.boardId;
 
             const src = b.image ? toUrl(b.image) : "";
-
-            // reviewBoards와 매칭해서 TTS를 보강
             const rb = reviewBoards?.find((rb) => rb.boardId === b.boardId);
             const effectiveTts: TtsPair =
               rb?.board_tts ?? (b.board_tts as TtsPair) ?? null;
