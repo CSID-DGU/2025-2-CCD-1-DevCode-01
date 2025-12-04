@@ -1,3 +1,4 @@
+import html
 import re
 import tempfile
 import wave
@@ -388,11 +389,14 @@ def text_to_ssml(text: str) -> str:
     if not text or text.strip() == "":
         raise ValueError("SSML 변환할 텍스트가 비어 있습니다.")
 
-    text = text.replace("\n", " <break time=\"500ms\"/> ")
-    text = re.sub(r'\s*([.,])\s*', r'\1 <break time="300ms"/> ', text)
+    text = html.escape(text)
+
+    text = text.replace("\n", '<break time="0.5s"/>')
+
+    text = re.sub(r'([.,])', r'\1<break time="0.3s"/>', text)
 
     ssml = f"<speak>{text}</speak>"
-    
+
     return ssml
 
 def text_to_speech_local(text: str, voice: str, rate: str) -> str:
