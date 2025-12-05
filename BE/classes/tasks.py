@@ -60,6 +60,8 @@ def run_speech(speech_id, audio_path, page_id, user_id):
 
         stt_text, stt_words = speech_to_text(wav_path)
 
+        mapped_words = text_positioin(stt_text, stt_words)
+
         s3_url = text_to_speech(stt_text, user, "tts/speech/")
 
         duration_sec, duration = get_duration(wav_path)
@@ -70,7 +72,7 @@ def run_speech(speech_id, audio_path, page_id, user_id):
         for b in bookmarks:
             if start_time_sec <= b.timestamp_sec <= end_time_sec:
                 b.relative_time = round(b.timestamp_sec - start_time_sec)
-                b.text = extract_text(stt_words, b.relative_time, user)
+                b.text = extract_text(stt_words, mapped_words, stt_text, b.relative_time, user)
                 b.save(update_fields=["relative_time", "text"])
 
         speech.stt = stt_text
