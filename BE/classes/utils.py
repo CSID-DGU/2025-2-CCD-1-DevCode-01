@@ -366,7 +366,6 @@ def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     if not text or text.strip() == "":
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
 
-    # ssml_text = text_to_ssml(text)
     synthesis_input = texttospeech.SynthesisInput(text=text)
     
     voice_map = {
@@ -420,28 +419,13 @@ def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
 
     return s3_urls
 
-def text_to_ssml(text: str) -> str:
-    if not text or text.strip() == "":
-        raise ValueError("SSML 변환할 텍스트가 비어 있습니다.")
-
-    text = html.escape(text)
-
-    text = text.replace("\n", '<break time="0.5s"/>')
-
-    text = re.sub(r'([.,])', r'\1<break time="0.3s"/>', text)
-
-    ssml = f"<speak>{text}</speak>"
-
-    return ssml
-
 def text_to_speech_local(text: str, voice: str, rate: str) -> str:
     """
     Google TTS 변환 후 로컬에만 MP3 저장 (S3 업로드 없음)
     """
     if not text or text.strip() == "":
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
-
-    # ssml_text = text_to_ssml(text)
+    
     synthesis_input = texttospeech.SynthesisInput(text=text)
 
     voice_map = {
