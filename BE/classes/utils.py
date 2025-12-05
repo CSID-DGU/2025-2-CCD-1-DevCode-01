@@ -205,18 +205,53 @@ def speech_to_text(audio_path) -> tuple[str, list]:
 
     return transcript, stt_words
 
+def text_positioin(stt_text, stt_words):
+    mapped = []
+    search_pos = 0
 
-def extract_text(stt_words, relative_time, user: User):
+    for w in stt_words:
+        clean_word = w["word"].replace("▁", "")
+
+        if not clean_word:
+            continue
+
+        idx = stt_text.find(clean_word, search_pos)
+
+        if idx != -1:
+            mapped.append({
+                "word": w["word"],
+                "start": w["start"],
+                "end": w["end"],
+                "start_index": idx,
+                "end_index": idx + len(clean_word),
+            })
+            search_pos = idx + len(clean_word)
+
+    return mapped
+
+def text_substring(stt_text, mapped_words, start_idx, end_idx):
+    valid_words = [w for w in mapped_words[start_idx:end_idx] 
+                   if w["start_index"] is not None]
+    
+    if not valid_words:
+        return ""
+    
+    text_start = valid_words[0]["start_index"]
+    text_end = valid_words[-1]["end_index"]
+
+    return stt_text[text_start:text_end]
+
+def extract_text(stt_words, mapped_words, stt_text, relative_time, user: User):
     for w in stt_words:
         if w["start"] <= relative_time <= w["end"]:
-            return find_full_text(stt_words, w, user)
+            start_idx, end_idx = find_full_text(stt_words, w, user)
+            return text_substring(stt_text, mapped_words, start_idx, end_idx)
     return None
 
 def find_full_text(stt_words, target_word, user: User):
     idx = stt_words.index(target_word)
 
     # 오른쪽으로 wps초 구간만 추출
-    sentence_words = [target_word["word"]]
     start_time = target_word["start"]
 
     if user.rate == "느림":
@@ -226,13 +261,13 @@ def find_full_text(stt_words, target_word, user: User):
     else:
         wps = 6.0  # 기본값
     
-    for w in stt_words[idx+1:]:
+    last_idx = idx
+    for i, w in enumerate(stt_words[idx+1:], start=idx+1):
         if w["end"] - start_time > wps: # 시작 단어 기준으로 wps초
             break
-        sentence_words.append(w["word"])
+        last_idx = i
     
-    # 단어 결합 (▁ 제거하고 공백 처리)
-    return "".join([w.replace("▁", " ") for w in sentence_words]).strip()
+    return idx, last_idx
 
 # 코드 전처리
 def preprocess_code(code_text: str) -> str:
@@ -331,7 +366,6 @@ def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     if not text or text.strip() == "":
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
 
-    # ssml_text = text_to_ssml(text)
     synthesis_input = texttospeech.SynthesisInput(text=text)
     
     voice_map = {
@@ -385,28 +419,13 @@ def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
 
     return s3_urls
 
-def text_to_ssml(text: str) -> str:
-    if not text or text.strip() == "":
-        raise ValueError("SSML 변환할 텍스트가 비어 있습니다.")
-
-    text = html.escape(text)
-
-    text = text.replace("\n", '<break time="0.5s"/>')
-
-    text = re.sub(r'([.,])', r'\1<break time="0.3s"/>', text)
-
-    ssml = f"<speak>{text}</speak>"
-
-    return ssml
-
 def text_to_speech_local(text: str, voice: str, rate: str) -> str:
     """
     Google TTS 변환 후 로컬에만 MP3 저장 (S3 업로드 없음)
     """
     if not text or text.strip() == "":
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
-
-    # ssml_text = text_to_ssml(text)
+    
     synthesis_input = texttospeech.SynthesisInput(text=text)
 
     voice_map = {
