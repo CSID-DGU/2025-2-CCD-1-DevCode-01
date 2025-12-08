@@ -269,12 +269,12 @@ def normalize_text_for_kind(kind: str, raw: str) -> str:
     if not text:
         return ""
 
-    # code: 코드블록만 추출
-    if kind == "code":
-        inner = extract_first_code_block(text)
-        if inner is not None:
-            return f"```sql\n{inner}\n```"
-        return f"```sql\n{text}\n```"
+    # # code: 코드블록만 추출
+    # if kind == "code":
+    #     inner = extract_first_code_block(text)
+    #     if inner is not None:
+    #         return f"```sql\n{inner}\n```"
+    #     return f"```sql\n{text}\n```"
 
     # choice: 보기 한 줄씩 유지
     if kind == "choice":
