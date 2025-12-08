@@ -9,7 +9,9 @@ import {
   type PageSummary,
   fetchSummaryTTS,
 } from "@apis/lecture/lecture.api";
-import { fetchPageReview, type PageReview } from "@apis/lecture/review.api";
+
+import { postPageReview, type PageReview } from "@apis/lecture/review.api";
+import { fetchBoards, type BoardItem } from "@apis/lecture/board.api";
 import { formatOcr } from "@shared/formatOcr";
 
 import DocPane from "src/components/lecture/pre/DocPane";
@@ -24,11 +26,16 @@ import { Container, Grid, SrLive, Wrap } from "./pre/styles";
 import { useTtsTextBuilder } from "src/hooks/useTtsTextBuilder";
 import { useOcrTtsAutoStop } from "src/hooks/useOcrTtsAutoStop";
 import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
+import { useLocalTTS } from "src/hooks/useLocalTTS";
 
 import BottomToolbar from "src/components/lecture/pre/BottomToolBar";
 import RightTabsPost from "src/components/lecture/post/RightTabPost";
 import { useFocusTTS } from "src/hooks/useFocusTTS";
 import { fetchDocSpeechSummaries } from "@apis/lecture/profTts.api";
+
+/* ===========================
+ * 유틸 & 타입
+ * =========================== */
 
 type RouteParams = { courseId?: string; docId?: string };
 type NavState = {
@@ -37,6 +44,27 @@ type NavState = {
   resumeClock?: string | null;
 };
 type UserRole = "assistant" | "student";
+
+// 비동기 딜레이용
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+// 모든 status / TTS가 완료되었는지 판단
+function isReviewDone(review: PageReview | null): boolean {
+  if (!review) return false;
+
+  // speeches가 하나도 없으면 그냥 끝난 걸로 볼지,
+  // 아니면 false로 볼지는 취향인데 일단 "없으면 true"로 둘게
+  if (!review.speeches || review.speeches.length === 0) {
+    return true;
+  }
+
+  // ✅ 모든 speech.status가 "done"이면 완료
+  return review.speeches.every((s) => s.status === "done");
+}
 
 function useDocIdFromParamsAndState(params: RouteParams, state?: NavState) {
   return useMemo(() => {
@@ -96,6 +124,36 @@ function useA11ySettings() {
   return { fontPct, readOnFocus };
 }
 
+type BoardsPayload = {
+  boards: {
+    boardId: number;
+    text: string;
+  }[];
+};
+
+async function buildBoardsPayload(
+  pageId: number,
+  transformText: (raw: string) => Promise<string>
+): Promise<BoardsPayload> {
+  const res = await fetchBoards(pageId);
+  const items: BoardItem[] = res?.boards ?? [];
+
+  const textBoards = items.filter((b) => (b.text ?? "").trim().length > 0);
+
+  const boards = await Promise.all(
+    textBoards.map(async (b) => ({
+      boardId: b.boardId,
+      text: await transformText(b.text!),
+    }))
+  );
+
+  return { boards };
+}
+
+/* ===========================
+ * 컴포넌트
+ * =========================== */
+
 export default function PostClass() {
   const params = useParams<RouteParams>();
   const { state } = useLocation() as { state?: NavState };
@@ -142,12 +200,16 @@ export default function PostClass() {
 
   const ocrAudioRef = useRef<HTMLAudioElement | null>(null);
   const sumAudioRef = useRef<HTMLAudioElement | null>(null);
+  const memoAudioRef = useRef<HTMLAudioElement | null>(null);
+  const boardStopAudioRef = useRef<(() => void) | null>(null);
 
   const cleanOcr = useMemo(() => formatOcr(docPage?.ocr ?? ""), [docPage?.ocr]);
 
   const { buildTtsText } = useTtsTextBuilder();
   const { soundRate, soundVoice } = useSoundOptions();
   const [pageTtsLoading, setPageTtsLoading] = useState(false);
+
+  const { speak, stop } = useLocalTTS();
 
   useFocusTTS({
     enabled: readOnFocus,
@@ -160,7 +222,75 @@ export default function PostClass() {
     announce,
   });
 
-  /* ---------------- 페이지 로드 + 요약/리뷰/요약TTS ---------------- */
+  /* 서버 오디오 정지 도우미 (본문/요약/메모/판서 공통) */
+  const stopServerAudio = useCallback(() => {
+    const ocr = ocrAudioRef.current;
+    const sum = sumAudioRef.current;
+    const memoEl = memoAudioRef.current;
+
+    if (ocr) {
+      try {
+        ocr.pause();
+        ocr.currentTime = 0;
+      } catch {
+        //ignore
+      }
+    }
+    if (sum) {
+      try {
+        sum.pause();
+        sum.currentTime = 0;
+      } catch {
+        //ignore
+      }
+    }
+    if (memoEl) {
+      try {
+        memoEl.pause();
+        memoEl.currentTime = 0;
+      } catch {
+        //ignore
+      }
+    }
+
+    if (boardStopAudioRef.current) {
+      try {
+        boardStopAudioRef.current();
+      } catch {
+        //ignore
+      }
+    }
+  }, []);
+
+  const stopAllTts = useCallback(() => {
+    stopServerAudio();
+    stop();
+  }, [stopServerAudio, stop]);
+
+  useEffect(() => {
+    return () => {
+      stopAllTts();
+    };
+  }, [stopAllTts]);
+
+  const speakWithStop = useCallback(
+    (text: string) => {
+      stopServerAudio();
+      stop();
+      speak(text);
+    },
+    [stopServerAudio, stop, speak]
+  );
+
+  const focusSpeakForToolbar = useCallback(
+    (msg: string) => {
+      if (!readOnFocus) return;
+      speakWithStop(msg);
+    },
+    [readOnFocus, speakWithStop]
+  );
+
+  /* ---------------- 페이지 로드 + 요약/리뷰/요약TTS (+ 리뷰 폴링) ---------------- */
   useEffect(() => {
     if (!docId) return;
 
@@ -194,6 +324,7 @@ export default function PostClass() {
         if (dp.pageId) {
           setSummaryLoading(true);
           try {
+            // 요약 + 요약 TTS
             const sumPromise = (async () => {
               const s = await fetchPageSummary(dp.pageId);
               if (cancelled) return null;
@@ -220,31 +351,48 @@ export default function PostClass() {
             })();
 
             const reviewPromise = (async (): Promise<PageReview | null> => {
-              const MAX_ATTEMPTS = 20;
-              let attempt = 0;
+              try {
+                const boardsPayload = await buildBoardsPayload(
+                  dp.pageId,
+                  buildTtsText
+                );
+                if (cancelled) return null;
 
-              while (!cancelled && attempt < MAX_ATTEMPTS) {
-                const res = await fetchPageReview(dp.pageId);
-                if (!res) return null;
+                const POLL_INTERVAL = 3000;
+                const MAX_ATTEMPTS = 30;
 
-                const hasData =
-                  !!res.note ||
-                  (res.speeches && res.speeches.length > 0) ||
-                  (res.bookmarks && res.bookmarks.length > 0) ||
-                  (res.boards && res.boards.length > 0);
+                let lastReview: PageReview | null = null;
 
-                const isDone = res.status === "done" || hasData;
+                for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+                  if (cancelled) return lastReview;
 
-                if (isDone) {
-                  return res;
+                  const res = await postPageReview(dp.pageId, boardsPayload);
+                  if (cancelled) return lastReview;
+
+                  lastReview = res ?? null;
+                  setReview(lastReview);
+
+                  if (isReviewDone(lastReview)) {
+                    console.log(
+                      "[PostClass] PageReview 처리 완료 (status=done)."
+                    );
+                    break;
+                  }
+
+                  await sleep(POLL_INTERVAL);
                 }
 
-                await new Promise((r) => setTimeout(r, 3000));
-                attempt += 1;
-              }
+                if (!isReviewDone(lastReview)) {
+                  console.warn(
+                    "[PostClass] PageReview 폴링 최대 시도 수 초과 (완료 전 중단 가능성)"
+                  );
+                }
 
-              console.warn("[PageReview] polling timeout or cancelled");
-              return null;
+                return lastReview;
+              } catch (err) {
+                console.error("[PostClass] postPageReview 폴링 실패:", err);
+                return null;
+              }
             })();
 
             const [, rev] = await Promise.all([sumPromise, reviewPromise]);
@@ -286,7 +434,7 @@ export default function PostClass() {
     return () => {
       cancelled = true;
     };
-  }, [docId, page, isAssistant, announce]);
+  }, [docId, page, isAssistant, announce, buildTtsText]);
 
   useOcrTtsAutoStop(ocrAudioRef, {
     pageKey: docPage?.pageId,
@@ -344,8 +492,8 @@ export default function PostClass() {
       announce("본문 음성을 재생합니다.");
     } catch (e) {
       console.error(e);
-      toast.error("음성 생성에 실패했습니다.");
-      announce("음성을 불러오지 못했습니다.");
+      toast.error("본문 음성을 불러오는 중입니다.");
+      announce("본문 음성을 불러오는 중입니다.");
     } finally {
       setPageTtsLoading(false);
     }
@@ -357,6 +505,145 @@ export default function PostClass() {
     buildTtsText,
     announce,
   ]);
+
+  type TtsPair = {
+    female?: string | null;
+    male?: string | null;
+  } | null;
+
+  const playReviewTts = useCallback(
+    async (tts: TtsPair | null | undefined, fallbackText?: string) => {
+      stop();
+      stopServerAudio();
+
+      const url =
+        tts && (tts.female || tts.male)
+          ? soundVoice === "여성"
+            ? tts.female ?? tts.male ?? null
+            : tts.male ?? tts.female ?? null
+          : null;
+
+      if (!url) {
+        if (fallbackText) {
+          speakWithStop(fallbackText);
+        }
+        return;
+      }
+
+      const audio = sumAudioRef.current;
+      if (!audio) return;
+
+      try {
+        audio.pause();
+      } catch {
+        // ignore
+      }
+
+      audio.src = url;
+      applyPlaybackRate(audio, soundRate);
+      audio.currentTime = 0;
+
+      try {
+        const playPromise = audio.play();
+
+        if (playPromise !== undefined) {
+          await playPromise;
+        }
+      } catch (err) {
+        if ((err as DOMException).name === "AbortError") {
+          console.warn(
+            "[TTS] play aborted (probably due to quick focus change or pause)."
+          );
+          return;
+        }
+        throw err;
+      }
+    },
+    [stop, stopServerAudio, soundVoice, soundRate, speakWithStop]
+  );
+
+  const handleFocusReviewTts = useCallback(
+    (opts: { tts?: TtsPair | null; fallbackText?: string }) => {
+      if (!readOnFocus) return;
+      void playReviewTts(opts.tts ?? null, opts.fallbackText);
+    },
+    [readOnFocus, playReviewTts]
+  );
+
+  const handlePlayMemoTts = useCallback(
+    async ({ content, tts }: { content: string; tts?: TtsPair | null }) => {
+      console.log("[PostClass] handlePlayMemoTts 호출", {
+        contentLen: content?.length ?? 0,
+        tts,
+      });
+
+      try {
+        stop();
+        stopServerAudio();
+
+        const url =
+          tts && (tts.female || tts.male)
+            ? soundVoice === "여성"
+              ? tts.female ?? tts.male ?? null
+              : tts.male ?? tts.female ?? null
+            : null;
+
+        console.log("[PostClass] handlePlayMemoTts URL 선택", {
+          soundVoice,
+          url,
+        });
+
+        if (!url) {
+          console.log(
+            "[PostClass] URL 없음 -> 로컬 TTS fallback (speakWithStop)"
+          );
+          speakWithStop(content);
+          return;
+        }
+
+        const audio = memoAudioRef.current;
+        if (!audio) {
+          console.warn("[PostClass] memoAudioRef.current가 없습니다.");
+          return;
+        }
+
+        try {
+          audio.pause();
+        } catch {
+          // ignore
+        }
+
+        audio.src = url;
+        applyPlaybackRate(audio, soundRate);
+        audio.currentTime = 0;
+
+        console.log("[PostClass] memo audio.play() 호출 직전", {
+          audioSrc: audio.src,
+          playbackRate: audio.playbackRate,
+        });
+
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          await playPromise;
+        }
+
+        console.log("[PostClass] memo audio.play() 완료");
+        announce("메모 음성을 재생합니다.");
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+          console.warn(
+            "[PostClass] 메모 음성 재생 중단(AbortError) - 로컬 TTS로 대체"
+          );
+          return;
+        }
+
+        console.error("[PostClass] 메모 음성 재생 실패:", e);
+        toast.error("메모 음성 재생에 실패했습니다.");
+        announce("메모 음성을 불러오지 못했습니다.");
+      }
+    },
+    [stop, stopServerAudio, soundVoice, soundRate, speakWithStop, announce]
+  );
 
   const handlePlaySummaryTts = useCallback(async () => {
     if (!docPage?.pageId) {
@@ -452,6 +739,7 @@ export default function PostClass() {
     <Wrap aria-busy={loading} aria-describedby="live-status">
       <audio ref={ocrAudioRef} preload="none" />
       <audio ref={sumAudioRef} preload="none" />
+      <audio ref={memoAudioRef} preload="none" />
 
       <SrLive
         id="live-status"
@@ -494,6 +782,13 @@ export default function PostClass() {
             }}
             onSummaryTtsPlay={handlePlaySummaryTts}
             summaryTtsLoading={summaryTtsLoading}
+            onPlayMemoTts={handlePlayMemoTts}
+            readOnFocus={readOnFocus}
+            onFocusReviewTts={handleFocusReviewTts}
+            buildBoardTtsText={buildTtsText}
+            registerBoardStop={(fn) => {
+              boardStopAudioRef.current = fn;
+            }}
           />
         </Grid>
       </Container>
@@ -508,6 +803,7 @@ export default function PostClass() {
         onNext={() => void goToPage(page + 1)}
         onToggleMode={toggleMode}
         onGoTo={(n) => void goToPage(n)}
+        speak={focusSpeakForToolbar}
         startPageId={docPage?.pageId ?? null}
         onStartLive={(pageId) => {
           if (!docId) {

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
+
 import styled from "styled-components";
 import toast from "react-hot-toast";
 
@@ -28,6 +30,7 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
   const [busy, setBusy] = useState(false);
+  const addLectureSpeak = useFocusSpeak({ text: "강의 추가" });
 
   // 강의 카드 컨텍스트 메뉴 영역
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -172,7 +175,12 @@ export default function LectureHome({ uiScale = 1, onOpenLecture }: Props) {
       >
         {/* 강의 추가 타일 */}
         <AddTileBox style={{ width: columnMin }}>
-          <AddTile aria-label="강의 추가" onClick={() => setOpen(true)}>
+          <AddTile
+            aria-label="강의 추가"
+            onClick={() => setOpen(true)}
+            onFocus={addLectureSpeak.onFocus}
+            onBlur={addLectureSpeak.onBlur}
+          >
             <AddInner>
               <AddPlus aria-hidden>＋</AddPlus>
             </AddInner>
@@ -244,7 +252,7 @@ const TileBase = styled.div`
   background: var(--c-white);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
   @media (prefers-reduced-motion: no-preference) {
@@ -269,7 +277,7 @@ const AddTile = styled.button`
   height: 9.5rem;
   border-radius: 10px;
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 ` as unknown as typeof TileBase;

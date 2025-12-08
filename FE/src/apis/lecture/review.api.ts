@@ -1,66 +1,67 @@
-import { getResponse } from "@apis/instance";
+import { getResponse, postResponse } from "@apis/instance";
 
-export type TtsGenderSet = {
-  female?: string;
-  male?: string;
-} | null;
+export type TtsPair = {
+  female?: string | null;
+  male?: string | null;
+};
+
+export type PageReviewNote = {
+  note_id: number;
+  content: string;
+  note_tts?: TtsPair | null;
+};
+
+export type PageReviewSpeech = {
+  speech_id: number;
+  stt: string;
+  stt_tts?: TtsPair | null;
+  end_time: string;
+  duration: string;
+  status?: string;
+};
+
+export type PageReviewBookmark = {
+  bookmark_id: number;
+  timestamp: string;
+};
+
+export type PageReviewBoard = {
+  boardId: number;
+  image: string | null;
+  text: string | null;
+  board_tts?: TtsPair | null;
+};
 
 export type PageReview = {
   status?: "processing" | "done";
-
-  note?: {
-    note_id: number;
-    content: string;
-    note_tts?: TtsGenderSet;
-  } | null;
-
-  speeches?: Array<{
-    speech_id: number;
-    stt: string;
-    stt_tts?: TtsGenderSet;
-    end_time?: string;
-    duration?: string;
-    status?: string;
-  }>;
-
-  bookmarks?: Array<{
-    bookmark_id: number;
-    timestamp: string;
-  }>;
-
-  boards?: Array<{
-    boardId: number;
-    image: string;
-    text: string | null;
-    board_tts?: TtsGenderSet;
-  }>;
+  note: PageReviewNote | null;
+  speeches: PageReviewSpeech[];
+  bookmarks: PageReviewBookmark[];
+  boards: PageReviewBoard[];
 };
 
-export async function fetchPageReview(
-  pageId: number
-): Promise<PageReview | null> {
-  const raw = await getResponse<PageReview>(`/page/${pageId}/review/`);
-  if (!raw) return null;
+export type PageReviewRequest = {
+  boards: {
+    boardId: number;
+    text: string;
+  }[];
+};
 
-  const base = import.meta.env.VITE_BASE_URL?.replace(/\/$/, "") ?? "";
+export async function postPageReview(
+  pageId: number,
+  body: PageReviewRequest
+): Promise<PageReview> {
+  const data = await postResponse<PageReviewRequest, PageReview>(
+    `/page/${pageId}/review/`,
+    body
+  );
 
-  const boards =
-    raw.boards?.map((b) => {
-      const fullImage = b.image?.startsWith("http")
-        ? b.image
-        : `${base}${b.image?.startsWith("/") ? "" : "/"}${b.image}`;
-      return {
-        ...b,
-        image: fullImage,
-      };
-    }) ?? undefined;
+  if (!data) {
+    throw new Error("리뷰 응답이 올바르지 않습니다.");
+  }
 
-  return {
-    ...raw,
-    boards,
-  };
+  return data;
 }
-
 export type BookmarkDetail = {
   stt_tts: {
     female?: string;

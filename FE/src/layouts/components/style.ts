@@ -21,7 +21,7 @@ export const ToggleButton = styled.button`
 
   /* 접근성: 키보드 포커스 */
   &:focus-visible {
-    outline: 1px solid var(--c-white);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;

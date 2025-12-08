@@ -61,11 +61,10 @@ export const SyncToggleInPane = styled.button`
   position: absolute;
   top: 12px;
   right: 12px;
-  z-index: 5;
   border-radius: 999px;
   padding: 10px 20px;
   ${fonts.bold20}
-  /* background-color: var(--c-blue); */
+  background-color: var(--c-white);
   border: 2px solid var(--c-blue);
   color: var(--c-blue);
 

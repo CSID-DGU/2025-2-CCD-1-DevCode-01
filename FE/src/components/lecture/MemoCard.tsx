@@ -1,4 +1,5 @@
 import type { LectureNote } from "@apis/lecture/memo.api";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 import { fonts } from "@styles/fonts";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -32,6 +33,14 @@ export default function MemoListCard({
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const memoCardSpeak = useFocusSpeak({
+    text: "공유 메모장입니다.",
+  });
+
+  const memoInputSpeak = useFocusSpeak({
+    text: "공유 메모 작성 영역입니다. ",
+  });
 
   const formatDateTime = (iso: string) => {
     const d = new Date(iso);
@@ -105,8 +114,12 @@ export default function MemoListCard({
   const statusText = busy ? "저장중" : savedAt ? "방금 저장됨" : "대기중";
 
   return (
-    <Card aria-busy={busy}>
-      <Header style={{ position: "sticky", top: stickyTop, zIndex: 1 }}>
+    <Card aria-busy={busy} role="region" aria-label="강의 공유 메모">
+      <Header
+        style={{ position: "sticky", top: stickyTop, zIndex: 1 }}
+        tabIndex={0}
+        {...memoCardSpeak}
+      >
         <TitleWrap>
           <h3 id="memo-heading">메모</h3>
         </TitleWrap>
@@ -164,6 +177,7 @@ export default function MemoListCard({
           rows={3}
           disabled={busy}
           aria-label="메모 입력"
+          {...memoInputSpeak}
         />
       </InputArea>
     </Card>
@@ -291,7 +305,7 @@ const Row = styled.div<{ $role: Role }>`
   }};
 
   &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.base.blueD};
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;

@@ -1,15 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { fonts } from "@styles/fonts";
-import {
-  fetchPageReview,
-  fetchBookmarkDetail,
-  type PageReview,
-} from "@apis/lecture/review.api";
+import { fetchBookmarkDetail, type PageReview } from "@apis/lecture/review.api";
 import { PANEL_FIXED_H_LIVE } from "@pages/class/pre/styles";
 import { applyPlaybackRate, useSoundOptions } from "src/hooks/useSoundOption";
 import Spinner from "src/components/common/Spinner";
 import { useOcrTtsAutoStop } from "src/hooks/useOcrTtsAutoStop";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 type Props = {
   pageId?: number;
@@ -47,31 +44,6 @@ export default function ClassPane({ pageId, review, isActive }: Props) {
     setHighlightText(null);
   }, [review]);
 
-  /* ---------- processing이면 폴링 ---------- */
-  useEffect(() => {
-    if (!isActive || !pageId) return;
-    if (!isProcessing) return;
-
-    let cancelled = false;
-
-    const poll = async () => {
-      const next = await fetchPageReview(pageId);
-      if (cancelled) return;
-
-      setLocalReview(next);
-
-      if (next?.status === "processing") {
-        setTimeout(poll, 3000);
-      }
-    };
-
-    poll();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isProcessing, isActive, pageId]);
-
   const ensureSrc = (index: number) => {
     const a = audioRef.current;
     if (!a) return null;
@@ -92,6 +64,8 @@ export default function ClassPane({ pageId, review, isActive }: Props) {
     applyPlaybackRate(a, soundRate);
     return a;
   };
+
+  const focusSpeak = useFocusSpeak();
 
   const playFrom = (index: number, offsetSec = 0) => {
     const a = ensureSrc(index);
@@ -229,27 +203,61 @@ export default function ClassPane({ pageId, review, isActive }: Props) {
     );
   };
 
+  // "HH:MM:SS" → "15초", "1분 05초", "1시간 2분 3초" 이런 식으로 변환
+  const formatBookmarkLabel = (timestamp: string): string => {
+    const parts = timestamp.split(":");
+    if (parts.length !== 3) {
+      return `북마크 ${timestamp}`;
+    }
+
+    const [hStr, mStr, sStr] = parts;
+    const h = Number.parseInt(hStr, 10) || 0;
+    const m = Number.parseInt(mStr, 10) || 0;
+    const s = Number.parseInt(sStr, 10) || 0;
+
+    const chunks: string[] = [];
+    if (h > 0) chunks.push(`${h}시간`);
+    if (m > 0) chunks.push(`${m}분`);
+    if (s > 0 || chunks.length === 0) chunks.push(`${s}초`);
+
+    const timeText = chunks.join(" ");
+    return `북마크 ${timeText}`;
+  };
+
   return (
     <Wrap ref={areaRef}>
       {/* 북마크 */}
       <Section aria-label="북마크">
-        <p>북마크</p>
+        <p {...focusSpeak} aria-label="북마크" tabIndex={0}>
+          북마크
+        </p>
         <MarkWrap>
           {bookmarks.length === 0 ? (
-            <EmptyText>북마크가 없습니다.</EmptyText>
+            <EmptyText
+              {...focusSpeak}
+              aria-label="북마크가 없습니다."
+              tabIndex={0}
+            >
+              북마크가 없습니다.
+            </EmptyText>
           ) : (
             bookmarks
               .slice()
               .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
-              .map((b) => (
-                <Mark
-                  key={b.bookmark_id}
-                  type="button"
-                  onClick={() => onClickBookmark(b)}
-                >
-                  {b.timestamp.replace(/^00:/, "")}
-                </Mark>
-              ))
+              .map((b) => {
+                const label = formatBookmarkLabel(b.timestamp);
+                return (
+                  <Mark
+                    key={b.bookmark_id}
+                    type="button"
+                    onClick={() => onClickBookmark(b)}
+                    aria-label={label}
+                    {...focusSpeak}
+                  >
+                    {b.timestamp.replace(/^00:/, "")}
+                  </Mark>
+                );
+              })
           )}
         </MarkWrap>
       </Section>
@@ -257,7 +265,9 @@ export default function ClassPane({ pageId, review, isActive }: Props) {
       {/* STT */}
       <Section aria-label="수업 STT">
         <HeaderRow>
-          <p>STT</p>
+          <p {...focusSpeak} aria-label="STT" tabIndex={0}>
+            STT
+          </p>
           <GhostBtn type="button" onClick={pause} disabled={!playing}>
             정지
           </GhostBtn>

@@ -75,7 +75,7 @@ export default function LiveClass() {
   const params = useParams<RouteParams>();
   const { state } = useLocation() as { state?: NavState };
 
-  console.log("[LiveClass] received resumeClock =", state?.resumeClock);
+  // console.log("[LiveClass] received resumeClock =", state?.resumeClock);
 
   const [totalPageNum, setTotalPageNum] = useState<number | null>(
     typeof state?.totalPage === "number" ? state!.totalPage : null
@@ -113,7 +113,7 @@ export default function LiveClass() {
   );
 
   // 페이지 따라가기 토글 (장애학우 전용)
-  const [followEnabled, setFollowEnabled] = useState<boolean>(true);
+  const [followEnabled, setFollowEnabled] = useState<boolean>(false);
 
   // ------- refs -------
   const liveRef = useRef<HTMLDivElement | null>(null);
@@ -723,6 +723,8 @@ export default function LiveClass() {
               page,
               pageId: docPage?.pageId ?? null,
             }}
+            localTtsEnabled={false}
+            boardTtsEnabled={false}
           />
         </Grid>
       </Container>

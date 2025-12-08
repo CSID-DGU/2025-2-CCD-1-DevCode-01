@@ -2,6 +2,8 @@ import type { ReactNode, RefObject } from "react";
 import styled from "styled-components";
 import { useContext } from "react";
 import { TTSContext } from "@shared/tts/TTSProvider";
+import { useNavigate } from "react-router-dom";
+import { fonts } from "@styles/fonts";
 
 type SignupLayoutProps = {
   title: string;
@@ -25,6 +27,11 @@ const SignupLayout = ({
   nextBtnRef,
 }: SignupLayoutProps) => {
   const tts = useContext(TTSContext);
+  const navigate = useNavigate();
+
+  const handleSignupClick = () => {
+    navigate("/login");
+  };
 
   return (
     <Wrap>
@@ -51,7 +58,19 @@ const SignupLayout = ({
         }}
       >
         {btn}
-      </Btn>
+      </Btn>{" "}
+      <p
+        className="login"
+        onFocus={() => {
+          tts?.speak("로그인 이동");
+        }}
+        onClick={handleSignupClick}
+        role="link"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === "Enter" && handleSignupClick()}
+      >
+        로그인 하러가기
+      </p>
     </Wrap>
   );
 };
@@ -67,6 +86,17 @@ const Wrap = styled.div`
   width: 100%;
   margin: 0 auto;
   margin-top: 3rem;
+
+  .login {
+    margin-bottom: 1rem;
+    ${fonts.medium24}
+    border-bottom: 1px solid black;
+
+    &:focus-visible {
+      outline: 5px solid var(--c-blue);
+      outline-offset: 2px;
+    }
+  }
 `;
 
 const Title = styled.h1`
@@ -102,7 +132,7 @@ const Btn = styled.button`
   }
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;

@@ -6,6 +6,7 @@ import {
   patchBoardText,
   deleteBoard,
   type BoardItem,
+  patchBoardTextWithTts,
 } from "@apis/lecture/board.api";
 
 import { PANEL_FIXED_H_LIVE } from "@pages/class/pre/styles";
@@ -16,13 +17,39 @@ import {
   type BoardEventDataBase,
 } from "src/hooks/useDocLiveSync";
 import MarkdownText from "./MarkdownText";
+import { useSoundOptions, applyPlaybackRate } from "src/hooks/useSoundOption";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
+
+type TtsPair = {
+  female?: string | null;
+  male?: string | null;
+} | null;
 
 type Props = {
-  docId: number; // WS 채널 키
-  pageId: number; // API 호출 키
-  assetBase?: string; // 정적 파일 prefix (ex. VITE_BASE_URL)
-  token?: string | null; // access token (없으면 localStorage)
-  wsBase?: string; // ws(s)://HOST[:PORT] (없으면 VITE_BASE_URL → ws 변환)
+  docId: number;
+  pageId: number;
+  assetBase?: string;
+  token?: string | null;
+  wsBase?: string;
+  /**
+   * 수업 후(Post)에서 TTS 전처리를 위해 사용하는 함수.
+   * 전달되면 /board/{id}/tts/ 엔드포인트를 사용.
+   * 미전달이면 /board/{id}/ 로 텍스트만 patch (라이브용).
+   */
+  buildBoardTtsText?: (raw: string) => Promise<string>;
+  /**
+   * true면 board_tts 기반 서버 TTS 재생 버튼 노출.
+   */
+  enableTts?: boolean;
+  onRegisterStopAudio?: (fn: () => void) => void;
+  /**
+   * 리뷰 API에서 내려온 보드들 (강의 중 생성된 판서 TTS 포함)
+   * boardId 기준으로 fetchBoards 결과와 매칭해서 board_tts를 보강
+   */
+  reviewBoards?: {
+    boardId: number;
+    board_tts?: TtsPair;
+  }[];
 };
 
 export default function BoardBox({
@@ -31,6 +58,10 @@ export default function BoardBox({
   assetBase = "",
   token,
   wsBase,
+  buildBoardTtsText,
+  enableTts = true,
+  onRegisterStopAudio,
+  reviewBoards,
 }: Props) {
   const [list, setList] = useState<BoardItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,6 +70,9 @@ export default function BoardBox({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [preview, setPreview] = useState<{ src: string; alt: string } | null>(
+    null
+  );
 
   const fileRef = useRef<HTMLInputElement | null>(null);
   const toUrl = (p: string | null) =>
@@ -49,36 +83,118 @@ export default function BoardBox({
     wsBase ??
     (import.meta.env.VITE_BASE_URL as string).replace(/^http(s?)/, "ws$1");
 
-  // 초기 로드
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { soundRate, soundVoice } = useSoundOptions();
+
+  const stopBoardAudio = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    if (!enableTts) return;
+    if (!onRegisterStopAudio) return;
+
+    onRegisterStopAudio(stopBoardAudio);
+
+    return () => {
+      stopBoardAudio();
+    };
+  }, [enableTts, onRegisterStopAudio]);
+
+  useEffect(() => {
+    stopBoardAudio();
+  }, [pageId]);
+
+  const rawFocusSpeak = useFocusSpeak();
+  const focusSpeak = enableTts ? rawFocusSpeak : ({} as typeof rawFocusSpeak);
+
+  const playBoardTts = async (tts: TtsPair | undefined | null) => {
+    if (!enableTts) return;
+    if (!audioRef.current) return;
+    if (!tts) return;
+
+    const female = tts.female ?? null;
+    const male = tts.male ?? null;
+    const url = soundVoice === "여성" ? female ?? male : male ?? female;
+    if (!url) return;
+
+    stopBoardAudio();
+
+    const audio = audioRef.current;
+
+    if (audio.src !== url) {
+      audio.src = url;
+    }
+
+    applyPlaybackRate(audio, soundRate);
+
+    try {
+      await audio.play();
+    } catch (e) {
+      console.error("[BoardBox] TTS 재생 실패:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (!preview) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setPreview(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [preview]);
+
   const load = async () => {
     setLoading(true);
     setError(null);
     const res = await fetchBoards(pageId);
-    if (!res) setError("판서 목록을 불러오지 못했습니다.");
-    setList(res?.boards ?? []);
+
+    if (!res) {
+      setError("판서 목록을 불러오지 못했습니다.");
+      setList([]);
+      setLoading(false);
+      return;
+    }
+
+    const boards = [...res.boards].sort((a, b) => a.boardId - b.boardId);
+    setList(boards);
     setLoading(false);
   };
+
   useEffect(() => {
-    load();
+    void load();
   }, [pageId]);
 
-  // 실시간: 수신 처리
   const { sendBoardEvent } = useDocLiveSync({
     serverBase: wsServer,
     docId,
     token: accessToken,
     onBoardCreated: (data: BoardEventCreatedOrUpdated) => {
-      setList((prev) =>
-        prev.some((b) => b.boardId === data.boardId)
-          ? prev
-          : [{ ...data }, ...prev]
-      );
+      setList((prev) => {
+        const exists = prev.some((b) => b.boardId === data.boardId);
+        if (exists) return prev;
+        return [...prev, { ...data }];
+      });
     },
     onBoardUpdated: (data: BoardEventCreatedOrUpdated) => {
       setList((prev) =>
         prev.map((b) =>
           b.boardId === data.boardId
-            ? { ...b, text: data.text, image: data.image }
+            ? {
+                ...b,
+                text: data.text ?? b.text,
+                image: data.image ?? b.image,
+              }
             : b
         )
       );
@@ -89,16 +205,23 @@ export default function BoardBox({
     },
   });
 
-  // 업로드
+  const stopOnFocus = enableTts ? { onFocus: () => stopBoardAudio() } : {};
+
+  // 이미지 업로드 (수업 중/후 공통)
   const handleFiles = async (file?: File) => {
     if (!file) return;
     try {
       setUploading(true);
       setError(null);
       const created = await uploadBoardImage(pageId, file);
-      setList((prev) => [created, ...prev]);
 
-      // 서버로도 created 전송 (선택)
+      setList((prev) => {
+        const exists = prev.some((b) => b.boardId === created.boardId);
+        if (exists) return prev;
+        return [...prev, created];
+      });
+
+      // 실시간 방송
       sendBoardEvent("created", {
         boardId: created.boardId,
         image: created.image,
@@ -116,24 +239,60 @@ export default function BoardBox({
   const onDrop: React.DragEventHandler<HTMLDivElement> = (e) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
-    handleFiles(file);
+    void handleFiles(file);
   };
 
-  // 수정 저장
+  // 텍스트 저장
+  // - 라이브: /board/{id}/ (buildBoardTtsText 없음)
+  // - 수업 후: /board/{id}/tts/ (buildBoardTtsText 있음)
   const saveText = async (boardId: number, nextText: string) => {
+    const trimmed = nextText.trim();
+
     try {
       setSavingId(boardId);
-      const updated = await patchBoardText(boardId, nextText);
-      setList((prev) =>
-        prev.map((b) => (b.boardId === boardId ? { ...b, ...updated } : b))
-      );
+
+      if (buildBoardTtsText) {
+        // ===== 수업 후(Post): 텍스트 + TTS 생성 =====
+        const processed = await buildBoardTtsText(trimmed);
+
+        const updated = await patchBoardTextWithTts(boardId, {
+          board_text: trimmed,
+          processed_text: processed,
+        });
+
+        setList((prev) =>
+          prev.map((b) =>
+            b.boardId === boardId
+              ? {
+                  ...b,
+                  text: updated.board_text,
+                  board_tts: updated.board_tts ?? b.board_tts ?? null,
+                }
+              : b
+          )
+        );
+      } else {
+        // ===== 라이브: 텍스트만 수정 =====
+        const updated = await patchBoardText(boardId, trimmed);
+        setList((prev) =>
+          prev.map((b) => (b.boardId === boardId ? { ...b, ...updated } : b))
+        );
+      }
+
       setEditingId(null);
 
-      // 서버로도 updated 전송
-      sendBoardEvent("updated", {
-        boardId,
-        image: updated.image ?? null,
-        text: updated.text ?? null,
+      // 소켓
+      setList((current) => {
+        const updatedItem = current.find((b) => b.boardId === boardId);
+        if (!updatedItem) return current;
+
+        sendBoardEvent("updated", {
+          boardId,
+          image: updatedItem.image ?? null,
+          text: updatedItem.text ?? null,
+        });
+
+        return current;
       });
     } catch (e) {
       console.error(e);
@@ -142,6 +301,73 @@ export default function BoardBox({
       setSavingId(null);
     }
   };
+
+  // ====== 자동 TTS 생성용: 이미 텍스트 있는데 TTS 없는 보드 처리 ======
+  const autoTtsPendingRef = useRef<Set<number>>(new Set());
+
+  const hasEffectiveTts = (b: BoardItem): boolean => {
+    const rb = reviewBoards?.find((rb) => rb.boardId === b.boardId);
+    const ttsFromReview = rb?.board_tts;
+    const ttsFromList = b.board_tts as TtsPair | undefined;
+
+    const tts = ttsFromReview ?? ttsFromList ?? null;
+    return !!(tts && (tts.female || tts.male));
+  };
+
+  useEffect(() => {
+    if (!enableTts) return;
+    if (!buildBoardTtsText) return;
+    if (!list.length) return;
+
+    const run = async () => {
+      for (const b of list) {
+        const text = (b.text ?? "").trim();
+        if (!text) continue;
+
+        // 이미 TTS가 있으면 스킵
+        if (hasEffectiveTts(b)) continue;
+
+        // 이미 이 보드에 대해 자동 TTS 발행 중이면 스킵
+        if (autoTtsPendingRef.current.has(b.boardId)) continue;
+
+        autoTtsPendingRef.current.add(b.boardId);
+
+        try {
+          // 1) 프론트 전처리
+          const processed = await buildBoardTtsText(text);
+
+          // 2) 서버 TTS 생성
+          const updated = await patchBoardTextWithTts(b.boardId, {
+            board_text: text,
+            processed_text: processed,
+          });
+
+          // 3) list에 TTS 반영
+          setList((prev) =>
+            prev.map((x) =>
+              x.boardId === b.boardId
+                ? {
+                    ...x,
+                    text: updated.board_text,
+                    board_tts: updated.board_tts ?? x.board_tts ?? null,
+                  }
+                : x
+            )
+          );
+        } catch (err) {
+          console.error("[BoardBox] auto TTS 생성 실패:", {
+            boardId: b.boardId,
+            err,
+          });
+        } finally {
+          autoTtsPendingRef.current.delete(b.boardId);
+        }
+      }
+    };
+
+    void run();
+  }, [list, enableTts, buildBoardTtsText, reviewBoards]);
+  // ======================== 자동 TTS 생성 끝 ========================
 
   // 삭제
   const remove = async (boardId: number) => {
@@ -152,7 +378,6 @@ export default function BoardBox({
       setList((prev) => prev.filter((b) => b.boardId !== boardId));
       if (editingId === boardId) setEditingId(null);
 
-      // 서버로도 deleted 전송
       sendBoardEvent("deleted", { boardId });
     } catch (e) {
       console.error(e);
@@ -162,107 +387,188 @@ export default function BoardBox({
     }
   };
 
+  const openFileDialog = () => {
+    fileRef.current?.click();
+  };
+
   return (
-    <Wrap>
-      <Uploader
-        role="button"
-        tabIndex={0}
-        onClick={() => fileRef.current?.click()}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={onDrop}
-        aria-label="사진 업로드 또는 드래그 앤 드롭"
-      >
-        <span>{uploading ? "업로드 중" : "사진 업로드"}</span>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          onChange={(e) => handleFiles(e.target.files?.[0] ?? undefined)}
-          hidden
-        />
-      </Uploader>
+    <>
+      {enableTts && (
+        <audio ref={audioRef} preload="none" style={{ display: "none" }} />
+      )}
 
-      {loading && <Hint>불러오는 중…</Hint>}
-      {error && <Error role="alert">{error}</Error>}
+      <Wrap>
+        <Uploader
+          role="button"
+          tabIndex={0}
+          onClick={() => fileRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openFileDialog();
+            }
+          }}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={onDrop}
+          aria-label="사진 업로드"
+          {...focusSpeak}
+          {...stopOnFocus}
+        >
+          <span>{uploading ? "업로드 중" : "사진 업로드"}</span>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => void handleFiles(e.target.files?.[0] ?? undefined)}
+            hidden
+          />
+        </Uploader>
 
-      <List role="list" aria-busy={loading || uploading}>
-        {list.map((b) => {
-          const isEditing = editingId === b.boardId;
-          const isSaving = savingId === b.boardId;
-          const isDeleting = deletingId === b.boardId;
+        {loading && <Hint>불러오는 중…</Hint>}
+        {error && <Error role="alert">{error}</Error>}
 
-          return (
-            <Item key={b.boardId} role="listitem">
-              {b.image && <Thumb src={toUrl(b.image)} alt="추가자료 이미지" />}
+        <List role="list" aria-busy={loading || uploading}>
+          {list.map((b) => {
+            const isEditing = editingId === b.boardId;
+            const isSaving = savingId === b.boardId;
+            const isDeleting = deletingId === b.boardId;
 
-              <Row>
-                <Actions>
-                  {isEditing ? (
-                    <>
+            const src = b.image ? toUrl(b.image) : "";
+            const rb = reviewBoards?.find((rb) => rb.boardId === b.boardId);
+            const effectiveTts: TtsPair =
+              rb?.board_tts ?? (b.board_tts as TtsPair) ?? null;
+
+            return (
+              <Item key={b.boardId} role="listitem">
+                {b.image && (
+                  <ThumbButton
+                    type="button"
+                    onClick={() => setPreview({ src, alt: "추가자료 이미지" })}
+                    aria-label="이미지 크게 보기"
+                    {...focusSpeak}
+                    {...stopOnFocus}
+                  >
+                    <Thumb src={src} alt="추가자료 이미지" />
+                  </ThumbButton>
+                )}
+
+                <Row>
+                  <Actions>
+                    {enableTts && effectiveTts && (
                       <Button
                         type="button"
-                        aria-label="설명 저장"
-                        disabled={isSaving}
-                        onClick={() => {
-                          const textarea = document.getElementById(
-                            `edit-${b.boardId}`
-                          ) as HTMLTextAreaElement | null;
-                          if (textarea)
-                            saveText(b.boardId, textarea.value.trim());
-                        }}
+                        onClick={() => void playBoardTts(effectiveTts)}
+                        aria-label="추가 자료 설명 듣기"
+                        {...focusSpeak}
                       >
-                        {isSaving ? "저장중…" : "저장"}
+                        듣기
                       </Button>
-                      <Button
-                        type="button"
-                        aria-label="편집 취소"
-                        onClick={() => setEditingId(null)}
-                        $variant="ghost"
-                      >
-                        취소
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button
-                        type="button"
-                        onClick={() => setEditingId(b.boardId)}
-                      >
-                        수정
-                      </Button>
-                      <DangerBtn
-                        type="button"
-                        onClick={() => remove(b.boardId)}
-                        disabled={isDeleting}
-                        aria-label="추가 자료 삭제"
-                      >
-                        {isDeleting ? "삭제중…" : "삭제"}
-                      </DangerBtn>
-                    </>
-                  )}
-                </Actions>
-              </Row>
+                    )}
 
-              {isEditing ? (
-                <EditArea
-                  id={`edit-${b.boardId}`}
-                  defaultValue={b.text ?? ""}
-                  placeholder="이미지에 대한 설명이나 텍스트를 입력하세요"
-                />
-              ) : b.text ? (
-                <MarkdownText>{b.text}</MarkdownText>
-              ) : (
-                <EmptyLine>설명이 없습니다.</EmptyLine>
-              )}
-            </Item>
-          );
-        })}
+                    {isEditing ? (
+                      <>
+                        <Button
+                          type="button"
+                          aria-label="설명 저장"
+                          disabled={isSaving}
+                          onClick={() => {
+                            const textarea = document.getElementById(
+                              `edit-${b.boardId}`
+                            ) as HTMLTextAreaElement | null;
+                            if (textarea)
+                              void saveText(b.boardId, textarea.value);
+                          }}
+                          {...focusSpeak}
+                          {...stopOnFocus}
+                        >
+                          {isSaving ? "저장중…" : "저장"}
+                        </Button>
+                        <Button
+                          type="button"
+                          aria-label="편집 취소"
+                          onClick={() => setEditingId(null)}
+                          $variant="ghost"
+                          {...focusSpeak}
+                          {...stopOnFocus}
+                        >
+                          취소
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          type="button"
+                          onClick={() => setEditingId(b.boardId)}
+                          aria-label="설명 수정"
+                          {...focusSpeak}
+                          {...stopOnFocus}
+                        >
+                          {b.text ? "수정" : "설명 추가"}
+                        </Button>
+                        <DangerBtn
+                          type="button"
+                          onClick={() => void remove(b.boardId)}
+                          disabled={isDeleting}
+                          aria-label="추가 자료 삭제"
+                          {...focusSpeak}
+                          {...stopOnFocus}
+                        >
+                          {isDeleting ? "삭제중…" : "삭제"}
+                        </DangerBtn>
+                      </>
+                    )}
+                  </Actions>
+                </Row>
 
-        {!loading && list.length === 0 && (
-          <Empty>아직 업로드된 추가 자료가 없어요.</Empty>
-        )}
-      </List>
-    </Wrap>
+                {isEditing ? (
+                  <EditArea
+                    id={`edit-${b.boardId}`}
+                    defaultValue={b.text ?? ""}
+                    placeholder="이미지에 대한 설명이나 텍스트를 입력하세요"
+                    {...stopOnFocus}
+                  />
+                ) : b.text ? (
+                  <MarkdownText>{b.text}</MarkdownText>
+                ) : (
+                  <EmptyLine {...focusSpeak} aria-label="설명이 없습니다.">
+                    설명이 없습니다.
+                  </EmptyLine>
+                )}
+              </Item>
+            );
+          })}
+
+          {!loading && list.length === 0 && (
+            <Empty
+              {...focusSpeak}
+              aria-label="아직 업로드된 추가 자료가 없습니다."
+            >
+              아직 업로드된 추가 자료가 없어요.
+            </Empty>
+          )}
+        </List>
+      </Wrap>
+
+      {preview && (
+        <Overlay
+          role="dialog"
+          aria-modal="true"
+          aria-label="이미지 미리보기"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setPreview(null);
+            }
+          }}
+        >
+          <PreviewInner>
+            <PreviewImg src={preview.src} alt={preview.alt} />
+            <CloseBtn type="button" onClick={() => setPreview(null)}>
+              닫기
+            </CloseBtn>
+          </PreviewInner>
+        </Overlay>
+      )}
+    </>
   );
 }
 
@@ -272,7 +578,9 @@ const Wrap = styled.section`
   flex-direction: column;
   gap: 12px;
   height: ${PANEL_FIXED_H_LIVE};
+  min-width: 0;
 `;
+
 const Uploader = styled.div`
   border: 2px dashed #d1d5db;
   border-radius: 12px;
@@ -284,49 +592,71 @@ const Uploader = styled.div`
     background: var(--c-white);
   }
 `;
+
 const Hint = styled.p`
   margin: 0;
   color: #6b7280;
   font-size: 0.875rem;
 `;
+
 const Error = styled.p`
   margin: 0;
   color: #b91c1c;
   font-size: 0.875rem;
 `;
+
 const List = styled.div`
   display: grid;
   gap: 12px;
   overflow: auto;
 `;
+
 const Item = styled.article`
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--c-white);
+  border: 2px solid var(--c-grayD);
   border-radius: 12px;
   padding: 10px;
+  min-width: 0;
 `;
+
+const ThumbButton = styled.button`
+  all: unset;
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  margin-bottom: 8px;
+
+  &:focus-visible {
+    outline: 3px solid var(--c-blue);
+    outline-offset: 2px;
+    border-radius: 10px;
+  }
+`;
+
 const Thumb = styled.img`
   display: block;
   width: 100%;
   max-height: 220px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 8px;
-  margin-bottom: 8px;
 `;
+
 const Row = styled.div`
   display: flex;
   justify-content: flex-end;
   align-items: center;
   margin-bottom: 8px;
 `;
+
 const Actions = styled.div`
   display: inline-flex;
   gap: 8px;
 `;
+
 const Button = styled.button<{ $variant?: "ghost" }>`
-  border: 2px solid #2563eb;
-  color: #2563eb;
-  background: #fff;
+  border: 2px solid var(--c-blue);
+  color: var(--c-blue);
+  background: var(--c-white);
   border-radius: 999px;
   ${fonts.regular20};
   padding: 4px 10px;
@@ -334,10 +664,12 @@ const Button = styled.button<{ $variant?: "ghost" }>`
   ${({ $variant }) =>
     $variant === "ghost" && `border-color:#e5e7eb;color:#374151;`}
 `;
+
 const DangerBtn = styled(Button)`
   border-color: #ef4444;
   color: #ef4444;
 `;
+
 const EditArea = styled.textarea`
   width: 100%;
   min-height: 150px;
@@ -346,19 +678,65 @@ const EditArea = styled.textarea`
   border-radius: 8px;
   padding: 8px;
   ${fonts.regular17};
-  &:focus {
-    outline: none;
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  &:focus-visible {
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
   }
 `;
+
 const EmptyLine = styled.p`
   margin: 0;
-  color: #6b7280;
+  color: var(--c-grayD);
 `;
+
 const Empty = styled.p`
   margin: 0;
-  color: #6b7280;
+  color: var(--c-grayD);
   font-size: 0.9rem;
   text-align: center;
+`;
+
+/* 이미지 확대 오버레이 */
+const Overlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99;
+  padding: 16px;
+`;
+
+const PreviewInner = styled.div`
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+  z-index: 99;
+`;
+
+const PreviewImg = styled.img`
+  max-width: min(100vw - 48px, 960px);
+  max-height: min(100vh - 96px, 500px);
+  border-radius: 12px;
+  display: block;
+  background: #0f172a;
+  z-index: 99;
+`;
+
+const CloseBtn = styled.button`
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: none;
+  border-radius: 999px;
+  padding: 4px 10px;
+  ${fonts.regular17};
+  background: rgba(15, 23, 42, 0.85);
+  color: #f9fafb;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(15, 23, 42, 1);
+  }
 `;

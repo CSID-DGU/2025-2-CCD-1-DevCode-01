@@ -4,13 +4,21 @@ import { TTSContext } from "./TTSProvider";
 type Options = {
   text?: string;
   fallbackFromAttr?: boolean;
+  enabled?: boolean;
 };
 
 export function useFocusSpeak(opts: Options = {}) {
   const ctx = useContext(TTSContext);
-  const { text, fallbackFromAttr = true } = opts;
+  const { text, fallbackFromAttr = true, enabled = true } = opts;
 
   return useMemo(() => {
+    if (!enabled) {
+      return {
+        onFocus: () => {},
+        onBlur: () => {},
+      };
+    }
+
     const onFocus = (e: React.FocusEvent<HTMLElement>) => {
       if (!ctx) return;
       if (ctx.settings.trigger !== "focus") return;
@@ -33,5 +41,5 @@ export function useFocusSpeak(opts: Options = {}) {
     };
 
     return { onFocus, onBlur };
-  }, [ctx, text, fallbackFromAttr]);
+  }, [ctx, text, fallbackFromAttr, enabled]);
 }

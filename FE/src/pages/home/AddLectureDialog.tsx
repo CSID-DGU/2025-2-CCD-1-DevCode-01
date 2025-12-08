@@ -1,7 +1,9 @@
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 import { fonts } from "@styles/fonts";
 import { useEffect, useRef, useState } from "react";
 import { createLecture, joinLecture } from "src/entities/lecture/api";
 import type { Lecture } from "src/entities/lecture/types";
+import { useModalFocusTrap } from "src/hooks/useModalFocusTrap";
 import styled from "styled-components";
 
 type AddLectureDialogProps = {
@@ -20,27 +22,34 @@ export default function AddLectureDialog({
   const [title, setTitle] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  // 처음 포커스 줄 버튼 (지금은 "새 강의 만들기")
   const firstFocusRef = useRef<HTMLButtonElement | null>(null);
+  const addNewLecture = useFocusSpeak({
+    text: "새 강의 만들기",
+  });
+  const joinCodeLecture = useFocusSpeak({
+    text: "강의 코드로 참여하기",
+  });
 
-  // 다이얼로그 열릴 때 상태 초기화
+  const cancel = useFocusSpeak({
+    text: "닫기",
+  });
+
   useEffect(() => {
     if (open) {
       setMode("choose");
       setTitle("");
       setCode("");
-      setTimeout(() => firstFocusRef.current?.focus(), 0);
     }
   }, [open]);
 
-  // ESC 키로 닫기
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!open) return;
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+  const { handleKeyDown } = useModalFocusTrap({
+    open,
+    containerRef: dialogRef,
+    initialFocusRef: firstFocusRef,
+    onClose,
+  });
 
   // 새 강의 생성 요청
   const handleCreate = async () => {
@@ -70,10 +79,12 @@ export default function AddLectureDialog({
 
   return (
     <Backdrop
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="add-lecture-title"
       onClick={(e) => e.target === e.currentTarget && onClose()}
+      onKeyDown={handleKeyDown}
     >
       <Card>
         {/* 화면 리더 전용 제목 */}
@@ -87,18 +98,29 @@ export default function AddLectureDialog({
               <ChoiceButton
                 ref={firstFocusRef}
                 onClick={() => setMode("create")}
+                onFocus={addNewLecture.onFocus}
+                onBlur={addNewLecture.onBlur}
               >
                 <ChoiceTitle>새 강의 만들기</ChoiceTitle>
                 <ChoiceDesc>강의명을 입력하면 초대 코드가 생성돼요.</ChoiceDesc>
               </ChoiceButton>
-              <ChoiceButton onClick={() => setMode("join")}>
+              <ChoiceButton
+                onClick={() => setMode("join")}
+                onFocus={joinCodeLecture.onFocus}
+                onBlur={joinCodeLecture.onBlur}
+              >
                 <ChoiceTitle>강의 코드로 참여</ChoiceTitle>
                 <ChoiceDesc>받은 6자리 코드를 입력해 참여해요.</ChoiceDesc>
               </ChoiceButton>
             </ChoiceGrid>
 
             <RowEnd>
-              <GhostButton type="button" onClick={onClose}>
+              <GhostButton
+                type="button"
+                onClick={onClose}
+                onFocus={cancel.onFocus}
+                onBlur={cancel.onBlur}
+              >
                 닫기
               </GhostButton>
             </RowEnd>
@@ -232,7 +254,7 @@ const ChoiceButton = styled.button`
   }
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;
@@ -265,7 +287,7 @@ const Input = styled.input`
   margin-bottom: 0.5rem;
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;
@@ -301,7 +323,7 @@ const PrimaryButton = styled(BaseButton)`
   ${fonts.regular20}
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;
@@ -315,7 +337,7 @@ const GhostButton = styled(BaseButton)`
   width: 100%;
 
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;

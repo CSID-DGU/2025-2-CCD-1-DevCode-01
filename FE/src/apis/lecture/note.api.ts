@@ -1,8 +1,14 @@
 import { getResponse, postResponse, patchResponse } from "@apis/instance";
 
+export type NoteTts = {
+  female?: string | null;
+  male?: string | null;
+} | null;
+
 export type Note = {
-  id: number;
+  note_id: number;
   content: string;
+  note_tts?: NoteTts;
 };
 
 export async function fetchNoteByPage(pageId: number): Promise<Note | null> {
@@ -28,4 +34,26 @@ export async function updateNote(
     `/class/note/${noteId}/`,
     { content }
   );
+}
+
+//노트 업데이트 tts
+
+type UpdateNoteTtsRequest = {
+  content: string;
+};
+
+export async function updateNoteTts(
+  noteId: number,
+  content: string
+): Promise<Note> {
+  const data = await patchResponse<UpdateNoteTtsRequest, Note>(
+    `/class/note/${noteId}/tts/`,
+    { content }
+  );
+
+  if (!data) {
+    throw new Error("노트 TTS 응답이 올바르지 않습니다.");
+  }
+
+  return data;
 }

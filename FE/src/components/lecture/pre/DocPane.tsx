@@ -101,7 +101,7 @@ const Body = styled.div`
   overscroll-behavior: contain;
 
   &:focus-visible {
-    outline: 2px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
     border-radius: 8px;
   }

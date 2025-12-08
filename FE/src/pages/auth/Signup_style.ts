@@ -32,8 +32,8 @@ export const SignupContainer = styled.div<{ $active?: boolean }>`
     color: black;
   `}
   &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(47, 102, 200, 0.35);
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
   }
 
   img {

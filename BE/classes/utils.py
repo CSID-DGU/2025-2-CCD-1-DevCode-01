@@ -1,17 +1,18 @@
+import html
 import re
 import tempfile
 import wave
 from bs4 import BeautifulSoup
 from google.cloud import speech, storage
-from google.cloud import texttospeech, translate_v2 as translate
+from google.cloud import texttospeech
 import boto3
 from django.conf import settings
 import io, os
 import uuid
 from datetime import datetime, timedelta
-from groq import Groq
 import markdown
 import numpy as np
+from openai import OpenAI
 
 from users.models import User
 
@@ -55,11 +56,13 @@ symbol_pattern = re.compile("|".join(re.escape(k) for k in symbol_map.keys()))
 code_pattern = re.compile(r"<코드>(.*?)</코드>", re.DOTALL)
 math_pattern = re.compile(r"<수식>(.*?)</수식>", re.DOTALL)
 
-client = Groq(api_key=settings.GROQ_API_KEY)
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+tts_client = texttospeech.TextToSpeechClient(transport="rest")
+stt_client = speech.SpeechClient(transport="rest")
+storage_client = storage.Client()
 
 def upload_to_gcs(file_bytes: bytes, filename: str, bucket_name: str) -> str:
     """GCS 버킷에 파일 업로드 후 URI 반환"""
-    storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(f"stt/{filename}")
     blob.upload_from_string(file_bytes)
@@ -136,8 +139,6 @@ def split_audio_on_silence(wav_bytes: bytes, silence_threshold=150, min_silence_
     return chunks, rate
 
 def speech_to_text(audio_path) -> tuple[str, list]:
-    client = speech.SpeechClient(transport="rest")
-
     with open(audio_path, "rb") as f:
         content = f.read()
 
@@ -174,7 +175,7 @@ def speech_to_text(audio_path) -> tuple[str, list]:
 
         if len(chunk_bytes) < 1024 * 1024:
             audio = speech.RecognitionAudio(content=chunk_bytes)
-            response = client.recognize(config=config, audio=audio)
+            response = stt_client.recognize(config=config, audio=audio)
         else:
             gcs_uri = upload_to_gcs(
                 chunk_bytes,
@@ -182,7 +183,7 @@ def speech_to_text(audio_path) -> tuple[str, list]:
                 settings.GCP_BUCKET_NAME
             )
             audio = speech.RecognitionAudio(uri=gcs_uri)
-            operation = client.long_running_recognize(config=config, audio=audio)
+            operation = stt_client.long_running_recognize(config=config, audio=audio)
             response = operation.result(timeout=900)
 
         if response.results:
@@ -204,18 +205,53 @@ def speech_to_text(audio_path) -> tuple[str, list]:
 
     return transcript, stt_words
 
+def text_positioin(stt_text, stt_words):
+    mapped = []
+    search_pos = 0
 
-def extract_text(stt_words, relative_time, user: User):
+    for w in stt_words:
+        clean_word = w["word"].replace("▁", "")
+
+        if not clean_word:
+            continue
+
+        idx = stt_text.find(clean_word, search_pos)
+
+        if idx != -1:
+            mapped.append({
+                "word": w["word"],
+                "start": w["start"],
+                "end": w["end"],
+                "start_index": idx,
+                "end_index": idx + len(clean_word),
+            })
+            search_pos = idx + len(clean_word)
+
+    return mapped
+
+def text_substring(stt_text, mapped_words, start_idx, end_idx):
+    valid_words = [w for w in mapped_words[start_idx:end_idx] 
+                   if w["start_index"] is not None]
+    
+    if not valid_words:
+        return ""
+    
+    text_start = valid_words[0]["start_index"]
+    text_end = valid_words[-1]["end_index"]
+
+    return stt_text[text_start:text_end]
+
+def extract_text(stt_words, mapped_words, stt_text, relative_time, user: User):
     for w in stt_words:
         if w["start"] <= relative_time <= w["end"]:
-            return find_full_text(stt_words, w, user)
+            start_idx, end_idx = find_full_text(stt_words, w, user)
+            return text_substring(stt_text, mapped_words, start_idx, end_idx)
     return None
 
 def find_full_text(stt_words, target_word, user: User):
     idx = stt_words.index(target_word)
 
     # 오른쪽으로 wps초 구간만 추출
-    sentence_words = [target_word["word"]]
     start_time = target_word["start"]
 
     if user.rate == "느림":
@@ -225,13 +261,13 @@ def find_full_text(stt_words, target_word, user: User):
     else:
         wps = 6.0  # 기본값
     
-    for w in stt_words[idx+1:]:
+    last_idx = idx
+    for i, w in enumerate(stt_words[idx+1:], start=idx+1):
         if w["end"] - start_time > wps: # 시작 단어 기준으로 wps초
             break
-        sentence_words.append(w["word"])
+        last_idx = i
     
-    # 단어 결합 (▁ 제거하고 공백 처리)
-    return "".join([w.replace("▁", " ") for w in sentence_words]).strip()
+    return idx, last_idx
 
 # 코드 전처리
 def preprocess_code(code_text: str) -> str:
@@ -270,7 +306,7 @@ def preprocess_text(processed_math):
     def translate_math(match):
         english_math = match.group(1)
         # 수식 번역
-        korean_math = translate(english_math)
+        korean_math = translate_processed_math(english_math)
         return korean_math
 
     # 최종 전처리 텍스트
@@ -279,28 +315,31 @@ def preprocess_text(processed_math):
 
     return processed_text
 
-def translate(text: str) -> str:
-    prompt = f"""
+def translate_processed_math(text: str) -> str:
+    system_prompt = f"""
     너는 영어 수식을 한국어로 번역하는 전문가이다.
-    아래는 영어로 표현된 수식이다:
+    
+    번역 규칙:
+    - 수식 텍스트의 모든 구성요소를 단 하나도 생략하거나 삭제하지 않는다.
+    - 수식의 기호, 구조, 관계를 자연스러운 한국어 수학 서술로 표현한다.
+    - 수식을 설명, 해석, 요약하지 않고, 오직 수식 표현을 그대로 번역한다.
+    - '~입니다', '~합니다', '~됩니다' 등 문어체 종결을 사용하지 않는다.
+    - 출력은 번역된 한국어 텍스트만 제공한다.
+    """
+
+    user_prompt = f"""
+    아래 수식을 번역해줘:
     ---
     {text}
     ---
-    
-    이 수식을 한국어로 자연스럽게 번역한다.
-    번역 규칙은 다음과 같다:
-
-    1) 수식의 기호, 구조, 관계를 한국어로 정확히 표현한다.
-    2) 수식을 설명하거나 해석하지 않고, 제공된 수식 자체만 번역한다.
-    3) '~입니다', '~합니다', '~됩니다' 등 문어체 종결을 사용하지 않는다.
-    4) 출력은 번역된 한국어 텍스트만 제공한다.
-
-    번역문:
     """
 
     response = client.chat.completions.create(
-        model="openai/gpt-oss-20b",
-        messages=[{"role": "user", "content": prompt}],
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
         temperature=0.1,
     )
     
@@ -327,8 +366,6 @@ def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
     if not text or text.strip() == "":
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
 
-    client = texttospeech.TextToSpeechClient(transport="rest")
-
     synthesis_input = texttospeech.SynthesisInput(text=text)
     
     voice_map = {
@@ -349,7 +386,7 @@ def text_to_speech(text: str, user: User, s3_folder: str = "tts/") -> str:
             name=name,
         )
 
-        response = client.synthesize_speech(
+        response = tts_client.synthesize_speech(
             input=synthesis_input,
             voice=voice_config,
             audio_config=audio_config
@@ -388,10 +425,7 @@ def text_to_speech_local(text: str, voice: str, rate: str) -> str:
     """
     if not text or text.strip() == "":
         raise ValueError("TTS 변환할 텍스트가 비어 있습니다.")
-
-    # 1️⃣ Google TTS 클라이언트 생성
-    client = texttospeech.TextToSpeechClient(transport="rest")
-
+    
     synthesis_input = texttospeech.SynthesisInput(text=text)
 
     voice_map = {
@@ -414,7 +448,7 @@ def text_to_speech_local(text: str, voice: str, rate: str) -> str:
     )
 
     # 2️⃣ TTS 변환
-    response = client.synthesize_speech(
+    response = tts_client.synthesize_speech(
         input=synthesis_input,
         voice=voice_config,
         audio_config=audio_config

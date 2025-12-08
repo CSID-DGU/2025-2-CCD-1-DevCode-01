@@ -63,7 +63,7 @@ export const ToolbarButton = styled.button`
   cursor: pointer;
 
   &:focus-visible {
-    outline: 2px solid var(--c-blue, #2563eb);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;
@@ -128,7 +128,8 @@ export const SummaryItem = styled.li<{ $active: boolean }>`
   gap: 0.15rem;
 
   &:focus-visible {
-    outline: 2px solid #2563eb;
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
   }
 `;
 
@@ -194,7 +195,7 @@ export const TextArea = styled.textarea`
   color: var(--c-black);
 
   &:focus-visible {
-    outline: 2px solid #2563eb;
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;
@@ -235,7 +236,7 @@ export const PrimaryButton = styled.button`
   }
 
   &:focus-visible {
-    outline: 2px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;
@@ -250,7 +251,7 @@ export const GhostButton = styled.button`
   cursor: pointer;
 
   &:focus-visible {
-    outline: 2px solid var(--c-grayL);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;

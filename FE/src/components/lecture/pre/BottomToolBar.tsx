@@ -120,7 +120,11 @@ export default function BottomToolbar({
     !!onStartLive && !(typeof startPageId === "number" && startPageId > 0);
 
   return (
-    <Bar role="toolbar" aria-label="페이지 및 강의 조작">
+    <Bar
+      role="toolbar"
+      aria-label="페이지 및 강의 조작"
+      data-area="bottom-toolbar"
+    >
       <Group>
         <Btn
           onClick={() => {
@@ -293,9 +297,10 @@ const Bar = styled.div`
   color: var(--c-white);
   border-radius: 0.5rem;
   box-shadow: 0 6px 10px rgba(0, 0, 0, 0.12);
-  z-index: 999;
+  z-index: 10;
   width: max-content;
 `;
+
 const Group = styled.div`
   display: inline-flex;
   align-items: center;
@@ -305,11 +310,13 @@ const Group = styled.div`
     ${fonts.medium26};
   }
 `;
+
 const Divider = styled.div`
   width: 1px;
   height: 1.25rem;
   background: #ffffff55;
 `;
+
 const Btn = styled.button`
   border: 2px solid var(--c-white);
   ${fonts.medium26};
@@ -323,13 +330,15 @@ const Btn = styled.button`
     cursor: not-allowed;
   }
   &:focus-visible {
-    outline: 2px solid var(--c-white);
+    outline: 5px solid var(--c-white);
     outline-offset: 2px;
   }
 `;
+
 const Slash = styled.span`
   ${fonts.medium26};
 `;
+
 const Primary = styled.button`
   background: var(--c-blue);
   color: var(--c-white);
@@ -342,7 +351,13 @@ const Primary = styled.button`
     opacity: 0.55;
     cursor: not-allowed;
   }
+
+  &:focus-visible {
+    outline: 5px solid var(--c-white);
+    outline-offset: 2px;
+  }
 `;
+
 const PageInputWrap = styled.div`
   display: inline-flex;
   align-items: center;
@@ -351,6 +366,7 @@ const PageInputWrap = styled.div`
   padding: 0.1rem 0.4rem;
   background: #ffffff22;
 `;
+
 const PageInput = styled.input`
   width: 3.2ch;
   text-align: center;

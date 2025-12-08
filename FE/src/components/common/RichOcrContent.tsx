@@ -31,7 +31,6 @@ export function RichOcrContent({ text }: Props) {
           return (
             <CodeBlock
               key={`${idx}-code`}
-              tabIndex={0}
               aria-hidden="true"
               data-skip-focus-tts="true"
             >
@@ -71,12 +70,16 @@ function MathBlock({ latex }: MathBlockProps) {
 
     mj.typesetPromise([root])
       .then(() => {
+        // MathJax가 만들어 놓은 포커스 가능한 모든 요소 + tabindex 가진 요소들
         const focusableSelector =
-          'a, button, input, textarea, select, [tabindex], [contenteditable="true"], svg[focusable="true"]';
+          'a, button, input, textarea, select, [contenteditable="true"], svg[focusable="true"], [tabindex]';
 
         root.querySelectorAll<HTMLElement>(focusableSelector).forEach((el) => {
-          el.tabIndex = 0;
+          // 키보드 포커스 막기
+          el.tabIndex = -1;
+          // 스크린리더/포커스 읽기도 막기
           el.setAttribute("aria-hidden", "true");
+          el.setAttribute("data-skip-focus-tts", "true");
         });
       })
       .catch((err) => {
@@ -87,8 +90,8 @@ function MathBlock({ latex }: MathBlockProps) {
   return (
     <MathContainer
       ref={ref}
+      tabIndex={-1}
       aria-hidden="true"
-      tabIndex={0}
       data-skip-focus-tts="true"
     >
       {"$$ " + latex + " $$"}
@@ -108,7 +111,11 @@ const Paragraph = styled.p`
   margin-bottom: 0.75rem;
 `;
 
-const CodeBlock = styled.pre`
+const CodeBlock = styled.pre.attrs({
+  tabIndex: -1,
+  "aria-hidden": true,
+  "data-skip-focus-tts": true,
+})`
   max-width: ${DOC_TEXT_MEASURE}ch;
   margin: 1rem 0;
   padding: 0.75rem 1rem;
@@ -117,10 +124,6 @@ const CodeBlock = styled.pre`
   color: var(--c-black);
   border-radius: 8px;
   overflow-x: auto;
-
-  &:focus-visible {
-    outline: none;
-  }
 `;
 
 const MathContainer = styled.div`
@@ -132,8 +135,4 @@ const MathContainer = styled.div`
   ${fonts.medium26};
   color: var(--c-black);
   overflow: auto;
-
-  &:focus-visible {
-    outline: none;
-  }
 `;

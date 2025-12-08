@@ -1,6 +1,7 @@
 import styled from "styled-components";
 import { fonts } from "@styles/fonts";
 import { forwardRef, useEffect, useRef } from "react";
+import { useFocusSpeak } from "@shared/tts/useFocusSpeak";
 
 type Props = {
   onEdit: () => void;
@@ -86,6 +87,9 @@ export const OptionsMenu = forwardRef<HTMLDivElement, Props>(
       }
     };
 
+    const editSpeak = useFocusSpeak({ text: "강의 제목 수정" });
+    const deleteSpeak = useFocusSpeak({ text: "강의 삭제" });
+
     return (
       <Dropdown
         ref={ref}
@@ -113,8 +117,10 @@ export const OptionsMenu = forwardRef<HTMLDivElement, Props>(
             e.stopPropagation();
             onEdit();
           }}
+          onFocus={editSpeak.onFocus}
+          onBlur={editSpeak.onBlur}
         >
-          ✏️ 수정
+          수정
         </DropdownItem>
         <DropdownItem
           role="menuitem"
@@ -125,8 +131,10 @@ export const OptionsMenu = forwardRef<HTMLDivElement, Props>(
             e.stopPropagation();
             onDelete();
           }}
+          onFocus={deleteSpeak.onFocus}
+          onBlur={deleteSpeak.onBlur}
         >
-          🗑 삭제
+          삭제
         </DropdownItem>
       </Dropdown>
     );
@@ -166,9 +174,8 @@ const DropdownItem = styled.button<{ $danger?: boolean }>`
   cursor: pointer;
   color: ${({ $danger }) => ($danger ? "crimson" : "black")};
 
-  &:hover,
   &:focus-visible {
-    background: var(--c-blueL);
-    outline: none;
+    outline: 5px solid var(--c-blue);
+    outline-offset: 2px;
   }
 `;

@@ -90,5 +90,9 @@ export const SignupContainer = styled.section`
   .signup {
     color: var(--c-blue);
     cursor: pointer;
+    &:focus-visible {
+      outline: 5px solid var(--c-blue);
+      outline-offset: 2px;
+    }
   }
 `;

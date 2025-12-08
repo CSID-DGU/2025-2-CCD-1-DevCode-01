@@ -1,15 +1,30 @@
-import base64
+import re
 from google.cloud import texttospeech
-from openai import OpenAI
-import vertexai
-from classes.utils import text_to_speech, time_to_seconds
+from classes.utils import text_to_speech, time_to_seconds, math_pattern
 from lecture_docs.models import *
-from dotenv import load_dotenv
-from vertexai import generative_models
+from project.vertexai import gemini_model
 from users.models import User
 from django.conf import settings
 from botocore.exceptions import NoCredentialsError
 import boto3
+
+latex_patterns = [
+    r'\\\((.*?)\\\)',
+    r'\\\[(.*?)\\\]',
+    r'\$\$(.*?)\$\$',
+    r'(\\begin\{.*?\}.*?\\end\{.*?\})',
+]
+
+text_commands = [
+    "textbf", "textit", "textrm", "textsf",
+    "texttt", "text", "mathrm", "mathbf"
+]
+
+text_pattern = r'\\(' + '|'.join(text_commands) + r')\{([^{}]+)\}'
+
+code_pattern = r"```(.*?)```"
+
+tts_client = texttospeech.TextToSpeechClient(transport="rest")
 
 def summarize_stt(doc_id: int, user: User) -> tuple[str, str]:
     """
@@ -44,22 +59,19 @@ def summarize_stt(doc_id: int, user: User) -> tuple[str, str]:
     # 3️⃣ Gemini 프롬프트 생성
     prompt = f"""
     너는 '{lecture_title}' 강의의 '{doc_title}' 교안에 대한 전문가이다.
-    아래는 강의 중 교수님이 실제로 말한 내용이다:
-    ---
-    {combined_stt}
-    ---
     
-    이 내용을 전체적으로 읽고, 아래 규칙에 맞게 1000자 이내로 요약한다:
+    요약 규칙:
+    - 오탈자나 일부 누락이 있을 수 있으니 의미를 올바르게 해석한다.
+    - 원문에 없는 새로운 사실은 추가하지 않는다.
+    - 중복된 설명은 생략한다.
+    - 중요하고 핵심적인 개념 위주로 정리한다.
+    - 1000자 이내로 요약한다.
 
-    1) 오탈자나 일부 누락이 있을 수 있으니 의미를 올바르게 해석한다.
-    2) 원문에 없는 새로운 사실은 추가하지 않는다.
-    3) 중복된 설명은 생략한다.
-    4) 중요하고 핵심적인 개념 위주로 정리한다.
-    
-    요약문:
+    아래 내용을 요약해줘:
+    {combined_stt}
     """
 
-    summary_text = summarize(prompt)
+    summary_text = summarize(prompt).strip()
 
     # Google TTS 변환 + S3 업로드
     try:
@@ -79,30 +91,111 @@ def summarize_doc(doc_id: int, ocr_text: str) -> str:
         raise ValueError("요약할 OCR 데이터가 없습니다.")
 
     ocr_text = ocr_text.strip()
-
+   
     # 3️⃣ Gemini 프롬프트 생성
     prompt = f"""
     너는 '{lecture_title}' 강의의 '{doc_title}' 교안에 대한 전문가이다.
-    아래는 강의 교안의 OCR 인식 결과이다:
-    ---
+
+    요약 규칙:
+    - 오탈자나 일부 누락이 있을 수 있으니 의미를 올바르게 해석한다.
+    - 수식은 LaTeX 문법으로만 출력하라. (\(...\), \[...\], \begin{...}...\end{...} 그대로 유지)
+    - 코드(쉘 명령어 포함)는 코드블록(```)으로 감싸서 출력하되 언어명은 작성하지 않는다.
+    - 원문에 없는 새로운 사실은 추가하지 않는다.
+    - 중복된 설명은 생략한다.
+    - 중요하고 핵심적인 개념 위주로 정리한다.
+    - 200자 이내로 요약한다.
+    
+    아래 내용을 요약해줘:
     {ocr_text}
-    ---
-
-    이 내용을 전체적으로 읽고, 아래 규칙에 맞게 200자 이내로 요약한다:
-
-    1) 오탈자나 일부 누락이 있을 수 있으니 의미를 올바르게 해석한다.
-    2) 수식은 <수식> ... </수식> 으로 감싸고, 코드블록은 <코드> ... </코드> 으로 감싼다.
-    2-1) 수식은 LaTeX로 작성한다.
-    3) 원문에 없는 새로운 사실은 추가하지 않는다.
-    4) 중복된 설명은 생략한다.
-    5) 중요하고 핵심적인 개념 위주로 정리한다.
-
-    요약문:
     """
 
-    return summarize(prompt)
+    response = summarize(prompt).strip()
 
-def summarize(prompt: str) -> str:
+    response = latex_rewrite(remove_text(response))
+    response = code_rewrite(response)
+
+    return response
+
+# 수식 치환 함수
+def safe_sub(pattern, repl, text):
+    def wrapper(match):
+        start = match.start()
+        # 이미 <수식> 태그 안에 있는지 검사
+        open_tag = text.rfind("<수식>", 0, start)
+        close_tag = text.rfind("</수식>", 0, start)
+
+        # <수식>은 보였지만 </수식>이 안 보였다 → 수식 내부
+        if open_tag != -1 and (close_tag == -1 or close_tag < open_tag):
+            return match.group(0)
+        return repl(match)
+
+    return re.sub(pattern, wrapper, text, flags=re.DOTALL)
+
+#수식 밖 Latex 제거
+def remove_text(text: str) -> str:
+    math_spans = []
+    for pattern in latex_patterns:
+        for m in re.finditer(pattern, text, flags=re.DOTALL):
+            math_spans.append((m.start(), m.end()))
+
+    def is_inside_math(pos):
+        for start, end in math_spans:
+            if start <= pos < end:
+                return True
+        return False
+
+    def replacer(match):
+        cmd = match.group(1)
+        inner = match.group(2)
+        start = match.start()
+
+        if is_inside_math(start):
+            return match.group(0)
+        return inner
+
+    return re.sub(text_pattern, replacer, text)
+
+#수식 후처리
+def latex_rewrite(text: str) -> str:
+    def latex_replace(match):
+        inner = match.group(1).strip()
+        return f"<수식>\n{inner}\n</수식>"
+
+    for pattern in latex_patterns:
+        text = safe_sub(pattern, latex_replace, text)
+
+    text = remove_tag(text)
+
+    return text
+
+#중첩된 수식 제거
+def remove_tag(text: str) -> str:
+    while True:
+        new_text = text
+        new_text = re.sub(r'<수식>\s*<수식>', '<수식>', new_text)
+        new_text = re.sub(r'</수식>\s*</수식>', '</수식>', new_text)
+        new_text = math_pattern.sub(
+            lambda m: f"<수식>\n{re.sub(r'</?수식>', '', m.group(1)).strip()}\n</수식>", 
+            new_text
+        )
+        
+        if new_text == text:
+            break
+        text = new_text
+        
+    return text
+
+#코드 후처리
+def code_rewrite(text: str) -> str:
+    def code_replace(match):
+        inner = match.group(1).strip()
+        return f"<코드>\n{inner}\n</코드>"
+    
+    text = re.sub(code_pattern, code_replace, text, flags=re.DOTALL)
+
+    return text
+
+def summarize(prompt) -> str:
     """
     Gemini 호출 요약본 생성 함수
     프롬프트를 받아서 요약문 반환
@@ -110,12 +203,7 @@ def summarize(prompt: str) -> str:
 
     # Gemini 모델 호출
     try:
-        vertexai.init(
-            project=settings.GCP_PROJECT_ID,
-            location=settings.GCP_REGION,
-        )
-        model = generative_models.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(prompt)
+        response = gemini_model.generate_content(prompt)
 
         if not response or not getattr(response, "text", "").strip():
             raise ValueError("Gemini 응답이 비어 있습니다.")
@@ -123,11 +211,9 @@ def summarize(prompt: str) -> str:
         summary_text = response.text.strip()
 
     except Exception as e:
-        raise RuntimeError(f"Gemini 요약 생성 중 오류 발생: {e}")
+        raise RuntimeError(f"Gemini 응답 생성 중 오류 발생: {e}")
 
     return summary_text
-
-
 
 def upload_s3(file_obj, file_name, folder=None, content_type=None):
     try:
@@ -152,8 +238,6 @@ def upload_s3(file_obj, file_name, folder=None, content_type=None):
         raise Exception(f"S3 업로드 실패: {e}")
 
 def exam_tts(text: str, user: User):
-    client = texttospeech.TextToSpeechClient(transport="rest")
-
     synthesis_input = texttospeech.SynthesisInput(text=text)
 
     voice_map = {
@@ -175,7 +259,7 @@ def exam_tts(text: str, user: User):
         speaking_rate=speaking_rate,
     )
 
-    response = client.synthesize_speech(
+    response = tts_client.synthesize_speech(
         input=synthesis_input, voice=voice_config, audio_config=audio_config
     )
 

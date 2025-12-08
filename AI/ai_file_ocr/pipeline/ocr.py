@@ -4,7 +4,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from typing import List, Tuple
 import fitz  
-from ai_file_ocr.pipeline.rewrite import latex_rewrite, code_rewrite
+from ai_file_ocr.pipeline.rewrite import code_rewrite, process_latex
 
 #이미지 변환
 def pdf_to_images(pdf_bytes: bytes, dpi: int = 150) -> List[Tuple[int, bytes]]:
@@ -89,11 +89,9 @@ def analyze_page_with_context(image_bytes: bytes, context: str) -> str:
         ],
     )
 
-
-
     raw = response.choices[0].message.content.strip()
-
-    clean = latex_rewrite(raw)
+    print("🔥🔥전처리 전 코드:" +  raw)
+    clean = process_latex(raw)
     clean = code_rewrite(clean)
 
     return clean

@@ -61,7 +61,7 @@ const TitleInput = styled.input`
   padding: 10px 12px;
   ${fonts.regular24}
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;
@@ -91,7 +91,7 @@ const Chip = styled.button<{ $ghost?: boolean }>`
       $ghost ? "brightness(0.98)" : "brightness(0.96)"};
   }
   &:focus-visible {
-    outline: 3px solid var(--c-blue);
+    outline: 5px solid var(--c-blue);
     outline-offset: 2px;
   }
 `;

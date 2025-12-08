@@ -8,6 +8,7 @@ from typing import List, Dict, Any
 import cv2
 import numpy as np
 #from paddleocr import PaddleOCR
+from ai_file_ocr.pipeline.rewrite import code_rewrite, process_latex
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -121,13 +122,13 @@ def enhance_for_choice(crop_bgr: np.ndarray, scale: int = 4, pad: int = 8) -> np
     return crop_big
 
 
-def paddle_ocr_with_newlines(crop_bgr):
-    ocr = get_paddle_ocr()
-    result = ocr.ocr(crop_bgr, cls=True)
-    if not result or not result[0]:
-        return ""
-    lines = [r[1][0] for r in result[0]]
-    return "\n".join(lines).strip()
+# def paddle_ocr_with_newlines(crop_bgr):
+#     ocr = get_paddle_ocr()
+#     result = ocr.ocr(crop_bgr, cls=True)
+#     if not result or not result[0]:
+#         return ""
+#     lines = [r[1][0] for r in result[0]]
+#     return "\n".join(lines).strip()
 
 
 def _extract_text_from_openai_message(message) -> str:
@@ -153,9 +154,7 @@ def _extract_text_from_openai_message(message) -> str:
 # ==============================
 
 def hybrid_gpt_vision_with_paddle(img_path: str,
-                                  paddle_text: str,
                                   kind: str = "text") -> str:
-    """Paddle + GPT Vision 하이브리드."""
     with open(img_path, "rb") as f:
         image_bytes = f.read()
     b64 = base64.b64encode(image_bytes).decode("utf-8")
@@ -167,38 +166,41 @@ def hybrid_gpt_vision_with_paddle(img_path: str,
     # kind별 프롬프트
     if kind == "qnum":
         system_prompt = (
-            "너는 시험지의 문항 번호를 정확히 읽어주는 OCR 보정기다.\n"
-            "임의로 추가 설명, 해설, 요약을 절대로 넣지 마라.\n"
-            "이미지 안에 인쇄된 텍스트 전체를, 문항 번호 줄부터 마지막 줄까지 그대로 출력해라."
+            r"너는 시험지의 문항 번호를 정확히 읽어주는 OCR 보정기다.\n"
+            r"임의로 추가 설명, 해설, 요약을 절대로 넣지 마라.\n"
+            r"이미지 안에 인쇄된 텍스트 전체를, 문항 번호 줄부터 마지막 줄까지 그대로 출력해라.\n"
+            r"모든 수식은 LaTeX 문법으로만 출력하라. (\(...\), \[...\], \begin{...}...\end{...} 그대로 유지)\n"
+            r"모든 코드(쉘 명령어 포함)는  코드블록(```)으로 감싸서 출력하되 언어명은 작성하지 않는다.\n" 
+            r"코드 내부는 여백, 줄바꿈, 공백 포함하여 원본을 그대로 보존한다."
         )
         user_text = (
             "이미지를 보고, 문항 번호 줄과 그 아래에 이어지는 모든 문장을 그대로 적어라.\n"
-            "PaddleOCR 결과는 참고만 하고, 틀린 부분은 이미지 기준으로 수정해라.\n"
             "'최종 텍스트는' 같은 설명 문장은 쓰지 마라.\n"
-            f"[Paddle 시작]\n{paddle_text}\n[Paddle 끝]"
         )
     elif kind == "choice":
         system_prompt = (
-            "너는 시험지의 객관식 보기(선지)를 읽는 OCR 보정기다.\n"
-            "보기 내용 외의 설명, 해설, 요약은 절대로 쓰지 마라.\n"
+            r"너는 시험지의 객관식 보기(선지)를 읽는 OCR 보정기다.\n"
+            r"보기 내용 외의 설명, 해설, 요약은 절대로 쓰지 마라.\n"
+            r"모든 수식은 LaTeX 문법으로만 출력하라. (\(...\), \[...\], \begin{...}...\end{...} 그대로 유지)\n"
+            r"모든 코드(쉘 명령어 포함)는  코드블록(```)으로 감싸서 출력하되 언어명은 작성하지 않는다.\n" 
+            r"코드 내부는 여백, 줄바꿈, 공백 포함하여 원본을 그대로 보존한다."
         )
         user_text = (
             "이미지를 보고, 보기들을 한 줄에 하나씩 적어라.\n"
             "예: '① ㄱ', '② ㄴ', '③ ㄷ' 처럼 번호와 기호를 함께 써라.\n"
-            f"[Paddle 시작]\n{paddle_text}\n[Paddle 끝]"
         )
     else:
         desc = {"text": "지문/본문", "choice": "선지(보기)", "code": "코드/SQL"}.get(kind, "텍스트")
         system_prompt = (
-            "너는 시험지 OCR 결과를 보정하는 어시스턴트이다.\n"
-            "이미지 내용과 Paddle 결과를 참고해 최종 텍스트를 정확하게 만든다.\n"
-            "절대로 '최종 텍스트는 ...' 같은 설명 문장을 쓰지 마라.\n"
-            "코드/SQL은 필요하면 ``` 코드블록으로만 출력해라."
+            r"너는 시험지 OCR 결과를 보정하는 어시스턴트이다.\n"
+            r"이미지 내용과 Paddle 결과를 참고해 최종 텍스트를 정확하게 만든다.\n"
+            r"절대로 '최종 텍스트는 ...' 같은 설명 문장을 쓰지 마라.\n"
+            r"모든 수식은 LaTeX 문법으로만 출력하라. (\(...\), \[...\], \begin{...}...\end{...} 그대로 유지)\n"
+            r"모든 코드(쉘 명령어 포함)는  코드블록(```)으로 감싸서 출력하되 언어명은 작성하지 않는다.\n" 
+            r"코드 내부는 여백, 줄바꿈, 공백 포함하여 원본을 그대로 보존한다."
         )
         user_text = (
             f"이미지 안에는 {desc}가 들어있다.\n"
-            "Paddle 결과는 참고만 하고, 틀린 부분은 이미지 기준으로 수정해라.\n"
-            f"[Paddle 시작]\n{paddle_text}\n[Paddle 끝]"
         )
 
     client = get_openai()
@@ -350,7 +352,9 @@ def run_hybrid_ocr_on_seq_meta(seq_meta: List[Dict[str, Any]]):
             paddle_text = ""  # 지금은 안 씀
 
            
-            gpt_text = hybrid_gpt_vision_with_paddle(path, paddle_text, kind=kind)
-            item["gpt_hybrid_text"] = gpt_text
+            gpt_text = hybrid_gpt_vision_with_paddle(path, kind=kind)
+            clean_text = code_rewrite(gpt_text)
+            clean_text = process_latex(clean_text)
+            item["gpt_hybrid_text"] = clean_text
 
     return seq_meta
